@@ -1,0 +1,40 @@
+version: "3.8"
+name: "haf-world"
+
+services:
+  app:
+    image: postgrest/postgrest:v10.1.1
+    ports:
+      - ${POSTGREST_PORT}:3000
+    networks:
+      - haf-network
+    tty: true
+    stdin_open: true
+    init: true
+    environment:
+      PGRST_DB_URI: postgres://haf_app_admin@haf:5432/haf_block_log
+      PGRST_OPENAPI_SERVER_PROXY_URI: http://localhost:3000
+      PGRST_DB_SCHEMAS: "app_schema"
+      PGRST_DB_ANON_ROLE: haf_app_anonymous_user_group
+      PGRST_LOG_LEVEL: "info"
+      PGRST_OPENAPI_MODE: "follow-privileges"
+    depends_on:
+      haf:
+        condition: service_healthy
+
+  swagger:
+    image: swaggerapi/swagger-ui:v4.15.5
+    ports:
+      - ${SWAGGER_PORT}:8080
+    networks:
+      - haf-network
+    tty: true
+    stdin_open: true
+    init: true
+    expose:
+      - "8080"
+    environment:
+      API_URL: http://localhost:3000/
+    depends_on:
+      app:
+        condition: service_started

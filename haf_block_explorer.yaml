@@ -1,0 +1,39 @@
+version: '3.9'
+name: "haf-world"
+
+services:
+  haf-block-explorer-setup:
+    image: ${HAF_BLOCK_EXPLORER_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer/setup}:${HAF_BLOCK_EXPLORER_SETUP_VERSION:-latest}
+    environment:
+      POSTGRES_HOST: haf-world-haf-1.haf
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: haf_app_admin
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+      balance-tracker-setup:
+        condition: service_completed_successfully
+      hafah-setup:
+        condition: service_completed_successfully
+          #haf-block-explorer-postgrest:
+          #  image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
+          #  environment:
+          #    PGRST_ADMIN_SERVER_PORT: 3001
+          #    PGRST_DB_URI: postgresql://haf-block-explorer_user@haf:5432/haf_block_log
+          #    PGRST_DB_SCHEMA: haf-block-explorer_endpoints, haf-block-explorer_api_v1, haf-block-explorer_api_v2
+          #    PGRST_DB_ROOT_SPEC: home
+          #    PGRST_DB_ANON_ROLE: haf-block-explorer_user
+          #    PGRST_DB_POOL: 20
+          #    PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+          #    PGRST_OPENAPI_SERVER_PROXY_URI: http://localhost:3000
+          #  networks:
+          #    haf-network:
+          #  depends_on:
+          #    haf-block-explorer-setup:
+          #      condition: service_completed_successfully
+
+networks:
+  haf-network:
+    name: ${NETWORK_NAME}

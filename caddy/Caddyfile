@@ -1,0 +1,20 @@
+# Simple caddy config, handles SSL and forwards everything to varnish
+{$PUBLIC_HOSTNAME} {
+  import snippets/*
+
+  route /btracker_api/ {
+    uri strip_prefix /btracker_api
+    reverse_proxy {$COMPOSE_PROJECT_NAME}-balance-tracker-swagger-1.{$NETWORK_NAME}:8080 {
+      header_up Host {http.request.host}
+      header_up X-Real-IP {http.request.remote}
+      header_up X-Forwarded-For {http.request.remote}
+      header_up X-Forwarded-Port {http.request.port}
+      header_up X-Forwarded-Proto {http.request.scheme}
+    }
+  }
+  route /account_history_api/ {
+    reverse_proxy {$COMPOSE_PROJECT_NAME}-hafah-swagger-1.{$NETWORK_NAME}:80
+  }
+  reverse_proxy {$COMPOSE_PROJECT_NAME}-varnish-1.{$NETWORK_NAME}:80
+
+}

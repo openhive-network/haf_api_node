@@ -1,0 +1,70 @@
+version: "3.8"
+name: ${COMPOSE_PROJECT_NAME}
+
+services:
+  haf:
+    image: ${HAF_IMAGE}
+    ports:
+      - ${HAF_PORT}:8090
+    #   - ${DB_PORT}:5432
+    networks:
+      - haf-network
+    tty: true
+    stdin_open: true
+    init: true
+    entrypoint:
+      - /home/haf_admin/docker_entrypoint.sh
+      - ${ARGUMENTS}
+    # after requesting a shutdown with SIGTERM, allow the container two minutes to exit
+    # before killing it.  The default of ten seconds isn't enough for postgresql to 
+    # cleanly shut down, and would often make PostgreSQL perform crash recovery at the
+    # next startup
+    stop_grace_period: 2m
+    # grant passwordless access to the other haf apps.  if you add apps later, you'll
+    # need to add access rules for them here
+    # TODO: needs work:
+    environment:
+      PG_ACCESS: "
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-balance-tracker-setup-1.${NETWORK_NAME}             trust\n
+        host    haf_block_log    btracker_owner   ${COMPOSE_PROJECT_NAME}-balance-tracker-block-processing-1.${NETWORK_NAME}  trust\n
+        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-balance-tracker-postgrest-1.${NETWORK_NAME}         trust\n
+
+        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-hafah-setup-1.${NETWORK_NAME}                       trust\n
+        host    haf_block_log    hafah_user       ${COMPOSE_PROJECT_NAME}-hafah-postgrest-1.${NETWORK_NAME}                   trust\n
+
+        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-haf-block-explorer-setup-1.${NETWORK_NAME}          trust\n
+        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-haf-block-explorer-setup-1.${NETWORK_NAME}          trust\n
+
+        # hivemind setup needs to change the join_collapse_limit setting on the whole database, which\n
+        # requires superuser privileges\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-setup-1.${NETWORK_NAME}                    trust\n
+        host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-block-processing-1.${NETWORK_NAME}         trust\n
+
+        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                           trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                           trust\n
+        host    postgres         haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                           trust\n
+        host    haf_block_log    pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                            trust\n
+        host    postgres         pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                            trust\n
+        "
+    # when mounting volumes, declare the directories you want to bind-mount here, 
+    # using either the short or long syntax.  Don't declare them as top-level named
+    # volumes and mount them by name.  Declaring them inline here always results
+    # in a recursive bind.  The behavior when declaring the volumes at the top-level 
+    # seems to vary from system to system (even when `o: rbind` is specified).
+    volumes:
+      - type: bind
+        source: ${HAF_DATA_DIRECTORY}/
+        target: /home/hived/datadir
+      - type: bind
+        source: ${HAF_SHM_DIRECTORY}/
+        target: /home/hived/shm_dir
+    healthcheck:
+      test: ["CMD-SHELL","curl -f localhost:8091"]
+      interval: 10s
+      timeout: 2s
+      retries: 10
+      start_period: 72h
+
+networks:
+  haf-network:
+    name: ${NETWORK_NAME}

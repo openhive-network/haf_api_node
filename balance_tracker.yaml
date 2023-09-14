@@ -1,0 +1,62 @@
+version: '3.9'
+name: ${PROJECT_NAME}
+
+services:
+  balance-tracker-setup:
+    image: ${BACKEND_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker/setup}:${BALANCE_TRACKER_SETUP_VERSION:-latest}
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+  balance-tracker-block-processing:
+    image: ${BACKEND_BLOCK_PROCESSING_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker/block-processing}:${BALANCE_TRACKER_BLOCK_PROCESSING_VERSION:-latest}
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    depends_on:
+      balance-tracker-setup:
+        condition: service_completed_successfully
+  balance-tracker-postgrest:
+    image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    environment:
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_DB_URI: postgresql://haf_app_admin@haf/haf_block_log
+      PGRST_DB_SCHEMA: btracker_app
+      PGRST_DB_ANON_ROLE: btracker_user
+      PGRST_DB_POOL: 20
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+      PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/btracker_api/
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+      balance-tracker-block-processing:
+        condition: service_healthy
+  balance-tracker-swagger:
+    image: ${SWAGGER_REGISTRY:-swaggerapi/swagger-ui}:${SWAGGER_VERSION:-latest}
+    ports:
+      - "8080:8080"
+    profiles:
+      - swagger
+    environment:
+      API_URL: http://${PUBLIC_HOSTNAME}/btracker_api/
+    networks:
+      haf-network:
+    #healthcheck:
+    #  test: ["CMD-SHELL","curl -f localhost:8080"]
+    depends_on:
+      balance-tracker-postgrest:
+        condition: service_started
+          #balance-tracker-agent-check:
+          #  image: alpine:3.18.3
+          #  entrypoint:
+
+networks:
+  haf-network:
+    name: ${NETWORK_NAME}

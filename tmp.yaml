@@ -1,0 +1,24 @@
+version: "3.8"
+name: "haf-world"
+
+services:
+  tmp:
+    image: ubuntu
+    ports:
+      - ${HAF_PORT}:8090
+    #   - ${DB_PORT}:5432
+    tty: true
+    stdin_open: true
+    init: true
+    entrypoint:
+      - /usr/bin/bash
+    volumes:
+      - haf_datadir:/haf_datadir
+
+volumes:
+  haf_datadir:
+    driver: local
+    driver_opts:
+      o: rbind
+      type: none
+      device: /pro-pool/haf-datadir-load

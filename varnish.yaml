@@ -1,0 +1,21 @@
+version: '3.9'
+name: "haf-world"
+
+services:
+  varnish:
+    image: varnish:7.3.0-alpine
+    volumes:
+      - type: bind
+        source: ./varnish/default.vcl
+        target: /etc/varnish/default.vcl
+        read_only: true
+    tmpfs:
+      - /var/lib/varnish/varnishd:exec
+    environment:
+      - VARNISH_SIZE=2G
+    networks:
+      - haf-network
+
+networks:
+  haf-network:
+    name: ${NETWORK_NAME}

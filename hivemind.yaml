@@ -1,0 +1,40 @@
+version: '3.9'
+name: "haf-world"
+
+services:
+  hivemind-setup:
+    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
+    networks:
+      haf-network:
+    command:
+      - "setup"
+      - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
+    depends_on:
+      haf:
+        condition: service_healthy
+
+  hivemind-block-processing:
+    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
+    networks:
+      haf-network:
+    command:
+      - "--database-url=postgresql://hivemind@haf/haf_block_log"
+      - "sync"
+    depends_on:
+      hivemind-setup:
+        condition: service_completed_successfully
+
+  hivemind-server:
+    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
+    networks:
+      haf-network:
+    command:
+      - "--database-url=postgresql://hivemind@haf/haf_block_log"
+      - "server"
+    depends_on:
+      hivemind-block-processing:
+        condition: service_healthy
+
+networks:
+  haf-network:
+    name: ${NETWORK_NAME}

@@ -1,0 +1,69 @@
+version: "3.8"
+name: "haf-world"
+
+services:
+  pghero:
+    image: ankane/pghero:v3.3.3
+    environment:
+      DATABASE_URL: postgres://pghero@haf:5432/haf_block_log
+    ports:
+      - ${PGHERO_PORT}:8080
+    networks:
+      - haf-network
+    tty: true
+    stdin_open: true
+    init: true
+    depends_on:
+      haf:
+        condition: service_healthy
+
+  # This service just fixes the ownership of a few files.  Users will checkout the haf docker-compose 
+  # repository and these files will be owned by their own userid/gid by default.  This changes the
+  # owner to what pgadmin expects.
+  #pgadmin_setup:
+  #  image: alpine:3.18.3
+  #    # - ./haf-datadir/pgadmin/data:/var/lib/pgadmin:rw
+  #    # - ./haf-datadir/pgadmin/servers.json:/pgadmin4/servers.json:ro
+  #  command: chown -R 5050:5050 /var/lib/pgadmin
+  pgadmin:
+    image: dpage/pgadmin4:7.6
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@haf.world"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+    ports:
+      - ${PGADMIN_PORT}:80
+    networks:
+      - haf-network
+    # tty: true
+    # stdin_open: true
+    # init: true
+    volumes:
+      - type: volume
+        source: pgadmin_data
+        target: /var/lib/pgadmin
+    # volumes:
+    #   - ./haf-datadir/pgadmin/data:/var/lib/pgadmin:rw
+    configs:
+      - source: pgadmin_servers
+        target: /pgadmin4/servers.json
+        uid: "5050"
+        gid: "5050"
+      - source: pgadmin_passwords
+        target: /pgadmin4/pgpass
+        uid: "5050"
+        gid: "5050"
+    # depends_on:
+    #   pgadmin-setup:
+    #     condition: service_completed_successfully
+
+
+configs:
+  # this config pre-loads the haf database server into pgadmin so you don't have to add it by hand
+  pgadmin_servers:
+    file: ./pgadmin/servers.json
+  pgadmin_passwords:
+    file: ./pgadmin/pgpass
+
+volumes:
+  # this volume stores your pgadmin state
+  pgadmin_data:

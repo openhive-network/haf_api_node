@@ -1,0 +1,23 @@
+version: '3.9'
+name: "haf-world"
+
+services:
+  haproxy:
+    image: haproxy:2.8.2-alpine
+    volumes:
+      - type: bind
+        source: ./haproxy/haproxy.cfg
+        target: /usr/local/etc/haproxy/haproxy.cfg
+        read_only: true
+  jussi:
+    image: registry.gitlab.syncad.com/hive/jussi:latest
+    volumes:
+      - type: bind
+        source: ./jussi/config.json
+        target: /home/jussi/config.json
+        read_only: true
+    command: --server_workers=4 --upstream_config_ifle=/home/jussi/config.json
+
+networks:
+  haf-network:
+    name: ${NETWORK_NAME}

@@ -1,0 +1,33 @@
+version: '3.9'
+name: "haf-world"
+
+services:
+  hafah-setup:
+    image: ${HAFAH_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/hafah/setup}:${HAFAH_SETUP_VERSION:-latest}
+    environment:
+      POSTGRES_URL: postgresql://haf_app_admin@haf-world-haf-1.haf:5432/haf_block_log
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+  hafah-postgrest:
+    image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
+    environment:
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_DB_URI: postgresql://hafah_user@haf:5432/haf_block_log
+      PGRST_DB_SCHEMA: hafah_endpoints, hafah_api_v1, hafah_api_v2
+      PGRST_DB_ROOT_SPEC: home
+      PGRST_DB_ANON_ROLE: hafah_user
+      PGRST_DB_POOL: 20
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+      PGRST_OPENAPI_SERVER_PROXY_URI: http://localhost:3000
+    networks:
+      haf-network:
+    depends_on:
+      hafah-setup:
+        condition: service_completed_successfully
+
+networks:
+  haf-network:
+    name: ${NETWORK_NAME}

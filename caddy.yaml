@@ -1,0 +1,41 @@
+version: '3.9'
+name: ${PROJECT_NAME}
+
+services:
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2.7.4-alpine}
+    ports:
+      - 80:80
+      - 443:443
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
+      NETWORK_NAME: ${NETWORK_NAME}
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME}
+    volumes:
+      - type: bind
+        source: ./caddy/Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+      - type: bind
+        source: ./caddy/snippets
+        target: /etc/caddy/snippets
+        read_only: true
+      - type: volume
+        source: caddy_data
+        target: /data
+      - type: volume
+        source: caddy_config
+        target: /config
+    networks:
+      - haf-network
+
+networks:
+  haf-network:
+    name: ${NETWORK_NAME}
+
+volumes:
+  # this volume stores your SSL certificates, every time you destroy this volume,
+  # caddy will obtain a new certificate at startup, and this can quickly cause
+  # you to hit letsencrypt rate limts.
+  caddy_data:
+  caddy_config:
