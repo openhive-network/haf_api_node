@@ -1,6 +1,3 @@
-version: '3.9'
-name: ${PROJECT_NAME}
-
 services:
   balance-tracker-setup:
     image: ${BACKEND_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker/setup}:${BALANCE_TRACKER_SETUP_VERSION:-latest}
@@ -56,7 +53,3 @@ services:
           #balance-tracker-agent-check:
           #  image: alpine:3.18.3
           #  entrypoint:
-
-networks:
-  haf-network:
-    name: ${NETWORK_NAME}

@@ -1,5 +1,7 @@
 #! /bin/sh
 
+set -e
+
 print_help() {
   echo "Usage: $0 --env-file=filename"
 }
@@ -45,7 +47,7 @@ done
 
 if [ ! -z "$ENV_FILE" ]; then
   echo reading $ENV_FILE
-  source $ENV_FILE
+  . $ENV_FILE
 fi
 
 [ -z "$ZPOOL_MOUNT_POINT" ] && ZPOOL_MOUNT_POINT="/$ZPOOL"
@@ -73,8 +75,11 @@ zfs create $zfs_common_options $zfs_compressed_options -o canmount=off "${ZPOOL}
 # create a dataset for everything in PostgreSQL except for HAF (system tables and the like).  Having this directory
 # uncompressed improved performance in tests, and it's not very big
 zfs create $zfs_common_options $zfs_uncompressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
+
 # create a dataset for the write-ahead logs, simply to reduce the size of snapshots of other datasets
-zfs create $zfs_common_options $zfs_uncompressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
+# note: this is disabled, I'm not sure we really care about the size of the snapshots of other datasets, we
+# only care about the total size, and I'm not sure this gives us any benefit
+# zfs create $zfs_common_options $zfs_uncompressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 
 # create a dataset for the main HAF database itself
 zfs create $zfs_common_options $zfs_compressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"

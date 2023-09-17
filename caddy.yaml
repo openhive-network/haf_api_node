@@ -1,6 +1,3 @@
-version: '3.9'
-name: ${PROJECT_NAME}
-
 services:
   caddy:
     image: ${CADDY_IMAGE:-caddy:2.7.4-alpine}
@@ -28,10 +25,6 @@ services:
         target: /config
     networks:
       - haf-network
-
-networks:
-  haf-network:
-    name: ${NETWORK_NAME}
 
 volumes:
   # this volume stores your SSL certificates, every time you destroy this volume,

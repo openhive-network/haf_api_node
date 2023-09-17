@@ -1,6 +1,3 @@
-version: '3.9'
-name: "haf-world"
-
 services:
   haf-block-explorer-setup:
     image: ${HAF_BLOCK_EXPLORER_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer/setup}:${HAF_BLOCK_EXPLORER_SETUP_VERSION:-latest}
@@ -33,7 +30,3 @@ services:
           #  depends_on:
           #    haf-block-explorer-setup:
           #      condition: service_completed_successfully
-
-networks:
-  haf-network:
-    name: ${NETWORK_NAME}

@@ -1,6 +1,3 @@
-version: "3.8"
-name: "haf-world"
-
 services:
   pghero:
     image: ankane/pghero:v3.3.3

@@ -1,6 +1,3 @@
-version: '3.9'
-name: "haf-world"
-
 services:
   hivemind-setup:
     image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
@@ -34,7 +31,3 @@ services:
     depends_on:
       hivemind-block-processing:
         condition: service_healthy
-
-networks:
-  haf-network:
-    name: ${NETWORK_NAME}
