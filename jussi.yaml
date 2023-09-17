@@ -1,6 +1,8 @@
 services:
   jussi:
     image: registry.gitlab.syncad.com/hive/jussi:latest
+    profiles:
+      - servers
     volumes:
       - type: bind
         source: ./jussi/config.json

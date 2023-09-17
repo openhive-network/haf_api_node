@@ -1,6 +1,8 @@
 services:
   haf-block-explorer-setup:
     image: ${HAF_BLOCK_EXPLORER_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer/setup}:${HAF_BLOCK_EXPLORER_SETUP_VERSION:-latest}
+    profiles:
+      - apps
     environment:
       POSTGRES_HOST: haf-world-haf-1.haf
       POSTGRES_PORT: 5432

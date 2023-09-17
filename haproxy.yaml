@@ -1,6 +1,8 @@
 services:
   haproxy:
     image: haproxy:2.8.2-alpine
+    profiles:
+      - servers
     ports:
       - "8000:8000"
     volumes:

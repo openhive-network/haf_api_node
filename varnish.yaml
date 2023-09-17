@@ -1,6 +1,8 @@
 services:
   varnish:
     image: varnish:7.3.0-alpine
+    profiles:
+      - servers
     volumes:
       - type: bind
         source: ./varnish/default.vcl

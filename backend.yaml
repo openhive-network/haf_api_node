@@ -1,6 +1,8 @@
 services:
   pghero:
     image: ankane/pghero:v3.3.3
+    profiles:
+      - admin
     environment:
       DATABASE_URL: postgres://pghero@haf:5432/haf_block_log
     ports:
@@ -24,6 +26,8 @@ services:
   #  command: chown -R 5050:5050 /var/lib/pgadmin
   pgadmin:
     image: dpage/pgadmin4:7.6
+    profiles:
+      - admin
     environment:
       PGADMIN_DEFAULT_EMAIL: "admin@haf.world"
       PGADMIN_DEFAULT_PASSWORD: "admin"

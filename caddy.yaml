@@ -1,6 +1,8 @@
 services:
   caddy:
     image: ${CADDY_IMAGE:-caddy:2.7.4-alpine}
+    profiles:
+      - server
     ports:
       - 80:80
       - 443:443

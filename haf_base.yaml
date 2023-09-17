@@ -1,5 +1,7 @@
 services:
   haf:
+    profiles:
+      - core
     image: ${HAF_IMAGE}
     ports:
       - ${HAF_PORT}:8090
