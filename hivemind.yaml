@@ -36,4 +36,4 @@ services:
       - "server"
     depends_on:
       hivemind-block-processing:
-        condition: service_healthy
+        condition: service_started
