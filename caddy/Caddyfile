@@ -1,20 +1,22 @@
 # Simple caddy config, handles SSL and forwards everything to varnish
 {$PUBLIC_HOSTNAME} {
-  import snippets/*
+  import snippets/self-signed.snippet
 
   route /btracker_api/ {
     uri strip_prefix /btracker_api
-    reverse_proxy {$COMPOSE_PROJECT_NAME}-balance-tracker-swagger-1.{$NETWORK_NAME}:8080 {
+    reverse_proxy balance-tracker-swagger:8080 {
       header_up Host {http.request.host}
       header_up X-Real-IP {http.request.remote}
-      header_up X-Forwarded-For {http.request.remote}
-      header_up X-Forwarded-Port {http.request.port}
-      header_up X-Forwarded-Proto {http.request.scheme}
     }
   }
-  route /account_history_api/ {
-    reverse_proxy {$COMPOSE_PROJECT_NAME}-hafah-swagger-1.{$NETWORK_NAME}:80
-  }
-  reverse_proxy {$COMPOSE_PROJECT_NAME}-varnish-1.{$NETWORK_NAME}:80
 
+  # Route all POST calls to the root URL to jussi (assume they're old-style JSON-RPC calls)
+  @post_to_root {
+    method POST
+    path /
+  }
+  reverse_proxy @post_to_root http://jussi:9000
+
+  # Route everything else (mostly new-style REST calls)
+  reverse_proxy http://varnish
 }

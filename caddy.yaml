@@ -2,13 +2,11 @@ services:
   caddy:
     image: ${CADDY_IMAGE:-caddy:2.7.4-alpine}
     profiles:
-      - server
+      - servers
     ports:
       - 80:80
       - 443:443
     environment:
-      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
-      NETWORK_NAME: ${NETWORK_NAME}
       PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME}
     volumes:
       - type: bind

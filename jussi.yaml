@@ -1,11 +1,28 @@
 services:
+  redis1:
+    image: "redis:7.2-alpine"
+    profiles:
+      - servers
+    networks:
+      - haf-network
+  redis2:
+    image: "redis:7.2-alpine"
+    profiles:
+      - servers
+    networks:
+      - haf-network
   jussi:
     image: registry.gitlab.syncad.com/hive/jussi:latest
     profiles:
       - servers
+        #environment:
+        #  JUSSI_REDIS_URL: redis://redis1:6379
+        #  JUSSI_REDIS_READ_REPLICA_URLS: redis://redis2:6379
     volumes:
       - type: bind
         source: ./jussi/config.json
         target: /home/jussi/config.json
         read_only: true
-    command: --server_workers=4 --upstream_config_ifle=/home/jussi/config.json
+    command: --server_workers=4 --upstream_config_file=/home/jussi/config.json
+    networks:
+      - haf-network
