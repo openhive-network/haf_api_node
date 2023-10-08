@@ -3,9 +3,6 @@ services:
     profiles:
       - core
     image: ${HAF_IMAGE}
-    ports:
-      - ${HAF_PORT}:8090
-    #   - ${DB_PORT}:5432
     networks:
       - haf-network
     tty: true
@@ -24,27 +21,32 @@ services:
     # TODO: needs work:
     environment:
       PG_ACCESS: "
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-balance-tracker-setup-1.${NETWORK_NAME}             trust\n
-        host    haf_block_log    btracker_owner   ${COMPOSE_PROJECT_NAME}-balance-tracker-block-processing-1.${NETWORK_NAME}  trust\n
-        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-balance-tracker-postgrest-1.${NETWORK_NAME}         trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-balance-tracker-setup-1.${NETWORK_NAME}               trust\n
+        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-balance-tracker-drop-db-1.${NETWORK_NAME}             trust\n
+        host    haf_block_log    btracker_owner   ${COMPOSE_PROJECT_NAME}-balance-tracker-block-processing-1.${NETWORK_NAME}    trust\n
+        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-balance-tracker-postgrest-1.${NETWORK_NAME}           trust\n
 
-        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-hafah-setup-1.${NETWORK_NAME}                       trust\n
-        host    haf_block_log    hafah_user       ${COMPOSE_PROJECT_NAME}-hafah-postgrest-1.${NETWORK_NAME}                   trust\n
+        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-hafah-setup-1.${NETWORK_NAME}                         trust\n
+        host    haf_block_log    hafah_user       ${COMPOSE_PROJECT_NAME}-hafah-postgrest-1.${NETWORK_NAME}                     trust\n
 
-        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-haf-block-explorer-setup-1.${NETWORK_NAME}          trust\n
-        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-haf-block-explorer-setup-1.${NETWORK_NAME}          trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-haf-block-explorer-setup-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-haf-block-explorer-setup-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-haf-block-explorer-setup-1.${NETWORK_NAME}            trust\n
+
+        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-haf-block-explorer-block-processing-1.${NETWORK_NAME} trust\n
+        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-haf-block-explorer-postgrest-1.${NETWORK_NAME}        trust\n
 
         # hivemind setup needs to change the join_collapse_limit setting on the whole database, which\n
         # requires superuser privileges\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-setup-1.${NETWORK_NAME}                    trust\n
-        host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-block-processing-1.${NETWORK_NAME}         trust\n
-        host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-server-1.${NETWORK_NAME}                   trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-setup-1.${NETWORK_NAME}                      trust\n
+        host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-block-processing-1.${NETWORK_NAME}           trust\n
+        host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-server-1.${NETWORK_NAME}                     trust\n
 
-        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                           trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                           trust\n
-        host    postgres         haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                           trust\n
-        host    haf_block_log    pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                            trust\n
-        host    postgres         pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                            trust\n
+        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
+        host    postgres         haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
+        host    haf_block_log    pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                              trust\n
+        host    postgres         pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                              trust\n
         "
     # when mounting volumes, declare the directories you want to bind-mount here, 
     # using either the short or long syntax.  Don't declare them as top-level named

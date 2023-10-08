@@ -14,6 +14,11 @@ backend balance_tracker {
     .port = "7004";
 }
 
+backend haf_block_explorer {
+    .host = "haproxy";
+    .port = "7005";
+}
+
 backend default {
     .host = "haproxy";
     .port = "7001";
@@ -53,6 +58,14 @@ sub vcl_recv {
         # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
         set req.url = regsub(req.url, "^/btracker/(.*)$", "/rpc/\1");
         set req.backend_hint = balance_tracker;
+
+        if (req.method == "POST") {
+            call recv_cachable_post;
+        }
+    } elseif (req.url ~ "^/hafbe/") {
+        # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
+        set req.url = regsub(req.url, "^/hafbe/(.*)$", "/rpc/\1");
+        set req.backend_hint = haf_block_explorer;
 
         if (req.method == "POST") {
             call recv_cachable_post;

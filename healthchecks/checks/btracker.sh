@@ -2,7 +2,6 @@
 set -e
 # Setup a trap to kill potentially pending healthcheck SQL query at script exit
 trap "trap - SIGINT SIGTERM && kill -- -\$\$" SIGINT SIGTERM
-POSTGRES_URL="postgresql://haf_app_admin@${COMPOSE_PROJECT_NAME}-haf-1/haf_block_log"
 if [ $(psql "$POSTGRES_URL" --quiet --no-align --tuples-only --command="SELECT hive.is_instance_ready();") = f ]; then
   echo "down #HAF not in sync"
   exit 1

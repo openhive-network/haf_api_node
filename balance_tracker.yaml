@@ -1,21 +1,46 @@
 services:
   balance-tracker-setup:
-    image: ${BACKEND_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker/setup}:${BALANCE_TRACKER_SETUP_VERSION:-latest}
-    profiles:
-      - apps
-    networks:
-      haf-network:
-    depends_on:
-      haf:
-        condition: service_healthy
-  balance-tracker-block-processing:
-    image: ${BACKEND_BLOCK_PROCESSING_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker/block-processing}:${BALANCE_TRACKER_BLOCK_PROCESSING_VERSION:-latest}
+    image: ${BACKEND_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_SETUP_VERSION:-latest}
     profiles:
       - apps
     environment:
       POSTGRES_HOST: haf
     networks:
       haf-network:
+    command:
+      - setup_db
+    depends_on:
+      haf:
+        condition: service_healthy
+  balance-tracker-drop-db:
+    image: ${BACKEND_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_SETUP_VERSION:-latest}
+    profiles:
+      - balance-tracker-drop-db
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    command:
+      - drop_db
+    depends_on:
+      balance-tracker-setup:
+        condition: service_completed_successfully
+  balance-tracker-block-processing:
+    image: ${BACKEND_BLOCK_PROCESSING_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_BLOCK_PROCESSING_VERSION:-latest}
+    profiles:
+      - balance-tracker-standalone
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    command:
+      - process_blocks
+    healthcheck:
+      test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 48h
     depends_on:
       balance-tracker-setup:
         condition: service_completed_successfully
