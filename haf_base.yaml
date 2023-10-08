@@ -60,6 +60,7 @@ services:
       - type: bind
         source: ${HAF_SHM_DIRECTORY}/
         target: /home/hived/shm_dir
+    shm_size: 2gb
     healthcheck:
       test: ["CMD-SHELL","curl -f localhost:8091"]
       interval: 10s
