@@ -18,6 +18,10 @@ services:
         source: ./caddy/snippets
         target: /etc/caddy/snippets
         read_only: true
+      - type: bind
+        source: ${TLS_SELF_SIGNED_SNIPPET}
+        target: /etc/caddy/tls-self-signed-snippets/self-signed.snippet
+        read_only: true
       - type: volume
         source: caddy_data
         target: /data

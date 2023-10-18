@@ -32,7 +32,6 @@ sub recv_cachable_post {
     # on the PostgREST side, so we may be able to remove this soon.
     unset req.http.X-Body-Len;
 
-    std.log("Will cache POST for: " + req.http.host + req.url);
     if (std.integer(req.http.content-length, 0) > 500000) {
         return(synth(413, "The request body size exceeds the limit"));
     }
@@ -41,7 +40,6 @@ sub recv_cachable_post {
         return(hash);
     }
     set req.http.X-Body-Len = bodyaccess.len_req_body();
-    std.log("req_body is " + req.http.X-Body-Len);
     return(hash);
 }
 

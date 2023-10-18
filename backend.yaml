@@ -25,7 +25,7 @@ services:
   #    # - ./haf-datadir/pgadmin/servers.json:/pgadmin4/servers.json:ro
   #  command: chown -R 5050:5050 /var/lib/pgadmin
   pgadmin:
-    image: dpage/pgadmin4:7.6
+    image: dpage/pgadmin4:7.7
     profiles:
       - admin
     environment:

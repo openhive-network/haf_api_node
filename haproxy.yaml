@@ -12,11 +12,11 @@ services:
         read_only: true
     networks:
       - haf-network
-  haproxy-healthchecks:
-    image: tmp
-    environment:
-      POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
-    profiles:
-      - servers
-    networks:
-      - haf-network
+  #haproxy-healthchecks:
+  #  image: tmp
+  #  environment:
+  #    POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
+  #  profiles:
+  #    - servers
+  #  networks:
+  #    - haf-network
