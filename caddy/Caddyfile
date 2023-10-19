@@ -38,6 +38,8 @@
       rewrite * /admin/haproxy{uri}
       reverse_proxy http://haproxy:8000
     }
+    root * /etc/caddy/admin_html
+    file_server
   }
 
   # Route everything else (mostly new-style REST calls)

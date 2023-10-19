@@ -19,6 +19,10 @@ services:
         target: /etc/caddy/snippets
         read_only: true
       - type: bind
+        source: ./caddy/admin_html
+        target: /etc/caddy/admin_html
+        read_only: true
+      - type: bind
         source: ${TLS_SELF_SIGNED_SNIPPET}
         target: /etc/caddy/tls-self-signed-snippets/self-signed.snippet
         read_only: true
