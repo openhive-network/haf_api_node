@@ -3,8 +3,6 @@ services:
     image: haproxy:2.8.2-alpine
     profiles:
       - servers
-    ports:
-      - "8000:8000"
     volumes:
       - type: bind
         source: ./haproxy/haproxy.cfg
@@ -12,11 +10,11 @@ services:
         read_only: true
     networks:
       - haf-network
-  #haproxy-healthchecks:
-  #  image: tmp
-  #  environment:
-  #    POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
-  #  profiles:
-  #    - servers
-  #  networks:
-  #    - haf-network
+  haproxy-healthchecks:
+    image: healthchecks
+    environment:
+      POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
+    profiles:
+      - servers
+    networks:
+      - haf-network
