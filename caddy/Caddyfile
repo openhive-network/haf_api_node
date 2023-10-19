@@ -14,6 +14,32 @@
   }
   reverse_proxy @post_to_root http://jussi:9000
 
+  handle_path /admin/* {
+    import admin-snippets/*.snippet
+
+    # Route /admin/pgadmin to pgAdmin
+    redir /pgadmin /admin/pgadmin/
+    handle_path /pgadmin/* {
+      reverse_proxy http://pgadmin {
+        header_up X-Script-Name "/admin/pgadmin"
+      }
+    }
+
+    # Route /admin/pgadmin to pghero
+    redir /pghero /admin/pghero/
+    handle_path /pghero/* {
+      rewrite * /admin/pghero{uri}
+      reverse_proxy http://pghero:8080
+    }
+
+    # Route /admin/haproxy to haproxy's stats page
+    redir /haproxy /admin/haproxy/
+    handle_path /haproxy/* {
+      rewrite * /admin/haproxy{uri}
+      reverse_proxy http://haproxy:8000
+    }
+  }
+
   # Route everything else (mostly new-style REST calls)
   reverse_proxy http://varnish
 }
