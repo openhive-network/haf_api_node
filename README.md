@@ -13,10 +13,11 @@ and environment files:
 - .env.dev *(for the developer stage)*
 - .env.prod *(for the production stage)*
 
-The environment files specify the versions of images and ports used by applications, as well as the network definition, which varies depending on the version of the environment being run.
+The environment files specify the versions of images and ports used by applications, as well as the network definition, which vary depending on the version of the environment being run.
 
-This example deployment assumes that haf-datadir local subdirecory can be directly used as HAF instance data directory, by specifying actual path in environment file.
-As usually, if you want to perform replay, you have to put a block_log file into `haf-datadir/blockchain` and specify --replay option to the Hived startup options (see ARGUMENTS variable definition in the example env files).
+This example deployment assumes that the haf-datadir local subdirecory can be directly used as a HAF instance data directory, by specifying the actual path in its environment file.
+
+As usual, if you want to perform a replay, you have to put a block_log file into the `haf-datadir/blockchain` directroy and specify the --replay option an a hived startup option (see ARGUMENTS variable definition in the example env files).
 
 # System Requirements
 
@@ -39,10 +40,10 @@ For a mainnet API node, we recommend:
 ## Install ZFS support
 
 We recommend running your HAF instance on a ZFS filesystem, and this documentation assumes you will be
-running ZFS.  Its compression and snapshots are particularly useful when running a HAF node.
+running ZFS.  Its compression and snapshot features are particularly useful when running a HAF node.
 
 We intend to publish ZFS snapshots of fully-synced HAF nodes that can downloaded to get a HAF node 
-up & running quickly, avoiding the multi-day replay times.
+up & running quickly, avoiding multi-day replay times.
 
 ```
 sudo apt install zfsutils-linux
@@ -134,7 +135,7 @@ Then, to restore the snapshot, run:
 sudo zfs recv -d -v haf-pool < snapshot_filename
 ```
 
-## Launch example
+## Launch example (needs updating)
 
 ---
 
