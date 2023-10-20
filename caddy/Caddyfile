@@ -1,6 +1,6 @@
-#{
-#  order rate_limit before basicauth
-#}
+{
+  order rate_limit before basicauth
+}
 
 # Simple caddy config, handles SSL and forwards everything to varnish
 {$PUBLIC_HOSTNAME} {
@@ -16,13 +16,13 @@
   respond @blacklisted_ips 403
 
   # rate limit users by IP to 600 requests per minute
-  #rate_limit {
-  #  zone apilimit {
-  #    key {remote_host}
-  #    events 600
-  #    window 1m
-  #  }
-  #}
+  rate_limit {
+    zone apilimit {
+      key {remote_host}
+      events 600
+      window 1m
+    }
+  }
 
   # Handle CORS pre-flight checks here, instead of passing them through
   @cors_preflight method OPTIONS
