@@ -61,7 +61,9 @@ echo "  mounted on:      $TOP_LEVEL_DATASET_MOUNTPOINT"
 zfs_common_options="-o atime=off"
 zfs_compressed_options="-o compression=lz4"
 zfs_uncompressed_options="-o compression=off"
-zfs_postgres_options="-o recordsize=8k" # or "-o recordsize=16k", consider also "-o logbias=throughput"
+# several sites recommend 8k blocks for optimizing postgres on zfs, but we have found that it
+# kills compression ratios for haf_block_log, so we've decided to leave it at the default 128k
+zfs_postgres_options="" # or "-o recordsize=8k -o recordsize=16k", consider also "-o logbias=throughput"
 zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
 # create an uncompressed dataset for the blockchain.  Blocks in it are already compressed, so won't compress further.
@@ -79,7 +81,7 @@ zfs create $zfs_common_options $zfs_uncompressed_options $zfs_postgres_options -
 # create a dataset for the write-ahead logs, simply to reduce the size of snapshots of other datasets
 # note: this is disabled, I'm not sure we really care about the size of the snapshots of other datasets, we
 # only care about the total size, and I'm not sure this gives us any benefit
-# zfs create $zfs_common_options $zfs_uncompressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
+zfs create $zfs_common_options $zfs_uncompressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 
 # create a dataset for the main HAF database itself
 zfs create $zfs_common_options $zfs_compressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
