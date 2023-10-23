@@ -135,32 +135,27 @@ Then, to restore the snapshot, run:
 sudo zfs recv -d -v haf-pool < snapshot_filename
 ```
 
-## Launch example (needs updating)
+## Launch procedure
 
 ---
 
-1.start/stop naked HAF instance using prod environment
+start/stop HAF instance based on profiles enabled in your `.env` file
 
 ```SH
 docker compose up -d
-docker compose down
+
+docker compose logs -f hivemind-block-processor # tail the hivemind sync logs to the console
+docker compose down hivemind-block-processor # shut down just the hivemind sync process
+docker compose up -d hivemind-block-processor # bring hivemind sync process back up
+
+docker compose down # shut down all containers
 ```
 
-2.start/stop HAF instance with pgadmin and pghero in dev enviroment
+This will start or stop all services selected by the profiles you have
+enabled in the `.env` file's `COMPOSE_PROFILES` variable.
 
-```SH
-docker compose --env-file .env.dev -f haf_base.yaml -f backend.yaml up -d
-docker compose --env-file .env.dev -f haf_base.yaml -f backend.yaml down
-```
-
-3.start/stop HAF instance with pgadmin and pghero and some apps in dev enviroment
-
-```SH
-docker compose --env-file .env.dev -f haf_base.yaml -f backend.yaml -f app.yaml up -d
-docker compose --env-file .env.dev -f haf_base.yaml -f backend.yaml -f app.yaml down
-```
-
-##
-
-
-
+Currently available profiles are:
+- `core`: the minimal HAF system of a database and hived
+- `admin`: useful tools for administrating HAF: pgadmin, pghero
+- `apps`: core HAF apps: hivemind, HAfAH, haf-block-explorer
+- `servers`: services for routing/caching API calls: jussi,varnish
