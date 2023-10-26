@@ -30,7 +30,7 @@ services:
     depends_on:
       hafah-setup:
         condition: service_completed_successfully
-  hafah-benchmarks:
+  hafah-benchmarks-old-style:
     image: registry.gitlab.syncad.com/hive/tests_api/benchmark_aio:latest
     profiles:
       - hafah-benchmarks
@@ -38,18 +38,45 @@ services:
       SKIP_VERSION1: 1
       ADDITIONAL_ARGS1: --skip-version-check
       JMETER_WORKDIR: /workspace/wdir
-      ADDRESS: hafah-postgest
+      ADDRESS: hafah-postgrest
       PORT: 3000
-      POSTGRES_SCHEMA: hafah_python
-      POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
-      CALL_STYLE: postgres
+      CALL_STYLE: old-style
       WDIR: /workspace
     volumes: 
       - type: bind
-        source: ${HAF_DATA_DIRECTORY}/tests/hafah_api_benchmarks
+        source: ${HAF_DATA_DIRECTORY}/tests/hafah_api_benchmarks/old-style
         target: /workspace
     networks:
       haf-network:
+    # note: when I enable this dependency which logically seems ok, 
+    # docker restarts postgrest every time I bring up the benchmarks.
+    # Other services don't do this, need to figure out why.  Suspect it's
+    # because postgrest services don't have a health check.
+    #depends_on:
+    #  hafah-postgrest:
+    #    condition: service_started
+  hafah-benchmarks-new-style:
+    image: registry.gitlab.syncad.com/hive/tests_api/benchmark_aio:latest
+    profiles:
+      - hafah-benchmarks
+    environment:
+      SKIP_VERSION1: 1
+      ADDITIONAL_ARGS1: --skip-version-check
+      JMETER_WORKDIR: /workspace/wdir
+      ADDRESS: hafah-postgrest
+      PORT: 3000
+      CALL_STYLE: new-style
+      WDIR: /workspace
+    volumes: 
+      - type: bind
+        source: ${HAF_DATA_DIRECTORY}/tests/hafah_api_benchmarks/new-style
+        target: /workspace
+    networks:
+      haf-network:
+    # note: when I enable this dependency which logically seems ok, 
+    # docker restarts postgrest every time I bring up the benchmarks.
+    # Other services don't do this, need to figure out why.  Suspect it's
+    # because postgrest services don't have a health check.
     #depends_on:
     #  hafah-postgrest:
     #    condition: service_started
