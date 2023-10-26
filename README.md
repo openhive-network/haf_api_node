@@ -1,24 +1,5 @@
 # Using docker compose to run the HAF
 
----
-
-Files used in the process:
-
-- haf_base.yaml *(haf instance)*
-- backend.yaml *(backend application: pgadmin, phgero to preview and manage the database)*
-- app.yaml *(example of application: postgrest and swagger)*
-
-and environment files:
-
-- .env.dev *(for the developer stage)*
-- .env.prod *(for the production stage)*
-
-The environment files specify the versions of images and ports used by applications, as well as the network definition, which vary depending on the version of the environment being run.
-
-This example deployment assumes that the haf-datadir local subdirecory can be directly used as a HAF instance data directory, by specifying the actual path in its environment file.
-
-As usual, if you want to perform a replay, you have to put a block_log file into the `haf-datadir/blockchain` directroy and specify the --replay option an a hived startup option (see ARGUMENTS variable definition in the example env files).
-
 # System Requirements
 
 We assume the base system will be running Ubuntu 22.04 (jammy).  Everything will likely work with later versions
@@ -109,7 +90,7 @@ ZFS options for different portions of the data.
 If you're starting from scratch, after you've created your zpool and configured its name in the .env file
 as described above, run:
 ```
-sudo ./create_zfs_datasets.sh
+sudo ./create_zfs_datasets.sh --env-file=./.env
 ```
 to create and mount the datasets.
 

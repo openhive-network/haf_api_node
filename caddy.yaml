@@ -1,6 +1,6 @@
 services:
   caddy:
-    image: ${CADDY_IMAGE:-caddy:2.7.4-alpine}
+    image: ${CADDY_IMAGE:-registry.gitlab.syncad.com/hive/haf_api_node/caddy}:${CADDY_VERSION:-latest}
     profiles:
       - servers
     ports:

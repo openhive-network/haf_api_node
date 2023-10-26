@@ -3,6 +3,7 @@ services:
     image: ${HAFAH_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/hafah/setup}:${HAFAH_SETUP_VERSION:-latest}
     profiles:
       - apps
+      - hafah
     environment:
       POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
     networks:
@@ -14,6 +15,7 @@ services:
     image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
+      - hafah
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_DB_URI: postgresql://hafah_user@haf/haf_block_log
@@ -28,3 +30,26 @@ services:
     depends_on:
       hafah-setup:
         condition: service_completed_successfully
+  hafah-benchmarks:
+    image: registry.gitlab.syncad.com/hive/tests_api/benchmark_aio:latest
+    profiles:
+      - hafah-benchmarks
+    environment:
+      SKIP_VERSION1: 1
+      ADDITIONAL_ARGS1: --skip-version-check
+      JMETER_WORKDIR: /workspace/wdir
+      ADDRESS: hafah-postgest
+      PORT: 3000
+      POSTGRES_SCHEMA: hafah_python
+      POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
+      CALL_STYLE: postgres
+      WDIR: /workspace
+    volumes: 
+      - type: bind
+        source: ${HAF_DATA_DIRECTORY}/tests/hafah_api_benchmarks
+        target: /workspace
+    networks:
+      haf-network:
+    #depends_on:
+    #  hafah-postgrest:
+    #    condition: service_started
