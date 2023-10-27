@@ -4,6 +4,7 @@ services:
     profiles:
       - apps
       - hafah
+      - hafbe
     environment:
       POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
     networks:

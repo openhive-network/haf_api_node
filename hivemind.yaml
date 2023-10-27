@@ -3,6 +3,7 @@ services:
     image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
     profiles:
       - apps
+      - hivemind
     networks:
       haf-network:
     command:
@@ -16,6 +17,7 @@ services:
     image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
     profiles:
       - apps
+      - hivemind
     networks:
       haf-network:
     command:
@@ -29,6 +31,7 @@ services:
     image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
     profiles:
       - apps
+      - hivemind
     networks:
       haf-network:
     command:

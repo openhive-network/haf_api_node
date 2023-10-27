@@ -3,6 +3,7 @@ services:
     image: ${BACKEND_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_SETUP_VERSION:-latest}
     profiles:
       - apps
+      - hafbe
     environment:
       POSTGRES_HOST: haf
     networks:

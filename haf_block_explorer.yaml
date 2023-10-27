@@ -3,6 +3,7 @@ services:
     image: ${HAF_BLOCK_EXPLORER_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer}:${HAF_BLOCK_EXPLORER_SETUP_VERSION:-latest}
     profiles:
       - apps
+      - hafbe
     environment:
       POSTGRES_HOST: haf
     command:
