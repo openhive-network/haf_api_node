@@ -21,6 +21,7 @@ services:
     image: ${HAF_BLOCK_EXPLORER_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer}:${HAF_BLOCK_EXPLORER_SETUP_VERSION:-latest}
     profiles:
       - apps
+      - hafbe
     environment:
       POSTGRES_HOST: haf
     command:
@@ -38,6 +39,7 @@ services:
     image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
+      - hafbe
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_DB_URI: postgresql://hafbe_owner@haf/haf_block_log
