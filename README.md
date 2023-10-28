@@ -147,4 +147,40 @@ Currently available profiles are:
 - `core`: the minimal HAF system of a database and hived
 - `admin`: useful tools for administrating HAF: pgadmin, pghero
 - `apps`: core HAF apps: hivemind, HAfAH, haf-block-explorer
-- `servers`: services for routing/caching API calls: jussi,varnish
+- `servers`: services for routing/caching API calls: haproxy, jussi,varnish
+
+# Observing node startup
+
+After you start your HAF instance, hived will need some time to catch up to the head block
+of the Hive blockchain (typically a few minutes or less if you started from a snapshot,
+otherwise it will take many hours or even days depending on your hardware). You can monitor
+this process using: `docker compose logs -f haf`
+
+# After startup: Monitoring services and troubleshooting failures on your API node
+
+Haproxy can be used to monitor the state of the various services on your HAF server:
+`https://your_server_name/admin/haproxy/`
+
+If you see a service is down, you can use an appropriate `docker compose log` command to
+diagnose the issue. When diagnosing issues, keep in mind that several services depend on other services
+(for example, all haf apps depend on the hived service) so start by checking the health of the lowest level
+services.
+
+You can diagnose API performance problems using pgadmin and pghero. Pgadmin is best for diagnosing severe problems
+(e.g. locked tables, etc) whereas pghero is typically best for profiling to determine what queries are loading
+down your server and can potentially be optimized.
+https://your_server_name/admin/pgadmin
+https://your_server_name/admin/pghero/
+
+# Creating a ZFS snapshot to backup your node
+Creating snapshots is fast and easy:
+
+```
+docker compose down  #shut down haf
+./snapshot_zfs_datasets.sh --env-file=./.env 20231023T1831Z-haf-only #where 20231023T1831Z-haf-only is an example snapshot name
+docker compose up -d
+```
+Note: snapshot_zfs_datasets.sh unmounts the HAF datasets, takes a snapshot, and remounts them. Since it unmounts the datasets,
+the script will fail if you have anything accessing the datasets. In particular, be sure you don't have any terminals open with
+a current working directory set to those datasets. In theory, the script shouldn't have to unmount the datasets before taking
+the snapshot, but we have occassionally encountered issues where the snapshots didn't get all needed data.
