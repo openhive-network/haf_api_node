@@ -20,8 +20,8 @@ For a mainnet API node, we recommend:
 
 ## Install ZFS support
 
-We recommend running your HAF instance on a ZFS filesystem, and this documentation assumes you will be
-running ZFS.  Its compression and snapshot features are particularly useful when running a HAF node.
+We strongly recommend running your HAF instance on a ZFS filesystem, and this documentation assumes 
+you will be running ZFS.  Its compression and snapshot features are particularly useful when running a HAF node.
 
 We intend to publish ZFS snapshots of fully-synced HAF nodes that can downloaded to get a HAF node 
 up & running quickly, avoiding multi-day replay times.
@@ -83,7 +83,8 @@ keep multiple configurations, you can give your environment files different name
 ## Set up ZFS filesystems
 
 The HAF installation is spread across multiple ZFS datasets, which allows us to set different
-ZFS options for different portions of the data.
+ZFS options for different portions of the data. We recommend that most nodes keep the default
+datasets in order to enable easy sharing of snapshots.
 
 ### Initializing from scratch
 
@@ -93,6 +94,13 @@ as described above, run:
 sudo ./create_zfs_datasets.sh --env-file=./.env
 ```
 to create and mount the datasets.
+
+By default, the dataset holding most of the database storage uses zfs compression. The dataset for
+the blockchain data directory (which holds the block_log for hived and the shared_memory.bin file)
+is not compressed because hived directly manages compression of the block_log file. 
+
+If you have a LOT of nvme storage (e.g. 6TB+), you can get better API performance at the cost of disk
+storage by disabling ZFS compression on the database dataset, but for most nodes this isn't recommended.
 
 ### Initializing from a snapshot
 
