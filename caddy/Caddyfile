@@ -36,6 +36,7 @@
 
 
   # reverse-proxy to the admin tools
+  redir /admin /admin/
   handle_path /admin/* {
     import admin-snippets/*.snippet
 
