@@ -1,6 +1,6 @@
 services:
   haf-block-explorer-setup:
-    image: ${HAF_BLOCK_EXPLORER_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer}:${HAF_BLOCK_EXPLORER_SETUP_VERSION:-latest}
+    image: ${HAF_BLOCK_EXPLORER_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer}:${HAF_BLOCK_EXPLORER_SETUP_VERSION:-haf_api_node}
     profiles:
       - apps
       - hafbe
@@ -18,7 +18,7 @@ services:
       hafah-setup:
         condition: service_completed_successfully
   haf-block-explorer-block-processing:
-    image: ${HAF_BLOCK_EXPLORER_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer}:${HAF_BLOCK_EXPLORER_SETUP_VERSION:-latest}
+    image: ${HAF_BLOCK_EXPLORER_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer}:${HAF_BLOCK_EXPLORER_SETUP_VERSION:-haf_api_node}
     profiles:
       - apps
       - hafbe
