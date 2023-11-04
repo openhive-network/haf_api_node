@@ -8,9 +8,10 @@ trap "trap - 2 15 && kill -- -\$\$" 2 15
 
 check_haf_lib
 
-APP_IN_SYNC=$(psql "$POSTGRES_URL" --quiet --no-align --tuples-only --command="SELECT hive.is_app_in_sync('hivemind_app');")
-if [ "$APP_IN_SYNC" = "f" ]; then
-  echo "down #app not in sync"
+HIVEMIND_LAST_IMPORTED_BLOCK_AGE=$(psql "$POSTGRES_URL" --quiet --no-align --tuples-only --command="select extract('epoch' from now() - (select last_imported_block_date from hivemind_app.hive_state limit 1))::integer")
+if [ "$HIVEMIND_LAST_IMPORTED_BLOCK_AGE" -gt 60 ]; then
+  age_string=$(format_seconds "$HIVEMIND_LAST_IMPORTED_BLOCK_AGE")
+  echo "down #hivemind block over a minute old ($age_string)"
   exit 3
 fi
 

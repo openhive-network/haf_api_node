@@ -8,10 +8,18 @@ trap "trap - 2 15 && kill -- -\$\$" 2 15
 
 check_haf_lib
 
-APP_IN_SYNC=$(psql "$POSTGRES_URL" --quiet --no-align --tuples-only --command="SELECT hive.is_app_in_sync(ARRAY['hafbe_app', 'btracker_app']);")
-if [ "$APP_IN_SYNC" = "f" ]; then
-  echo "down #app not in sync"
+BTRACKER_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_BTRACKER" --quiet --no-align --tuples-only --command="select extract('epoch' from now() - created_at)::integer from hive.blocks where num = (select last_processed_block from btracker_app.app_status)")
+if [ "$BTRACKER_LAST_PROCESSED_BLOCK_AGE" -gt 60 ]; then
+  age_string=$(format_seconds "$BTRACKER_LAST_PROCESSED_BLOCK_AGE")
+  echo "down #btracker block over a minute old ($age_string)"
   exit 3
+fi
+
+HAFBE_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_HAFBE" --quiet --no-align --tuples-only --command="select extract('epoch' from now() - created_at)::integer from hive.blocks where num = (select last_processed_block from hafbe_app.app_status)")
+if [ "$HAFBE_LAST_PROCESSED_BLOCK_AGE" -gt 60 ]; then
+  age_string=$(format_seconds "$HAFBE_LAST_PROCESSED_BLOCK_AGE")
+  echo "down #hafbe block over a minute old ($age_string)"
+  exit 4
 fi
 
 echo "up"
