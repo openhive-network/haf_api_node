@@ -184,3 +184,25 @@ Note: snapshot_zfs_datasets.sh unmounts the HAF datasets, takes a snapshot, and 
 the script will fail if you have anything accessing the datasets. In particular, be sure you don't have any terminals open with
 a current working directory set to those datasets. In theory, the script shouldn't have to unmount the datasets before taking
 the snapshot, but we have occassionally encountered issues where the snapshots didn't get all needed data.
+
+# Deleting Hivemind data from you database
+
+You may want to remove the Hivemind app's data from your database -- either because you no longer
+need it and want to free the space, or because you want want to replay your Hivemind app from 
+scratch, which is required for some upgrades.
+
+To delete the data:
+- stop Hivemind, but leave the rest of the stack running: `docker compose down hivemind-setup hivemind-block-processing hivemind-server`
+- run the uninstall script: `docker compose --profile=hivemind-uninstall-app up`
+- you'll see the results of a few sql statements scroll by, and it should exit after a few seconds
+
+The Hivemind data is now gone.
+
+If you're uninstalling Hivemind permanently, then remember to remove the `hivemind` profile from your `.env` file's `COMPOSE_PROFILES` line so it doesn't start automatically next time you do a `docker compose up`.
+
+If you're upgrading to a new version of hivemind:
+- if you're upgrading to a pre-release version, you'll need to set `HIVEMIND_INSTANCE_VERSION` in your `.env` file to the correct tag for the version you want to run.  If you're just upgrading to a new release version (the ones tagged `haf_api_node`), you can leave this alone.
+- run `docker compose pull` to grab the new version
+- run `docker compose up -d` to bring up all services.  This should run Hivemind setup, then launch the block processor.
+- you can monitor Hivemind's sync process by watching the logs from `docker compose logs -f hivemind-block-processing`.  In a few short days, your Hivemind app should be fully synced and ready to handle API requests.
+

@@ -1,6 +1,6 @@
 services:
   hivemind-setup:
-    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
+    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
     profiles:
       - apps
       - hivemind
@@ -14,7 +14,7 @@ services:
         condition: service_healthy
 
   hivemind-block-processing:
-    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
+    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
     profiles:
       - apps
       - hivemind
@@ -28,7 +28,7 @@ services:
         condition: service_completed_successfully
 
   hivemind-server:
-    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
+    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
     profiles:
       - apps
       - hivemind
@@ -42,9 +42,9 @@ services:
         condition: service_started
 
   hivemind-dropdb:
-    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
+    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
     profiles:
-      - hivemind-dropdb
+      - hivemind-uninstall-app
     networks:
       haf-network:
     entrypoint:
