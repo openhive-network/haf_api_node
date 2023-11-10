@@ -33,6 +33,8 @@ services:
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-haf-block-explorer-setup-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-haf-block-explorer-setup-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-haf-block-explorer-setup-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-haf-block-explorer-drop-db-1.${NETWORK_NAME}          trust\n
+        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-haf-block-explorer-drop-db-1.${NETWORK_NAME}          trust\n
 
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-haf-block-explorer-block-processing-1.${NETWORK_NAME} trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-haf-block-explorer-postgrest-1.${NETWORK_NAME}        trust\n
@@ -42,6 +44,7 @@ services:
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-setup-1.${NETWORK_NAME}                      trust\n
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-block-processing-1.${NETWORK_NAME}           trust\n
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-server-1.${NETWORK_NAME}                     trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-dropdb-1.${NETWORK_NAME}                     trust\n
 
         host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
@@ -53,7 +56,7 @@ services:
         host    haf_block_log    hafbe_user       ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
         host    haf_block_log    btracker_user    ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
         "
-      #SHM_DIR: /home/hived/shm_dir
+      SHM_DIR: /home/hived/shm_dir
     # when mounting volumes, declare the directories you want to bind-mount here, 
     # using either the short or long syntax.  Don't declare them as top-level named
     # volumes and mount them by name.  Declaring them inline here always results

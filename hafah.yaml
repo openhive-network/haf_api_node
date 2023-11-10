@@ -1,10 +1,11 @@
 services:
   hafah-setup:
-    image: ${HAFAH_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/hafah/setup}:${HAFAH_SETUP_VERSION:-latest}
+    image: ${HAFAH_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/hafah/setup}:${HAFAH_SETUP_VERSION:-haf_api_node}
     profiles:
       - apps
       - hafah
       - hafbe
+      - haf-block-explorer-drop-db
     environment:
       POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
     networks:

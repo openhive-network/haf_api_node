@@ -40,3 +40,14 @@ services:
     depends_on:
       hivemind-block-processing:
         condition: service_started
+
+  hivemind-dropdb:
+    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-latest}
+    profiles:
+      - hivemind-dropdb
+    networks:
+      haf-network:
+    entrypoint:
+      - /home/hivemind/app/drop_db.sh
+    command:
+      - "--postgres-url=postgresql://haf_admin@haf/haf_block_log"
