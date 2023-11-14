@@ -67,6 +67,9 @@ services:
         source: ${HAF_DATA_DIRECTORY}/
         target: /home/hived/datadir
       - type: bind
+        source: ${HAF_LOG_DIRECTORY}/postgresql
+        target: /home/hived/postgresql_logs/
+      - type: bind
         source: ${HAF_SHM_DIRECTORY}/
         target: /home/hived/shm_dir
     shm_size: 4gb
@@ -76,3 +79,18 @@ services:
       timeout: 2s
       retries: 10
       start_period: 72h
+  pgbadger:
+    image: matsuu/pgbadger
+    profiles:
+      - pgbadger
+    entrypoint: /bin/sh
+    command: -c "/usr/local/bin/pgbadger -I -O /pgbadger_output /postgresql_logs/*"
+    volumes:
+      - type: bind
+        source: ${HAF_DATA_DIRECTORY}/logs/pgbadger
+        target: /pgbadger_output
+      - type: bind
+        source: ${HAF_POSTGRESQL_LOG_DIRECTORY}/
+        target: /postgresql_logs
+        read_only: true
+

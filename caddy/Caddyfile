@@ -61,6 +61,18 @@
       rewrite * /admin/haproxy{uri}
       reverse_proxy http://haproxy:8000
     }
+
+    redir /pgbadger /admin/pgbadger/
+    handle_path /pgbadger/* {
+      @pgbadger_report_missing not file {
+        root /etc/caddy/pgbadger
+        try_files index.html
+      }
+
+      redir @pgbadger_report_missing /admin/pgbadger_instructions
+      root * /etc/caddy/pgbadger
+      file_server
+    }
     root * /etc/caddy/admin_html
     file_server
   }
