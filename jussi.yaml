@@ -26,3 +26,20 @@ services:
     command: --server_workers=4 --upstream_config_file=/home/jussi/config.json
     networks:
       - haf-network
+  # to use our log analysis tools, we need to capture jussi traffic using a 
+  # specific nginx logging config.  To do this, rename the actual jussi
+  # service above to 'jussi-real', then uncomment the next section. 
+  # jussi:
+  #   image: nginx
+  #   volumes:
+  #     - type: bind
+  #       source: ./jussi/nginx.conf
+  #       target: /etc/nginx/nginx.conf
+  #       read_only: true
+  #     - type: bind
+  #       source: ${HAF_LOG_DIRECTORY}/jussi
+  #       target: /var/log/jussi
+  #   ports:
+  #     - 9000:80
+  #   networks:
+  #     - haf-network
