@@ -90,7 +90,7 @@ services:
         source: ${HAF_DATA_DIRECTORY}/logs/pgbadger
         target: /pgbadger_output
       - type: bind
-        source: ${HAF_POSTGRESQL_LOG_DIRECTORY}/
+        source: ${HAF_LOG_DIRECTORY}/postgresql
         target: /postgresql_logs
         read_only: true
 
