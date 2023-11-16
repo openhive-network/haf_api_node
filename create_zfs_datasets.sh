@@ -104,5 +104,7 @@ chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
+# 1000:100 is hived:users inside the container
+chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs"
 # 105:109 is postgres:postgres inside the container
 chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql" "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
