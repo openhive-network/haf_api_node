@@ -86,6 +86,9 @@ zfs create $zfs_common_options $zfs_uncompressed_options $zfs_postgres_options -
 # create a dataset for the main HAF database itself
 zfs create $zfs_common_options $zfs_compressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 
+# create a dataset for logs (hived and postgresql, for now)
+zfs create $zfs_common_options $zfs_compressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/logs"
+
 # 1000:100 is hived:users inside the container
 chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT"
 
@@ -98,3 +101,8 @@ cp zfs.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 cp logging.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 # 105:109 is postgres:postgres inside the container
 chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
+
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql"
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
+# 105:109 is postgres:postgres inside the container
+chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql" "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"

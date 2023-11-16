@@ -71,6 +71,7 @@ echo 3 > /proc/sys/vm/drop_caches
 zfs umount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 zfs umount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 zfs umount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
+zfs umount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/logs"
 zfs umount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 zfs umount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
@@ -78,6 +79,7 @@ zfs snap -r "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"
 
 zfs mount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 zfs mount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
+zfs mount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/logs"
 zfs mount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 zfs mount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 zfs mount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
