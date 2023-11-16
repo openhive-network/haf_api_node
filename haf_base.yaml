@@ -83,8 +83,8 @@ services:
     image: matsuu/pgbadger
     profiles:
       - pgbadger
-    entrypoint: /bin/sh
-    command: -c "/usr/local/bin/pgbadger -I -O /pgbadger_output /postgresql_logs/*"
+    entrypoint: /bin/sleep
+    command: infinity
     volumes:
       - type: bind
         source: ${HAF_DATA_DIRECTORY}/logs/pgbadger
@@ -93,4 +93,14 @@ services:
         source: ${HAF_LOG_DIRECTORY}/postgresql
         target: /postgresql_logs
         read_only: true
-
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.datecron.schedule: "@daily"
+      ofelia.job-exec.datecron.command: "/bin/sh -c '/usr/local/bin/pgbadger -I -O /pgbadger_output /postgresql_logs/*'"
+  ofelia:
+    image: mcuadros/ofelia:latest
+    profiles:
+      - pgbadger
+    command: daemon --docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
