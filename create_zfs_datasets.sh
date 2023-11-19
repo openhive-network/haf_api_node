@@ -45,9 +45,23 @@ while true; do
   esac
 done
 
-if [ ! -z "$ENV_FILE" ]; then
-  echo reading $ENV_FILE
-  . $ENV_FILE
+if [ -z "$ZPOOL" -o -z "$TOP_LEVEL_DATASET" ]; then
+  if [ ! -z "$ENV_FILE" ]; then
+    echo reading $ENV_FILE
+    . $ENV_FILE
+  elif [ -f .env ]; then
+    echo reading configuration from .env
+    . ./.env
+  else
+    echo "You must either provide an --env-file argument or both a --zpool and --top-level-dataset"
+    echo "argument to tell this script what to create."
+    exit 1
+  fi
+fi
+
+if [ -z "$ZPOOL" -o -z "$TOP_LEVEL_DATASET" ]; then
+  echo "Your environment file must define the ZPOOL and TOP_LEVEL_DATASET environment variables"
+  exit 1
 fi
 
 [ -z "$ZPOOL_MOUNT_POINT" ] && ZPOOL_MOUNT_POINT="/$ZPOOL"
