@@ -82,8 +82,8 @@ echo ""
 echo "This will unmount the HAF datasets, take a snapshot, then remount them."
 
 check_dataset_is_unmountable() {
-  echo -n "Checking $1..."
-  if lsof_result=$(lsof +f $1); then
+  stdbuf -o0 echo -n "Checking $1..."
+  if lsof_result=$(lsof -w +f -- $1); then
     echo " error, dataset in use"
     echo "$lsof_result"
     exit 1
@@ -92,19 +92,23 @@ check_dataset_is_unmountable() {
 }
 
 echo "Verifying that all datasets are unmountable"
-check_dataset_is_unmountable "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
-check_dataset_is_unmountable "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
-check_dataset_is_unmountable "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
-check_dataset_is_unmountable "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/logs"
-check_dataset_is_unmountable "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
-check_dataset_is_unmountable "${ZPOOL}/${TOP_LEVEL_DATASET}"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/pgdata/pg_wal"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/pgdata"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/tablespace"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}"
 echo "All datasets appear unmountable"
 
+stdbuf -o0 echo -n "syncing filesystems..."
 sync; sync; sync
+echo " done"
+stdbuf -o0 echo -n "dropping caches..."
 echo 3 > /proc/sys/vm/drop_caches
+echo " done"
 
 unmount() {
-  echo -n "Unmounting $1..."
+  stdbuf -o0 echo -n "Unmounting $1..."
   zfs umount "$1"
   echo " done"
 }
@@ -112,30 +116,30 @@ unmount() {
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
-unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/logs"
+unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
-echo -n "Taking snapshot..."
+stdbuf -o0 echo -n "Taking snapshot..."
 zfs snap -r "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"
 echo " done"
 
 remount() {
-  echo -n "Re-mounting $1..."
-  zfs umount "$1"
+  stdbuf -o0 echo -n "Re-mounting $1..."
+  zfs mount "$1"
   echo " done"
 }
 
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/logs"
+remount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 
 zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain@${SNAPSHOT_NAME}" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/logs@${SNAPSHOT_NAME}" \
+         "${ZPOOL}/${TOP_LEVEL_DATASET}/logs@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal@${SNAPSHOT_NAME}"
