@@ -9,11 +9,11 @@ For a mainnet API node, we recommend:
 - 32GB of memory.  If you have 64GB, it will improve the time it takes to sync from scratch, but 
   it should make less of a difference if you're starting from a mostly-synced HAF node (i.e., 
   restoring a recent ZFS snapshot) (TODO: quantify this?)
-- 4TB of NVMe storage (TODO: fact check this, add details about current actual usage)
+- 4TB of NVMe storage 
   - Hive block log & shared memory: 500GB
-  - Base HAF database: xxx
-  - Hivemind database: xxx
-  - base HAF + Hivemind: 2.2TB
+  - Base HAF database: 3.5T (before 2x lz4 compression)
+  - Hivemind database: 0.65T (before 2x lz4 compression)
+  - base HAF + Hivemind:  2.14T (compressed)
   - HAF Block Explorer: xxx
 
 # Install prerequisites
