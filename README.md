@@ -91,7 +91,7 @@ datasets in order to enable easy sharing of snapshots.
 If you're starting from scratch, after you've created your zpool and configured its name in the .env file
 as described above, run:
 ```
-sudo ./create_zfs_datasets.sh --env-file=./.env
+sudo ./create_zfs_datasets.sh
 ```
 to create and mount the datasets.
 
@@ -101,6 +101,67 @@ is not compressed because hived directly manages compression of the block_log fi
 
 If you have a LOT of nvme storage (e.g. 6TB+), you can get better API performance at the cost of disk
 storage by disabling ZFS compression on the database dataset, but for most nodes this isn't recommended.
+
+#### Speeding up the initial sync
+
+Following the instructions above will get you a working HAF node, but there are some things you can
+do to speed up the initial sync.
+
+##### Replaying
+If you already have a recent block_log file (e.g., you're already running another instance of hived
+somewhere else on your local network), you can copy the block_log and block_log.artifacts files
+from that node into your /haf-pool/haf-datadir/blockchain directory.  After copying the files,
+make sure the ownership is set to the same owner as the /haf-pool/haf-datadir/blockchain directory
+so hived can read/write them: `chown 1000:100 block_log block_log.artifacts`
+
+Before brining up the haf service, you will also need to add the `--replay-blockchain` argument to
+hived to tell it you want to replay.  Edit the `.env` file's `ARGUMENTS` line like so:
+```
+ARGUMENTS="--replay-blockchain"
+```
+Once the replay has finished, you can revert the `ARGUMENTS` line to the empty string
+
+##### Shared Memory on Ramdisk
+If you have enough spare memory on your system, you can speed up the initial replay by placing the
+`shared_memory.bin` file on a ramdisk.  (TODO: how much faster is this? 20%?)
+The current default shared memory filesize is 24G, so this will only work if you have 24G free 
+(that's in addition to the memory you expect hived itself, plus HAF's integrated PostgreSQL 
+instance to use.  TODO: what's a reasonable estimate?).
+
+To do this, first create a ramdisk:
+```
+sudo mkdir /mnt/haf_shared_mem
+
+# then
+sudo mount -t tmpfs -o size=25g tmpfs /mnt/haf_shared_mem
+# - or -
+sudo mount -t ramfs ramfs /mnt/haf_shared_mem
+
+# then
+sudo chown 1000:100 /mnt/haf_shared_mem
+```
+
+Then, edit your `.env` file to tell it where to put the shared memory file:
+```
+HAF_SHM_DIRECTORY="/mnt/haf_shared_mem"
+```
+
+Now, when you resync / replay, your shared memory file will actually be in memory.  
+
+###### Moving Shared Memory back to disk
+Once your replay is finished, we suggest moving the shared_memory.bin file back to NVMe storage, 
+because:
+- it doesn't make much performance difference once hived is in sync
+- you'll be able to have your zfs snapshots include your shared memory file
+- you won't be forced to replay if the power goes out
+
+To do this:
+
+- take down the stack (`docker compose down`).
+- copy the shared memory: `sudo cp /mnt/haf_shared_mem/shared_memory.bin /haf-pool/haf-datadir/blockchain`
+- destroy the ramdisk: `sudo umount /mnt/haf_shared_mem`
+- update the `.env` file's location: `HAF_SHM_DIRECTORY="${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"`
+- bring the stack back up (`docker compose up -d`)
 
 ### Initializing from a snapshot
 
@@ -166,8 +227,8 @@ diagnose the issue. When diagnosing issues, keep in mind that several services d
 (for example, all haf apps depend on the hived service) so start by checking the health of the lowest level
 services.
 
-You can diagnose API performance problems using pgadmin and pghero. Pgadmin is best for diagnosing severe problems
-(e.g. locked tables, etc) whereas pghero is typically best for profiling to determine what queries are loading
+You can diagnose API performance problems using pgAdmin and PgHero. pgAdmin is best for diagnosing severe problems
+(e.g. locked tables, etc) whereas PgHero is typically best for profiling to determine what queries are loading
 down your server and can potentially be optimized.
 https://your_server_name/admin/pgadmin
 https://your_server_name/admin/pghero/
@@ -177,7 +238,7 @@ Creating snapshots is fast and easy:
 
 ```
 docker compose down  #shut down haf
-./snapshot_zfs_datasets.sh --env-file=./.env 20231023T1831Z-haf-only #where 20231023T1831Z-haf-only is an example snapshot name
+./snapshot_zfs_datasets.sh 20231023T1831Z-haf-only # where 20231023T1831Z-haf-only is an example snapshot name
 docker compose up -d
 ```
 Note: snapshot_zfs_datasets.sh unmounts the HAF datasets, takes a snapshot, and remounts them. Since it unmounts the datasets,
