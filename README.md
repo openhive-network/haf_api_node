@@ -246,7 +246,7 @@ the script will fail if you have anything accessing the datasets. In particular,
 a current working directory set to those datasets. In theory, the script shouldn't have to unmount the datasets before taking
 the snapshot, but we have occassionally encountered issues where the snapshots didn't get all needed data.
 
-# Deleting Hivemind data from you database
+# Deleting Hivemind data from your database
 
 You may want to remove the Hivemind app's data from your database -- either because you no longer
 need it and want to free the space, or because you want want to replay your Hivemind app from 
