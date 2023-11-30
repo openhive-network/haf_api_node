@@ -1,5 +1,5 @@
 services:
-  hivemind-setup:
+  hivemind-install:
     image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
     profiles:
       - apps
@@ -41,13 +41,13 @@ services:
       hivemind-block-processing:
         condition: service_started
 
-  hivemind-dropdb:
+  hivemind-uninstall:
     image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
     profiles:
-      - hivemind-uninstall-app
+      - hivemind-uninstall
     networks:
       haf-network:
     entrypoint:
-      - /home/hivemind/app/drop_db.sh
+      - /home/hivemind/app/uninstall_app.sh
     command:
       - "--postgres-url=postgresql://haf_admin@haf/haf_block_log"

@@ -1,5 +1,5 @@
 services:
-  balance-tracker-setup:
+  balance-tracker-install:
     image: ${BACKEND_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_SETUP_VERSION:-latest}
     profiles:
       - apps
@@ -9,20 +9,20 @@ services:
     networks:
       haf-network:
     command:
-      - setup_db
+      - install_app
     depends_on:
       haf:
         condition: service_healthy
-  balance-tracker-drop-db:
+  balance-tracker-uninstall:
     image: ${BACKEND_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_SETUP_VERSION:-latest}
     profiles:
-      - balance-tracker-drop-db
+      - balance-tracker-uninstall
     environment:
       POSTGRES_HOST: haf
     networks:
       haf-network:
     command:
-      - drop_db
+      - uninstall_app
     depends_on:
       balance-tracker-setup:
         condition: service_completed_successfully
