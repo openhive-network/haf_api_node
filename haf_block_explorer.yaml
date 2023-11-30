@@ -1,5 +1,5 @@
 services:
-  haf-block-explorer-setup:
+  block-explorer-install:
     image: ${HAF_BLOCK_EXPLORER_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer}:${HAF_BLOCK_EXPLORER_VERSION:-haf_api_node}
     profiles:
       - apps
@@ -7,17 +7,17 @@ services:
     environment:
       POSTGRES_HOST: haf
     command:
-      - setup_db
+      - install_app
     networks:
       haf-network:
     depends_on:
       haf:
         condition: service_healthy
-      balance-tracker-setup:
+      balance-tracker-install:
         condition: service_completed_successfully
-      hafah-setup:
+      hafah-install:
         condition: service_completed_successfully
-  haf-block-explorer-block-processing:
+  block-explorer-block-processing:
     image: ${HAF_BLOCK_EXPLORER_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer}:${HAF_BLOCK_EXPLORER_VERSION:-haf_api_node}
     profiles:
       - apps
@@ -29,13 +29,13 @@ services:
     networks:
       haf-network:
     depends_on:
-      haf-block-explorer-setup:
+      block-explorer-install:
         condition: service_completed_successfully
-      balance-tracker-setup:
+      balance-tracker-install:
         condition: service_completed_successfully
-      hafah-setup:
+      hafah-install:
         condition: service_completed_successfully
-  haf-block-explorer-postgrest:
+  block-explorer-postgrest:
     image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
@@ -51,5 +51,5 @@ services:
     networks:
       haf-network:
     depends_on:
-      haf-block-explorer-setup:
+      block-explorer-install:
         condition: service_completed_successfully

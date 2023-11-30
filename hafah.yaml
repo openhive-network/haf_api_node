@@ -1,5 +1,5 @@
 services:
-  hafah-setup:
+  hafah-install:
     image: ${HAFAH_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/hafah/setup}:${HAFAH_SETUP_VERSION:-haf_api_node}
     profiles:
       - apps
@@ -30,7 +30,7 @@ services:
     networks:
       haf-network:
     depends_on:
-      hafah-setup:
+      hafah-install:
         condition: service_completed_successfully
   hafah-benchmarks-old-style:
     image: registry.gitlab.syncad.com/hive/tests_api/benchmark_aio:latest

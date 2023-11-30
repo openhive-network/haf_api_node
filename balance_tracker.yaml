@@ -24,7 +24,7 @@ services:
     command:
       - uninstall_app
     depends_on:
-      balance-tracker-setup:
+      balance-tracker-install:
         condition: service_completed_successfully
   balance-tracker-block-processing:
     image: ${BACKEND_BLOCK_PROCESSING_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_BLOCK_PROCESSING_VERSION:-latest}
@@ -43,7 +43,7 @@ services:
       retries: 3
       start_period: 48h
     depends_on:
-      balance-tracker-setup:
+      balance-tracker-install:
         condition: service_completed_successfully
   balance-tracker-postgrest:
     image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
