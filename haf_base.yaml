@@ -79,6 +79,19 @@ services:
       timeout: 2s
       retries: 10
       start_period: 72h
+  logrotate:
+    image: registry.gitlab.syncad.com/hive/haf_api_node/logrotate
+    profiles:
+      - logrotate
+    init: true
+    volumes:
+      - type: bind
+        source: ${HAF_LOG_DIRECTORY}/postgresql
+        target: /var/log/postgresql
+      - type: bind
+        source: ./logrotate/logrotate.d
+        target: /etc/logrotate.d
+        read_only: true
   pgbadger:
     image: matsuu/pgbadger
     profiles:
