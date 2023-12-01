@@ -3,7 +3,7 @@
 set -e
 
 print_help() {
-  echo "Usage: $0 --env-file=filename"
+  echo "Usage: $0 [--env-file=filename] snapshot-name"
 }
 
 OPTIONS=$(getopt -o he: --long env-file:,help,zpool:,top-level-dataset: -n "$0" -- "$@")
@@ -54,7 +54,7 @@ if [ -z "$ZPOOL" -o -z "$TOP_LEVEL_DATASET" ]; then
     . ./.env
   else
     echo "You must either provide an --env-file argument or both a --zpool and --top-level-dataset"
-    echo "argument to tell this script what to create."
+    echo "argument to tell this script what datasets to snapshot."
     exit 1
   fi
 fi
@@ -67,6 +67,11 @@ fi
 SNAPSHOT_NAME="$1"
 if [ -z "$SNAPSHOT_NAME" ]; then
   echo "No snapshot name provided"
+  exit 1
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "This script must be run as root"
   exit 1
 fi
 
