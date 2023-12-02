@@ -68,6 +68,11 @@ sudo zpool create haf-pool /dev/nvme0n1 /dev/nvme1n1
 If you name your ZFS pool something else, configure the name in the environment file, 
 as described in the next section.
 
+Note: By default, ZFS tries to detect your disk's actual sector size, but it often gets it wrong 
+for modern NVMe drives, which will degrade performance due to having to write the same sector multiple
+times.  If you don't know the actual sector size, we recommend forcing the sector size to 8k by 
+specifying setting ashift=13 (e.g., `zfs create -o ashift=13 haf-pool /dev....`)
+
 ## Configure your environment
 
 Make a copy of the file `.env.example` and customize it for your system.  This file contains
