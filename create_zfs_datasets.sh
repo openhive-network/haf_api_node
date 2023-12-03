@@ -106,7 +106,7 @@ zfs create $zfs_common_options $zfs_uncompressed_options $zfs_postgres_options -
 zfs create $zfs_common_options $zfs_compressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 
 # create a dataset for logs (hived and postgresql, for now)
-zfs create $zfs_common_options $zfs_compressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/logs"
+zfs create $zfs_common_options $zfs_compressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 
 # 1000:100 is hived:users inside the container
 chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT"
