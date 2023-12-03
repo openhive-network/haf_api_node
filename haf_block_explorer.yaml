@@ -31,10 +31,6 @@ services:
     depends_on:
       block-explorer-install:
         condition: service_completed_successfully
-      balance-tracker-install:
-        condition: service_completed_successfully
-      hafah-install:
-        condition: service_completed_successfully
   block-explorer-postgrest:
     image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
