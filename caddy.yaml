@@ -2,6 +2,7 @@ services:
   caddy:
     image: ${CADDY_IMAGE:-registry.gitlab.syncad.com/hive/haf_api_node/caddy}:${CADDY_VERSION:-latest}
     profiles:
+      - admin
       - servers
     ports:
       - 80:80
