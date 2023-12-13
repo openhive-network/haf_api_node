@@ -1,12 +1,11 @@
-# Using docker compose to run the HAF
+# Using docker compose to install and maintain a HAF server and HAF apps
 
 # System Requirements
 
-We assume the base system will be running Ubuntu 22.04 (jammy).  Everything will likely work with later versions
-of Ubuntu.
+We assume the base system will be running at least Ubuntu 22.04 (jammy).  Everything will likely work with later versions of Ubuntu. IMPORTANT UPDATE: experiments have shown 20% better API performance when running U23.10, so this latter version is recommended over Ubuntu 22 as a hosting OS.
 
 For a mainnet API node, we recommend:
-- 32GB of memory.  If you have 64GB, it will improve the time it takes to sync from scratch, but 
+- at least 32GB of memory.  If you have 64GB, it will improve the time it takes to sync from scratch, but 
   it should make less of a difference if you're starting from a mostly-synced HAF node (i.e., 
   restoring a recent ZFS snapshot) (TODO: quantify this?)
 - 4TB of NVMe storage 
