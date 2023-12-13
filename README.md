@@ -231,11 +231,9 @@ diagnose the issue. When diagnosing issues, keep in mind that several services d
 (for example, all haf apps depend on the hived service) so start by checking the health of the lowest level
 services.
 
-You can diagnose API performance problems using pgAdmin and PgHero. pgAdmin is best for diagnosing severe problems
-(e.g. locked tables, etc) whereas PgHero is typically best for profiling to determine what queries are loading
-down your server and can potentially be optimized.
-https://your_server_name/admin/pgadmin
-https://your_server_name/admin/pghero/
+You can diagnose API performance problems using pgAdmin and PgHero. pgAdmin is best for diagnosing severe problems (e.g. locked tables, etc) whereas PgHero is typically best for profiling to determine what queries are loading down your server and can potentially be optimized.
+
+https://your_server_name/admin/
 
 # Creating a ZFS snapshot to backup your node
 Creating snapshots is fast and easy:
@@ -245,12 +243,9 @@ docker compose down  #shut down haf
 ./snapshot_zfs_datasets.sh 20231023T1831Z-haf-only # where 20231023T1831Z-haf-only is an example snapshot name
 docker compose up -d
 ```
-Note: snapshot_zfs_datasets.sh unmounts the HAF datasets, takes a snapshot, and remounts them. Since it unmounts the datasets,
-the script will fail if you have anything accessing the datasets. In particular, be sure you don't have any terminals open with
-a current working directory set to those datasets. In theory, the script shouldn't have to unmount the datasets before taking
-the snapshot, but we have occassionally encountered issues where the snapshots didn't get all needed data.
+Note: snapshot_zfs_datasets.sh unmounts the HAF datasets, takes a snapshot, and remounts them. Since it unmounts the datasets, the script will fail if you have anything accessing the datasets. In particular, be sure you don't have any terminals open with a current working directory set to those datasets. In theory, the script shouldn't have to unmount the datasets before taking the snapshot, but we have occassionally encountered issues where the snapshots didn't get all needed data.
 
-# Deleting Hivemind data from your database
+# Deleting Hivemind data from your database (or a similar app's data)
 
 You may want to remove the Hivemind app's data from your database -- either because you no longer
 need it and want to free the space, or because you want want to replay your Hivemind app from 
@@ -270,4 +265,3 @@ If you're upgrading to a new version of hivemind:
 - run `docker compose pull` to grab the new version
 - run `docker compose up -d` to bring up all services.  This should run hivemind's install, then launch the block processor.
 - you can monitor Hivemind's sync process by watching the logs from `docker compose logs -f hivemind-block-processing`.  In a few short days, your Hivemind app should be fully synced and ready to handle API requests.
-
