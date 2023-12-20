@@ -198,9 +198,9 @@ start/stop HAF instance based on profiles enabled in your `.env` file
 ```SH
 docker compose up -d
 
-docker compose logs -f hivemind-block-processor # tail the hivemind sync logs to the console
-docker compose down hivemind-block-processor # shut down just the hivemind sync process
-docker compose up -d hivemind-block-processor # bring hivemind sync process back up
+docker compose logs -f hivemind-block-processing # tail the hivemind sync logs to the console
+docker compose down hivemind-block-processing # shut down just the hivemind sync process
+docker compose up -d hivemind-block-processing # bring hivemind sync process back up
 
 docker compose down # shut down all containers
 ```
@@ -263,5 +263,5 @@ If you're uninstalling Hivemind permanently, then remember to remove the `hivemi
 If you're upgrading to a new version of hivemind:
 - if you're upgrading to a pre-release version, you'll need to set `HIVEMIND_INSTANCE_VERSION` in your `.env` file to the correct tag for the version you want to run.  If you're just upgrading to a new release version (the ones tagged `haf_api_node`), you can leave this alone.
 - run `docker compose pull` to grab the new version
-- run `docker compose up -d` to bring up all services.  This should run hivemind's install, then launch the block processor.
+- run `docker compose up -d` to bring up all services.  This should run hivemind's install, then launch the block processing container.
 - you can monitor Hivemind's sync process by watching the logs from `docker compose logs -f hivemind-block-processing`.  In a few short days, your Hivemind app should be fully synced and ready to handle API requests.
