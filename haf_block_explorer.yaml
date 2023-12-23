@@ -17,6 +17,16 @@ services:
         condition: service_completed_successfully
       hafah-install:
         condition: service_completed_successfully
+  block-explorer-uninstall:
+    image: ${HAF_BLOCK_EXPLORER_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer}:${HAF_BLOCK_EXPLORER_VERSION:-haf_api_node}
+    profiles:
+      - block-explorer-uninstall
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    command:
+      - uninstall_app
   block-explorer-block-processing:
     image: ${HAF_BLOCK_EXPLORER_REGISTRY:-registry.gitlab.syncad.com/hive/haf_block_explorer}:${HAF_BLOCK_EXPLORER_VERSION:-haf_api_node}
     profiles:
