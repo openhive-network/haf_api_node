@@ -13,6 +13,17 @@ services:
     depends_on:
       haf:
         condition: service_healthy
+  hafah-uninstall:
+    image: ${HAFAH_SETUP_REGISTRY:-registry.gitlab.syncad.com/hive/hafah/setup}:${HAFAH_SETUP_VERSION:-haf_api_node}
+    profiles:
+      - hafah-uninstall
+    environment:
+      POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
   hafah-postgrest:
     image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
