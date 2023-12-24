@@ -258,7 +258,7 @@ To delete the data:
 
 The Hivemind data is now gone.
 
-If you're uninstalling Hivemind permanently, then remember to remove the `hivemind` profile from your `.env` file's `COMPOSE_PROFILES` line so it doesn't start automatically next time you do a `docker compose upi -d`.
+If you're uninstalling Hivemind permanently, then remember to remove the `hivemind` profile from your `.env` file's `COMPOSE_PROFILES` line so it doesn't start automatically next time you do a `docker compose up -d`.
 
 If you're upgrading to a new version of hivemind:
 - if you're upgrading to a pre-release version, you'll need to set `HIVEMIND_INSTANCE_VERSION` in your `.env` file to the correct tag for the version you want to run.  If you're just upgrading to a new release version (the ones tagged `haf_api_node`), you can leave this alone.
