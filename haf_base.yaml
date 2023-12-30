@@ -33,6 +33,7 @@ services:
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-block-explorer-install-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-install-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}          trust\n
         host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}          trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}          trust\n
 

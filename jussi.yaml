@@ -24,6 +24,8 @@ services:
         target: /home/jussi/config.json
         read_only: true
     command: --server_workers=4 --upstream_config_file=/home/jussi/config.json
+    ports:
+      - 9000:9000
     networks:
       - haf-network
   # to use our log analysis tools, we need to capture jussi traffic using a 
