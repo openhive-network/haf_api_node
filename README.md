@@ -127,10 +127,16 @@ Once the replay has finished, you can revert the `ARGUMENTS` line to the empty s
 
 ##### Shared Memory on Ramdisk
 If you have enough spare memory on your system, you can speed up the initial replay by placing the
-`shared_memory.bin` file on a ramdisk.  (TODO: how much faster is this? 20%?)
+`shared_memory.bin` file on a ramdisk.
+
 The current default shared memory filesize is 24G, so this will only work if you have 24G free 
-(that's in addition to the memory you expect hived itself, plus HAF's integrated PostgreSQL 
-instance to use.  TODO: what's a reasonable estimate?).
+(that's in addition to the memory you expect to be used by hived and HAF's integrated PostgreSQL 
+instance). 
+
+If you have a 64GB system, ensure you have a big enough swapfile (32GB is recommended
+and 8GB is known to not be sufficient) to handle peak memory usage needs during the replay.
+Peak memory usage currently occurs when haf table indexes are being built during the final 
+stage of replay.
 
 To do this, first create a ramdisk:
 ```
