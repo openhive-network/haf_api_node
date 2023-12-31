@@ -31,12 +31,12 @@ if [[ $docker_up != 1 ]]; then
     # write variable to a temp file
     echo "remove_shared_mem=$remove_shared_mem" > startup.temp
 
-    # Modify the .env file to use only the core profile and the shared_mem directory
+    # Modify the .env file to use only the core and admin profile and the shared_mem directory
 
     while IFS= read -r line; do
         if [[ $line == COMPOSE_PROFILES=* ]]; then
             original_line="$line"
-            modified_line="COMPOSE_PROFILES=\"core\""
+            modified_line="COMPOSE_PROFILES=\"core,admin\""
             # Print the original and modified lines
             echo "Intended Profiles: $original_line"
             echo "Startup Profiles: $modified_line"
