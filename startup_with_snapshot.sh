@@ -92,7 +92,7 @@ if [[ $remove_shared_mem == 1 ]]; then
 fi
 
 # Create a snapshot of the ZFS pool
-snapshot_zfs_datasets.sh first_sync
+./snapshot_zfs_datasets.sh first_sync
 
 # Restart Docker Compose
 docker compose up -d
