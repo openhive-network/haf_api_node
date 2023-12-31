@@ -6,7 +6,7 @@ if [[ $? == 0 ]]; then
     exit 0
 fi
 
-source startup.temp
+touch startup.temp
 
 if [[ $docker_up != 1 ]]; then
     echo "Setting Up Startup..."
