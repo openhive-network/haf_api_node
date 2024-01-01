@@ -1,6 +1,6 @@
 services:
   hafah-install:
-    image: ${HAFAH_REGISTRY:-registry.gitlab.syncad.com/hive/hafah/instance}:${HAFAH_VERSION:-haf_api_node}
+    image: ${HAFAH_REGISTRY:-registry.gitlab.syncad.com/hive/hafah/setup}:${HAFAH_VERSION:-haf_api_node}
     profiles:
       - apps
       - hafah
@@ -14,7 +14,7 @@ services:
       haf:
         condition: service_healthy
   hafah-uninstall:
-    image: ${HAFAH_REGISTRY:-registry.gitlab.syncad.com/hive/hafah/instance}:${HAFAH_VERSION:-haf_api_node}
+    image: ${HAFAH_REGISTRY:-registry.gitlab.syncad.com/hive/hafah/setup}:${HAFAH_VERSION:-haf_api_node}
     profiles:
       - hafah-uninstall
     environment:
