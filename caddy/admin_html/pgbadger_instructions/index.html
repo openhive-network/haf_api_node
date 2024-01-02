@@ -11,17 +11,10 @@
       If you're seeing these instructions, it means you have never run pgBadger.
     </p>
     <p>
-      You must run pgBadger periodically to parse your PostgreSQL log files and generate the 
-      reports as static HTML files.  Once you have run pgBadger, the reports will show up
-      <a href="../pgbadger">here</a>.
-    </p>
-    <p>
-      To run pgBadger, launch:
-      <pre>
-        docker compose --profile=pgbadger up
-      </pre>
-      and wait for it to finish.  It can take several minutes when there are a lot of logs to
-      parse, and it may print anything on screen until it's done.
+      You must enable pgBadger by adding the <tt>pgbadger</tt> profile to your <tt>COMPOSE_PROFILES=</tt>
+      in your <tt>.env</tt> file, then running <tt>docker compose up -d</tt> again.  This will configure
+      the stack to run pgBadger once a day at UTC midnight.  After it has run, it will replace this page
+      with the pgBadger results.
     </p>
   </body>
 </html>
