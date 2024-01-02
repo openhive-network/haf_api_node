@@ -227,6 +227,10 @@ of the Hive blockchain (typically a few minutes or less if you started from a sn
 otherwise it will take many hours or even days depending on your hardware). You can monitor
 this process using: `docker compose logs -f haf`
 
+If syncing or replaying for the first time, HAF will delay creating indexes on its tables until the blockchain data has mostly been added to the database. This mean there will be a noticeable delay near the end of the catchup period while these indexes get created. Even on a fast machine this post-sync/replay process currently takes over 2 hours to create the indexes and another two hours to cluster the account_operations table. 
+
+If you enabled the "admin" profile, you can use pghero's "Live Queries" view to monitor this process (e.g https://your_server/admin/pghero/live_queries). If not, you can still observe the cpu and disk io usage by postgresql during this process if you run a tool like htop.
+
 # After startup: Monitoring services and troubleshooting failures on your API node
 
 Haproxy can be used to monitor the state of the various services on your HAF server:
