@@ -45,7 +45,7 @@ services:
       block-explorer-install:
         condition: service_completed_successfully
   block-explorer-postgrest:
-    image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
+    image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
       - hafbe
@@ -59,6 +59,12 @@ services:
       PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/hafbe_api/
     networks:
       haf-network:
+    healthcheck:
+      test: ["CMD-SHELL", "wget -nv -t1 --spider http://localhost:3000/rpc/get_hafbe_version || exit 1"]
+      interval: 10s
+      timeout: 2s
+      retries: 10
+      start_period: 1m
     depends_on:
       block-explorer-install:
         condition: service_completed_successfully

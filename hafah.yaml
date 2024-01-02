@@ -25,7 +25,7 @@ services:
       haf:
         condition: service_healthy
   hafah-postgrest:
-    image: ${POSTGREST_REGISTRY:-postgrest/postgrest}:${POSTGREST_VERSION:-latest}
+    image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
       - hafah
@@ -40,6 +40,12 @@ services:
       PGRST_OPENAPI_SERVER_PROXY_URI: http://localhost:3000
     networks:
       haf-network:
+    healthcheck:
+      test: ["CMD-SHELL", "wget -nv -t1 --spider --header 'Content-Type: application/json' --post-data '{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"block_api.get_block_header\", \"params\": [1]}' http://localhost:3000/ || exit 1"]
+      interval: 10s
+      timeout: 2s
+      retries: 10
+      start_period: 1m
     depends_on:
       hafah-install:
         condition: service_completed_successfully
@@ -61,35 +67,31 @@ services:
         target: /workspace
     networks:
       haf-network:
-    # note: when I enable this dependency which logically seems ok, 
-    # docker restarts postgrest every time I bring up the benchmarks.
-    # Other services don't do this, need to figure out why.  Suspect it's
-    # because postgrest services don't have a health check.
-    #depends_on:
-    #  hafah-postgrest:
-    #    condition: service_started
-  hafah-benchmarks-new-style:
-    image: registry.gitlab.syncad.com/hive/tests_api/benchmark_aio:latest
-    profiles:
-      - hafah-benchmarks
-    environment:
-      SKIP_VERSION1: 1
-      ADDITIONAL_ARGS1: --skip-version-check
-      JMETER_WORKDIR: /workspace/wdir
-      ADDRESS: hafah-postgrest
-      PORT: 3000
-      CALL_STYLE: new-style
-      WDIR: /workspace
-    volumes: 
-      - type: bind
-        source: ${HAF_DATA_DIRECTORY}/tests/hafah_api_benchmarks/new-style
-        target: /workspace
-    networks:
-      haf-network:
-    # note: when I enable this dependency which logically seems ok, 
-    # docker restarts postgrest every time I bring up the benchmarks.
-    # Other services don't do this, need to figure out why.  Suspect it's
-    # because postgrest services don't have a health check.
-    #depends_on:
-    #  hafah-postgrest:
-    #    condition: service_started
+    depends_on:
+      hafah-postgrest:
+        condition: service_healthy
+  # Note: new style benchmarks don't work.  Not sure if this is just a problem with the 
+  # environment set up below, or if it's a general problem and there's no way of running
+  # them that will work.
+  #
+  # hafah-benchmarks-new-style:
+  #   image: registry.gitlab.syncad.com/hive/tests_api/benchmark_aio:latest
+  #   profiles:
+  #     - hafah-benchmarks
+  #   environment:
+  #     SKIP_VERSION1: 1
+  #     ADDITIONAL_ARGS1: --skip-version-check
+  #     JMETER_WORKDIR: /workspace/wdir
+  #     ADDRESS: hafah-postgrest
+  #     PORT: 3000
+  #     CALL_STYLE: new-style
+  #     WDIR: /workspace
+  #   volumes: 
+  #     - type: bind
+  #       source: ${HAF_DATA_DIRECTORY}/tests/hafah_api_benchmarks/new-style
+  #       target: /workspace
+  #   networks:
+  #     haf-network:
+  #   depends_on:
+  #     hafah-postgrest:
+  #       condition: service_healthy
