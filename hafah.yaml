@@ -8,6 +8,8 @@ services:
       - haf-block-explorer-drop-db
     environment:
       POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
+    command:
+      - install_app
     networks:
       haf-network:
     depends_on:
@@ -19,6 +21,8 @@ services:
       - hafah-uninstall
     environment:
       POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
+    command:
+      - uninstall_app
     networks:
       haf-network:
     depends_on:
