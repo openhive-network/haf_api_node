@@ -51,7 +51,7 @@ services:
       - hafbe
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
-      PGRST_DB_URI: postgresql://hafbe_owner@haf/haf_block_log
+      PGRST_DB_URI: postgresql://hafbe_user@haf/haf_block_log
       PGRST_DB_SCHEMA: hafbe_endpoints
       PGRST_DB_ANON_ROLE: hafbe_user
       PGRST_DB_POOL: 20
