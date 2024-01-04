@@ -53,7 +53,7 @@ services:
     depends_on:
       hafah-install:
         condition: service_completed_successfully
-  hafah-benchmarks-old-style:
+  hafah-benchmarks-old-style:  #NOTE: need to first run mkdir -p ${HAF_DATA_DIRECTORY}/tests/hafah_api_benchmarks/old-style
     image: registry.gitlab.syncad.com/hive/tests_api/benchmark_aio:latest
     profiles:
       - hafah-benchmarks
