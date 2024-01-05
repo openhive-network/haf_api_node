@@ -73,6 +73,13 @@
       root * /etc/caddy/pgbadger
       file_server
     }
+
+    # Route /admin/versions to the version display app
+    redir /versions /admin/versions/
+    handle_path /versions/* {
+      reverse_proxy http://version-display
+    }
+
     root * /etc/caddy/admin_html
     file_server
   }

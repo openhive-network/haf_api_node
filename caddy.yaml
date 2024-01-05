@@ -39,6 +39,19 @@ services:
         target: /config
     networks:
       - haf-network
+  version-display:
+    image: ${VERSION_DISPLAY_IMAGE:-registry.gitlab.syncad.com/hive/haf_api_node/version-display}:${VERSION_DISPLAY_VERSION:-latest}
+    profiles:
+      - admin
+      - servers
+    environment:
+      PROJECT: ${COMPOSE_PROJECT_NAME}
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+    networks:
+      - haf-network
 
 volumes:
   # this volume stores your SSL certificates, every time you destroy this volume,
