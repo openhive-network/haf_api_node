@@ -60,9 +60,9 @@ services:
     networks:
       haf-network:
     healthcheck:
-      test: ["CMD-SHELL", "wget -nv -t1 --spider http://localhost:3000/rpc/get_hafbe_version || exit 1"]
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider http://localhost:3000/rpc/get_hafbe_version || exit 1"]
       interval: 10s
-      timeout: 2s
+      timeout: 3s
       retries: 10
       start_period: 1m
     depends_on:

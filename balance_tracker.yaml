@@ -60,9 +60,9 @@ services:
       PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/btracker_api/
     # This healthcheck is untested, modify as necessary
     healthcheck:
-      test: ["CMD-SHELL", "wget -nv -t1 --spider http://localhost:3000/rpc/get_balance_for_coin_by_block/?_account_name=miners&_coin_type=21&_start_block=2&_end_block=2 || exit 1"]
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 'http://localhost:3000/rpc/get_balance_for_coin_by_block/?_account_name=miners&_coin_type=21&_start_block=2&_end_block=2' || exit 1"]
       interval: 10s
-      timeout: 2s
+      timeout: 3s
       retries: 10
       start_period: 1m
     networks:

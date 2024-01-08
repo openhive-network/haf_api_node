@@ -45,9 +45,9 @@ services:
     networks:
       haf-network:
     healthcheck:
-      test: ["CMD-SHELL", "wget -nv -t1 --spider --header 'Content-Type: application/json' --post-data '{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"block_api.get_block_header\", \"params\": [1]}' http://localhost:3000/ || exit 1"]
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider --header 'Content-Type: application/json' --post-data '{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"block_api.get_block_header\", \"params\": [1]}' http://localhost:3000/ || exit 1"]
       interval: 10s
-      timeout: 2s
+      timeout: 3s
       retries: 10
       start_period: 1m
     depends_on:
