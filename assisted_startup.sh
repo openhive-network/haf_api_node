@@ -28,7 +28,6 @@ done
 touch startup.temp
 ## source will load the variable written later in the script if it exists
 source startup.temp
-source .env
 
 if command -v zfs >/dev/null 2>&1; then
     echo "Verifying Prerequisites..."
@@ -48,7 +47,7 @@ if [ ! -f .env ]; then
     echo ".env not found. Performing first time setup..."
     cp .env.example .env
     source .env
-    echo "PROFILES are the list of HAF services you want to run. The default is core,admin,apps,servers."
+    echo "PROFILES are the list of HAF services you want to run. The default is $COMPOSE_PROFILES."
     echo "core: the minimal HAF system of a database and hived"
     echo "admin: useful tools for administrating HAF: pgadmin, pghero"
     echo "apps: core HAF apps: hivemind, hafah, hafbe (balance-tracker is a subapp)"
@@ -56,14 +55,15 @@ if [ ! -f .env ]; then
     read -p "Run admin? (Y or N): " choice
     if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
         echo "Adding admin to profiles..."
-        echo "$COMPOSE_PROFILES"
-        sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES="core,admin"/g" .env
+        NEW_PROFILES="core,admin"
+        sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
         source .env
     else
-        sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES="core"/g" .env
+        NEW_PROFILES="core"
+        sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
         source .env
     fi
-    echo "$COMPOSE_PROFILES"
+    echo $COMPOSE_PROFILES
     read -p "Run all apps? (Y or N): " choice
     if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
         echo "Adding apps to profiles..."
@@ -280,7 +280,7 @@ if [[ $docker_up != 1 ]]; then
 
     sed -i "s/$original_line/$modified_line/g" .env
 
-    if [[ $remove_shared_mem == 1 ]]; then
+    if [[ $remove_shared_mem != 0 ]]; then
         sed -i "s#$original_HAF_SHM#$modified_HAF_SHM#g" .env
         echo "original_HAF_SHM=$original_HAF_SHM" >> startup.temp
         echo "modified_HAF_SHM=$modified_HAF_SHM" >> startup.temp

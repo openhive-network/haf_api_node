@@ -23,7 +23,7 @@ if [[ $docker_up != 1 ]]; then
         fi
         sudo mount -t tmpfs -o size=25g tmpfs /mnt/haf_shared_mem
         sudo chown 1000:100 /mnt/haf_shared_mem
-        remove_shared_mem=1
+        remove_shared_mem=25
     else
         echo "There is not more than 64 gigabytes of RAM."
         remove_shared_mem=0
@@ -58,7 +58,7 @@ if [[ $docker_up != 1 ]]; then
 
     sed -i "s/$original_line/$modified_line/g" .env
 
-    if [[ $remove_shared_mem == 1 ]]; then
+    if [[ $remove_shared_mem != 0 ]]; then
         sed -i "s#$original_HAF_SHM#$modified_HAF_SHM#g" .env
         echo "original_HAF_SHM=$original_HAF_SHM" >> startup.temp
         echo "modified_HAF_SHM=$modified_HAF_SHM" >> startup.temp
