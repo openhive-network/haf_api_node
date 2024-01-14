@@ -15,9 +15,10 @@ services:
     image: registry.gitlab.syncad.com/hive/jussi:latest
     profiles:
       - servers
-        #environment:
-        #  JUSSI_REDIS_URL: redis://redis1:6379
-        #  JUSSI_REDIS_READ_REPLICA_URLS: redis://redis2:6379
+    environment:
+      #  JUSSI_REDIS_URL: redis://redis1:6379
+      #  JUSSI_REDIS_READ_REPLICA_URLS: redis://redis2:6379
+      LOG_LEVEL: DEBUG
     volumes:
       - type: bind
         source: ./jussi/config.json
