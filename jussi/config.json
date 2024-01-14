@@ -132,7 +132,7 @@
         ],
         [
           "appbase.block_api.get_block",
-          "ws://haproxy:7001"
+          "ws://haproxy:7003"
         ],
         [
           "appbase.block_api.get_block_range",
@@ -140,7 +140,7 @@
         ],
         [
           "appbase.condenser_api.get_block",
-          "ws://haproxy:7001"
+          "ws://haproxy:7003"
         ],
         [
           "appbase.condenser_api.get_accounts",
