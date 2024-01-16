@@ -136,7 +136,7 @@
         ],
         [
           "appbase.condenser_api.get_block",
-          "http://haproxy:7001"
+          "ws://haproxy:7001"
         ],
         [
           "appbase.block_api.get_block",
