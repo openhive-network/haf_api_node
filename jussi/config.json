@@ -111,6 +111,10 @@
           "http://haproxy:7002"
         ],
         [
+          "appbase.condenser_api.get_accounts",
+          "ws://haproxy:7001"
+        ],
+        [
           "appbase.condenser_api.broadcast_block",
           "ws://haproxy:7001"
         ],
@@ -131,7 +135,15 @@
           "ws://haproxy:7001"
         ],
         [
+          "appbase.condenser_api.get_block",
+          "http://haproxy:7001"
+        ],
+        [
           "appbase.block_api.get_block",
+          "http://haproxy:7003"
+        ],
+        [
+          "appbase.block_api.get_block_header",
           "http://haproxy:7003"
         ],
         [
@@ -139,11 +151,35 @@
           "http://haproxy:7003"
         ],
         [
-          "appbase.condenser_api.get_block",
+          "appbase.account_history_api.get_account_history",
           "http://haproxy:7003"
         ],
         [
-          "appbase.condenser_api.get_accounts",
+          "appbase.account_history_api.get_ops_in_block",
+          "http://haproxy:7003"
+        ],
+        [
+          "appbase.account_history_api.enum_virtual_ops",
+          "http://haproxy:7003"
+        ],
+        [
+          "appbase.account_history_api.get_transaction",
+          "http://haproxy:7003"
+        ],
+        [
+          "appbase.condenser_api.get_account_history",
+          "http://haproxy:7003"
+        ],
+        [
+          "appbase.condenser_api.get_ops_in_block",
+          "http://haproxy:7003"
+        ],
+        [
+          "appbase.condenser_api.enum_virtual_ops",
+          "http://haproxy:7003"
+        ],
+        [
+          "appbase.condenser_api.get_transaction",
           "http://haproxy:7003"
         ],
         [
@@ -272,7 +308,7 @@
         ],
         [
           "appbase",
-          "http://haproxy:7003"
+          "ws://haproxy:7001"
         ]
       ],
       "ttls": [
