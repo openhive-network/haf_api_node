@@ -78,7 +78,7 @@ sub vcl_backend_fetch {
 }
 
 sub vcl_backend_response {
-    if (bereq.backend == hafah || bereq.backend == balance_tracker) {
+    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == haf_block_explorer) {
         # PostgREST generates invalid content-range headers, and varnish will refuse to cache/proxy calls because of it.
         # Until they fix it, just remove the header.  (see https://github.com/PostgREST/postgrest/issues/1089)
         unset beresp.http.Content-Range;
