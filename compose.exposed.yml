@@ -12,9 +12,9 @@
 # file in:
 #   COMPOSE_FILE=compose.yml:compose.exposed.yml
 #
-# If this system not already behind a firewall, you may want to restrict access 
-# to these  ports, since direct access lets you skip around some of the protections 
-# like rate-limiting.  By default, these ports will be open to everybody.
+# If this system is not already behind a firewall, you may want to restrict access 
+# to these  ports, since direct access lets you skip around some protections 
+# such as rate-limiting.  By default, these ports will be open to everybody.
 # You can restrict them by binding the exposed ports to a specific IP address 
 # that you trust.  To do this, put this in your .env file:
 #   HAF_API_NODE_EXPOSED_IPADDR=10.10.10.15
@@ -22,8 +22,8 @@
 #
 # Port number assignments are roughly based on what we use in haproxy's config:
 # The haproxy frontend for hived is on port 7001.  With these config files, we'll
-# expose the haproxy frontend on 7001, hived itself on 10000 + frontend port (17001)
-# and the corresponding haproxy healthcheck on 20000 + frontend port (27001)
+# expose the haproxy frontend for hived (port 7001) at 17001 (frontend port + 10000)
+# and the corresponding haproxy healthcheck for hived at 27001 (frontend port + 20000).
 include:
   - haproxy.exposed.yaml
   - hafah.exposed.yaml
