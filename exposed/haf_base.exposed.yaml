@@ -1,0 +1,4 @@
+services:
+  haf:
+    ports:
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:17001:8091"
