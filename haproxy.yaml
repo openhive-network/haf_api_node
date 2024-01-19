@@ -1,8 +1,12 @@
 services:
   haproxy:
-    image: haproxy:2.8.2
+    image: haproxy:2.9.3-alpine
     profiles:
       - servers
+    environment:
+      SYNC_BROADCAST_BACKEND_SERVER: "${SYNC_BROADCAST_BACKEND_SERVER:-api.hive.blog}"
+      SYNC_BROADCAST_BACKEND_PORT: "${SYNC_BROADCAST_BACKEND_PORT:-443}"
+      SYNC_BROADCAST_BACKEND_SSL: "${SYNC_BROADCAST_BACKEND_SSL:-ssl}"
     volumes:
       - type: bind
         source: ./haproxy/haproxy.cfg
@@ -11,8 +15,7 @@ services:
     networks:
       - haf-network
     healthcheck:
-      test: |
-        bash -c 'exec 3<>/dev/tcp/127.0.0.1/8001; echo -e "GET / HTTP/1.1\nConnection: close\n" >&3; cat <&3 | grep -q "200 OK"'
+      test: wget -q --spider 127.0.0.1:8001 
   haproxy-healthchecks:
     image: registry.gitlab.syncad.com/hive/haf_api_node/haproxy-healthchecks:${HAPROXY_HEALTHCHECKS_VERSION:-latest}
     environment:
