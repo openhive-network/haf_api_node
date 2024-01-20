@@ -17,3 +17,7 @@ services:
         condition: service_healthy
     networks:
       - haf-network
+    # when varnish is run as a non-root user, it will run correctly the first time,
+    # but fail with "Error: Cannot create test-file ..." after a restart.  See:
+    #   https://github.com/varnish/docker-varnish/issues/53
+    user: root
