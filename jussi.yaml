@@ -28,6 +28,8 @@ services:
     depends_on:
       haproxy:
         condition: service_healthy
+      haf:
+        condition: service_healthy
     networks:
       - haf-network
   # to use our log analysis tools, we need to capture jussi traffic using a 
