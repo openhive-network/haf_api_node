@@ -25,8 +25,6 @@ services:
         target: /home/jussi/config.json
         read_only: true
     command: --server_workers=4 --upstream_config_file=/home/jussi/config.json
-    ports:
-      - 9000:9000
     depends_on:
       haproxy:
         condition: service_healthy
