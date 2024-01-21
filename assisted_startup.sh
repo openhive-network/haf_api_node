@@ -222,7 +222,7 @@ if [[ $? == 0 ]]; then
     exit 0
 fi
 
-if docker compose ps > /dev/null 2>&1; then
+if docker compose ps | grep haf | grep Up > /dev/null 2>&1; then
     echo "Docker Compose is up and running."
 else
     echo "Setting Up Startup..."
@@ -371,7 +371,7 @@ done
 
 # prevent script completion if interupt sent to above loop
 
-if docker compose ps >/dev/null 2>&1; then
+if docker compose ps | grep haf | grep Up >/dev/null 2>&1; then
     echo "Docker Compose is still running."
 else
     # Restore the original line
