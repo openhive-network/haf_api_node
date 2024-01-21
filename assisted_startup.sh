@@ -222,7 +222,9 @@ if [[ $? == 0 ]]; then
     exit 0
 fi
 
-if [[ $docker_up != 1 ]]; then
+if docker compose ps > /dev/null 2>&1; then
+    echo "Docker Compose is up and running."
+else
     echo "Setting Up Startup..."
 
     # Optimize the system for replaying the blockchain
@@ -296,8 +298,6 @@ if [[ $docker_up != 1 ]]; then
 
     docker compose up -d
 
-    echo "docker_up=1" >> startup.temp
-
 fi
 
 source .env
@@ -306,8 +306,10 @@ max_mem=$(free -g | awk '/^Mem:/{print $3}')
 max_swap=$(free -g | awk '/^Swap:/{print $3}')
 echo "max_mem=$max_mem" >> startup.temp
 echo "max_swap=$max_swap" >> startup.temp
-sync_done=0
 # Monitor the output for the desired phrase
+
+
+
 docker compose logs -f | while read -r line; do
     if [[ $line == *"Block"* ]]; then
         echo "$line"
@@ -354,7 +356,6 @@ docker compose logs -f | while read -r line; do
         fi
     fi
     if [[ $line == *"PROFILE: Entered LIVE sync"* ]]; then
-        sync_done=1
         echo "Detected *PROFILE: Entered LIVE sync* in the output. Bringing down Docker Compose..."
 
         # Write Sync time to "haf.log" for tracking, as this log will get wiped on restart
@@ -370,7 +371,9 @@ done
 
 # prevent script completion if interupt sent to above loop
 
-if [[ $sync_done == 1 ]]; then
+if docker compose ps >/dev/null 2>&1; then
+    echo "Docker Compose is still running."
+else
     # Restore the original line
     sed -i "s/$modified_line/$original_line/g" .env
 
