@@ -95,6 +95,18 @@ sub vcl_deliver {
 }
 
 sub vcl_hash {
+    # the hashing happens after the vcl_recv function, so it only sees the rewritten form of
+    # the req.url.  So by default, it would cache, e.g., requests for /hafah/get_status
+    # and return them for /btracker/get_status.
+    # Add the name of the backend to the hash to prevent this
+    if (req.backend_hint == hafah) {
+        hash_data("hafah");
+    } else if (req.backend_hint == balance_tracker) {
+        hash_data("btracker");
+    } else if (req.backend_hint == haf_block_explorer) {
+        hash_data("hafbe");
+    }
+
     # To cache POST and PUT requests
     if (req.http.X-Body-Len) {
         bodyaccess.hash_req_body();
