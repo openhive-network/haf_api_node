@@ -84,12 +84,12 @@
     file_server
   }
 
-  # Route all POST calls to the root URL to jussi (assume they're old-style JSON-RPC calls)
+  # Route all POST calls to the root URL to jussi/drone (assume they're old-style JSON-RPC calls)
   @post_to_root {
     method POST
     path /
   }
-  reverse_proxy @post_to_root http://jussi:9000
+  reverse_proxy @post_to_root http://{$JSONRPC_API_SERVER_NAME}:9000
 
   # Route everything else (mostly new-style REST calls)
   reverse_proxy http://varnish

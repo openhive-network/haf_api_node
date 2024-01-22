@@ -12,7 +12,7 @@ services:
     networks:
       - haf-network
   jussi:
-    image: registry.gitlab.syncad.com/hive/jussi:latest
+    image: ${JUSSI_REGISTRY:-registry.gitlab.syncad.com/hive/jussi}:${JUSSI_VERSION:-latest}
     profiles:
       - servers
     environment:

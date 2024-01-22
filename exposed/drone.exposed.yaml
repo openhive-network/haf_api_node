@@ -1,0 +1,4 @@
+services:
+  drone:
+    ports:
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:9000:9000"

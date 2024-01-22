@@ -8,8 +8,8 @@ include:
   - hivemind.yaml
   - balance_tracker.yaml
   - haf_block_explorer.yaml
-  - jussi.yaml
   - varnish.yaml
+  - ${JSONRPC_API_SERVER_NAME:-jussi}.yaml
   - haproxy.yaml
   - caddy.yaml
 

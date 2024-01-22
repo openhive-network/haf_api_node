@@ -1,0 +1,15 @@
+services:
+  drone:
+    image: ${DRONE_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/drone}:${DRONE_VERSION:-latest}
+    profiles:
+      - servers
+    volumes:
+      - type: bind
+        source: ./drone/config.json
+        target: /config.json
+        read_only: true
+    depends_on:
+      haproxy:
+        condition: service_healthy
+    networks:
+      - haf-network

@@ -10,6 +10,7 @@ services:
       - 443:443/udp
     environment:
       PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME}
+      JSONRPC_API_SERVER_NAME: ${JSONRPC_API_SERVER_NAME:-jussi}
     volumes:
       - type: bind
         source: ./caddy/Caddyfile
