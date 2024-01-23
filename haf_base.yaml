@@ -26,7 +26,8 @@ services:
         host    haf_block_log    btracker_owner   ${COMPOSE_PROJECT_NAME}-balance-tracker-block-processing-1.${NETWORK_NAME}    trust\n
         host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-balance-tracker-postgrest-1.${NETWORK_NAME}           trust\n
 
-        host    haf_block_log    haf_app_admin    ${COMPOSE_PROJECT_NAME}-hafah-install-1.${NETWORK_NAME}                         trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-uninstall-1.${NETWORK_NAME}                       trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-install-1.${NETWORK_NAME}                       trust\n
         host    haf_block_log    hafah_user       ${COMPOSE_PROJECT_NAME}-hafah-postgrest-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-benchmarks-1.${NETWORK_NAME}                    trust\n
 

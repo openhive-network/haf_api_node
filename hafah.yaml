@@ -7,7 +7,7 @@ services:
       - hafbe
       - haf-block-explorer-drop-db
     environment:
-      POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
+      POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
     command:
       - install_app
     networks:
@@ -20,7 +20,7 @@ services:
     profiles:
       - hafah-uninstall
     environment:
-      POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
+      POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
     command:
       - uninstall_app
     networks:
