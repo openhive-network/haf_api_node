@@ -52,7 +52,7 @@ services:
       - apps
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
-      PGRST_DB_URI: postgresql://haf_app_admin@haf/haf_block_log
+      PGRST_DB_URI: postgresql://btracker_user@haf/haf_block_log
       PGRST_DB_SCHEMA: btracker_app
       PGRST_DB_ANON_ROLE: btracker_user
       PGRST_DB_POOL: 20

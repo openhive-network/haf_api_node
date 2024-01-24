@@ -19,7 +19,7 @@ services:
   haproxy-healthchecks:
     image: registry.gitlab.syncad.com/hive/haf_api_node/haproxy-healthchecks:${HAPROXY_HEALTHCHECKS_VERSION:-latest}
     environment:
-      POSTGRES_URL: postgresql://haf_app_admin@haf/haf_block_log
+      POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
       POSTGRES_URL_HAFBE: postgresql://hafbe_user@haf/haf_block_log
       POSTGRES_URL_BTRACKER: postgresql://btracker_user@haf/haf_block_log
     profiles:
