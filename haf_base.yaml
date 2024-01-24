@@ -21,37 +21,37 @@ services:
     # TODO: needs work:
     environment:
       PG_ACCESS: "
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-balance-tracker-install-1.${NETWORK_NAME}               trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-balance-tracker-uninstall-1.${NETWORK_NAME}             trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-balance-tracker-install-1.${NETWORK_NAME}             trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-balance-tracker-uninstall-1.${NETWORK_NAME}           trust\n
         host    haf_block_log    btracker_owner   ${COMPOSE_PROJECT_NAME}-balance-tracker-block-processing-1.${NETWORK_NAME}    trust\n
         host    haf_block_log    btracker_user    ${COMPOSE_PROJECT_NAME}-balance-tracker-postgrest-1.${NETWORK_NAME}           trust\n
 
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-uninstall-1.${NETWORK_NAME}                       trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-uninstall-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-install-1.${NETWORK_NAME}                       trust\n
         host    haf_block_log    hafah_user       ${COMPOSE_PROJECT_NAME}-hafah-postgrest-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-benchmarks-1.${NETWORK_NAME}                    trust\n
 
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-1.${NETWORK_NAME}            trust\n
-        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-install-1.${NETWORK_NAME}            trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}          trust\n
-        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}          trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-1.${NETWORK_NAME}              trust\n
+        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-install-1.${NETWORK_NAME}              trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}            trust\n
 
-        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-block-processing-1.${NETWORK_NAME} trust\n
-        host    haf_block_log    hafbe_user       ${COMPOSE_PROJECT_NAME}-block-explorer-postgrest-1.${NETWORK_NAME}        trust\n
+        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-block-processing-1.${NETWORK_NAME}     trust\n
+        host    haf_block_log    hafbe_user       ${COMPOSE_PROJECT_NAME}-block-explorer-postgrest-1.${NETWORK_NAME}            trust\n
 
         # hivemind install needs to change the join_collapse_limit setting on the whole database, which\n
         # requires superuser privileges\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-install-1.${NETWORK_NAME}                      trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-install-1.${NETWORK_NAME}                    trust\n
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-block-processing-1.${NETWORK_NAME}           trust\n
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-server-1.${NETWORK_NAME}                     trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-uninstall-1.${NETWORK_NAME}                     trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-uninstall-1.${NETWORK_NAME}                  trust\n
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
         host    postgres         haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
         host    haf_block_log    pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                              trust\n
         host    postgres         pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                              trust\n
 
-        host    haf_block_log    haf_admin i      ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
         host    haf_block_log    hafbe_user       ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
         host    haf_block_log    btracker_user    ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
         "
