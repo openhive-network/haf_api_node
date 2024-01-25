@@ -38,6 +38,12 @@ services:
       - type: volume
         source: caddy_config
         target: /config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -T2 -nv -t1 --spider http://localhost:2019/reverse_proxy/upstreams || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
     networks:
       - haf-network
   version-display:

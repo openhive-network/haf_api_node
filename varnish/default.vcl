@@ -68,6 +68,8 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url == "/varnishcheck") {
+        return(synth(200, "Ok"));
     }
 }
 

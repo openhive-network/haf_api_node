@@ -1,14 +1,15 @@
 services:
-  redis1:
+  redis:
     image: "redis:7.2-alpine"
     profiles:
       - servers
-    networks:
-      - haf-network
-  redis2:
-    image: "redis:7.2-alpine"
-    profiles:
-      - servers
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(redis-cli ping) = 'PONG' ]"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
+    command: redis-server --maxmemory ${JUSSI_REDIS_MAX_MEMORY:-8G} --maxmemory-policy allkeys-lru
     networks:
       - haf-network
   jussi:
@@ -16,8 +17,8 @@ services:
     profiles:
       - servers
     environment:
-      #  JUSSI_REDIS_URL: redis://redis1:6379
-      #  JUSSI_REDIS_READ_REPLICA_URLS: redis://redis2:6379
+      JUSSI_REDIS_URL: redis://redis:6379
+      # JUSSI_REDIS_READ_REPLICA_URLS: redis://redis2:6379
       LOG_LEVEL: DEBUG
     volumes:
       - type: bind
@@ -35,6 +36,8 @@ services:
       haproxy:
         condition: service_healthy
       haf:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - haf-network
