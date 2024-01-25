@@ -25,6 +25,12 @@ services:
         target: /home/jussi/config.json
         read_only: true
     command: --server_workers=4 --upstream_config_file=/home/jussi/config.json
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 wget -nv -t1 --spider http://localhost:9000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
     depends_on:
       haproxy:
         condition: service_healthy
@@ -45,7 +51,8 @@ services:
   #     - type: bind
   #       source: ${HAF_LOG_DIRECTORY}/jussi
   #       target: /var/log/jussi
-  #   ports:
-  #     - 9000:80
+  #   depends_on:
+  #     jussi-real:
+  #       condition: service_healthy
   #   networks:
   #     - haf-network

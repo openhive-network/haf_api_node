@@ -11,7 +11,7 @@
       "urls": [
         [
           "hived",
-          "http://haproxy:7001"
+          "ws://haproxy:7001"
         ],
         [
           "hived.network_broadcast_api.broadcast_transaction_synchronous",
