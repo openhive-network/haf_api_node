@@ -41,6 +41,7 @@ services:
 
         # hivemind install needs to change the join_collapse_limit setting on the whole database, which\n
         # requires superuser privileges\n
+        host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-install-1.${NETWORK_NAME}                    trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-install-1.${NETWORK_NAME}                    trust\n
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-block-processing-1.${NETWORK_NAME}           trust\n
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-server-1.${NETWORK_NAME}                     trust\n
