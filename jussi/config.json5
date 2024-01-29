@@ -1,13 +1,53 @@
 {
   "limits": {
-    "accounts_blacklist": [
-      "non-steemit"
-    ]
+    // reject broadcast_transaction calls with custom_json ops from these accounts.
+    // "non-steemit" is not a real account on the blockchain, I think this is just there
+    // to suppress a "using empty accounts_blacklist" warning message, we're really
+    // not blacklisting anything here
+    "accounts_blacklist": ["non-steemit"]
   },
   "upstreams": [
+    // the "upstreams" part of the config is a list of NAMESPACEs
+    //
+    // Request processing works like this:
+    // - figure out the method's real [namespace, API, method], and params:
+    //   it will either be in the form:
+    //   - foo
+    //     if foo is "call": 
+    //       if params are [bar, baz]: ["appbase", bar, baz]
+    //       if params are [bar, baz, [...] or {...}]: ["appbase", bar, baz] or ["hived", bar, baz], depending
+    //     otherwise: ["hived", "database_api", foo]
+    //   - foo.bar
+    //     if foo ends in "_api": ["appbase", foo, bar]
+    //     if foo is"jsonrpc": ["appbase", "jsonrpc", bar]
+    //     otherwise: [foo, null, bar]
+    //   - foo.bar.baz: [foo, bar, baz]
+    // - if the API is numeric, do a lookup to find out the symbolic API name
+    //
+    // Now, we lookup the upstream URL, TTL, and timeout using the [namespace, api, method].
+    // This match finds the longest matching prefix across all of the upstreams in the config.
+    // It is entirely possible that it will match a upstream URL from one "upstream" block,
+    // the TTL from a second, and the timeout from a third.
+    //
+    // Next, we lookup whether we should "translate_to_appbase" by matching the namespace
+    // we've detected with the "name" of an upstream.  Translate_to_appbase will convert
+    // our [namespace, api, method] and params into an un-parsed JSON-RPC call that looks like:
+    //    { "jsonrpc": "2.0", "id": 1, "method": "call", "params": ["condenser_api", method, params] }
+    // This json-rpc call is now re-parsed, starting at the top (this re-parsing only happens once,
+    // it will never loop, even if the re-parsed call ends up in a namespace that also has 
+    // translate_to_appbase: true)
     {
       "name": "hived",
       "translate_to_appbase": true,
+      // The "urls", "ttls", and "timeouts" sections are maps from the API call name to
+      // "urls": the backend that should handle this request
+      // "ttls": the TTL for caching this request
+      // "timeouts": how long we should allow the backend to generate the reply
+      // 
+      // In all three sections, we take the most specific match (the longest matching prefix),
+      // the order they appear in the file isn't relevant.
+      //
+      // 
       "urls": [
         [
           "hived",
@@ -331,6 +371,10 @@
         [
           "appbase.condenser_api.get_account_reputations",
           3600
+        ],
+        [
+          "appbase.condenser_api.get_block",
+          -2
         ],
         [
           "appbase.condenser_api.get_ticker",

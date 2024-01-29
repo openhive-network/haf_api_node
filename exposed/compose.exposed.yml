@@ -6,3 +6,4 @@ include:
   - exposed/hivemind.exposed.yaml
   - exposed/haf_base.exposed.yaml
   - exposed/balance_tracker.exposed.yaml
+  - exposed/hafsql.exposed.yaml

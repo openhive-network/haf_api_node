@@ -1,0 +1,43 @@
+services:
+  hafsql-install:
+    image: ${HAFSQL_API_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/hafsql}:${HAFSQL_API_VERSION:-latest}
+    profiles:
+      - hafsql
+    environment:
+      PGHOST: haf
+      PGUSER: haf_admin
+      CONCURRENTLY: true
+      INDEXMAXTHREADS: 8
+      PUBLICUSER: true
+    entrypoint: /usr/local/bin/npm
+    command: run create-indexes
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+  hafsql-block-processing:
+    image: ${HAFSQL_API_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/hafsql}:${HAFSQL_API_VERSION:-latest}
+    profiles:
+      - hafsql
+    environment:
+      PGHOST: haf
+      PGUSER: haf_admin
+    networks:
+      haf-network:
+    entrypoint: /usr/local/bin/node
+    command: src/main.js
+    depends_on:
+      hafsql-install:
+        condition: service_completed_successfully
+  hafsql-api:
+    image: ${HAFSQL_API_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/hafsql-api}:${HAFSQL_API_VERSION:-latest}
+    profiles:
+      - hafsql
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    depends_on:
+      hafsql-install:
+        condition: service_completed_successfully
