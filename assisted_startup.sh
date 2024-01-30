@@ -119,7 +119,7 @@ if [ ! -f .env ]; then
         sed -i "s/PUBLIC_HOSTNAME="$PUBLIC_HOSTNAME"/PUBLIC_HOSTNAME="$choice"/g" .env
         source .env
         echo "Caddy may attempt to get a real SSL certificate for $PUBLIC_HOSTNAME from LetsEncrypt."
-        echo "If this server is behind a firewall or NAT, or $PUBLIC_HOSTNAME is misconfigured," 
+        echo "If this server is behind a firewall or NAT, or $PUBLIC_HOSTNAME is misconfigured,"
         echo "it will fail to get a certificate, and that will count against LetsEncrypt's rate limits."
         read -p "Automate SSL for $PUBLIC_HOSTNAME? (Y or N)" choice
         if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
@@ -165,7 +165,7 @@ if [[ $? == 1 ]]; then
             TOTAL_SPACE=$(( $TOTAL_SPACE + $free_space ))
             MSG+="Found: $drive with $free_space bytes of free space.\n"
             CALLSTRING+="/dev/$drive "
-        else 
+        else
             echo "Drive $drive has less than 1G of free space. Skipping..."
         fi
     done
@@ -178,7 +178,7 @@ if [[ $? == 1 ]]; then
             TOTAL_SPACE=$(( $TOTAL_SPACE + $free_space ))
             MSG+="Found: $partition with $free_space Bytes of free space.\n"
             CALLSTRING+="/dev/$partition "
-        else 
+        else
             echo "Partition $partition has less than 1G of free space. Skipping..."
         fi
     done
@@ -296,7 +296,10 @@ else
         echo "modified_arguments=$modified_arguments" >> startup.temp
     fi
 
-    docker compose up -d
+    if ! docker compose up -d; then
+      echo "Docker containers did not start successfully, aborting..."
+      exit 1
+    fi
 
 fi
 
@@ -309,7 +312,7 @@ echo "max_swap=$max_swap" >> startup.temp
 # Monitor the output for the desired phrase
 
 
-
+entered_livesync=0
 docker compose logs -f | while read -r line; do
     if [[ $line == *"Block"* ]]; then
         echo "$line"
@@ -331,7 +334,7 @@ docker compose logs -f | while read -r line; do
             free_space=$(df -BG / | awk 'NR==2 {print $4}' | sed "s/G//g")
             if [[ $free_space -gt 40 ]]; then
                 making_swap=1
-		
+
                 echo "Swap is almost  full. Adding a swapfile..."
                 echo "Making swap file..."
                 if [[ $swap_type == "file" ]]; then
@@ -357,7 +360,7 @@ docker compose logs -f | while read -r line; do
     fi
     if [[ $line == *"PROFILE: Entered LIVE sync"* ]]; then
         echo "Detected *PROFILE: Entered LIVE sync* in the output. Bringing down Docker Compose..."
-
+        entered_livesync=1
         # Write Sync time to "haf.log" for tracking, as this log will get wiped on restart
         docker logs haf-world-haf-1 | grep PRO > haf.log
         # Write max memory and swap usage to "haf.log" for tracking
@@ -368,6 +371,10 @@ docker compose logs -f | while read -r line; do
     fi
 done
 
+if [ $entered_livesync -eq 0 ]; then
+  echo "Failed to enter livesync, aborting..."
+  exit 1
+fi
 
 # prevent script completion if interupt sent to above loop
 
