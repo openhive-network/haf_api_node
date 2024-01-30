@@ -14,7 +14,7 @@ services:
         condition: service_healthy
 
   pgadmin:
-    image: dpage/pgadmin4:8.1
+    image: dpage/pgadmin4:8.2
     profiles:
       - admin
     environment:
