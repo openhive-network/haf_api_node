@@ -8,7 +8,7 @@ trap "trap - 2 15 && kill -- -\$\$" 2 15
 
 check_haf_lib
 
-BTRACKER_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_BTRACKER" --quiet --no-align --tuples-only --command="select extract('epoch' from now() - created_at)::integer from hive.blocks where num = (select last_processed_block from btracker_app.app_status)")
+BTRACKER_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_BTRACKER" --quiet --no-align --tuples-only --command="select extract('epoch' from now() - created_at)::integer from hive.blocks where num = (select hive.get_current_block_num('btracker_app')")
 if [ "$BTRACKER_LAST_PROCESSED_BLOCK_AGE" -gt 60 ]; then
   age_string=$(format_seconds "$BTRACKER_LAST_PROCESSED_BLOCK_AGE")
   echo "down #btracker block over a minute old ($age_string)"
