@@ -399,7 +399,7 @@ else
     fi
 
     # Create a snapshot of the ZFS pool
-    ./snapshot_zfs_datasets.sh first_sync
+    sudo ./snapshot_zfs_datasets.sh first_sync
 
     # Restart Docker Compose
     docker compose up -d
