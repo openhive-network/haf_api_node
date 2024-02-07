@@ -62,6 +62,14 @@
       reverse_proxy http://haproxy:8000
     }
 
+    # # Route /admin/graphite to graphite's UI
+    # # (graphite) is commented-out in jussi's yaml file
+    # redir /graphite /admin/graphite/
+    # handle_path /graphite/* {
+    #   rewrite * /admin/graphite{uri}
+    #   reverse_proxy http://graphite:8080
+    # }
+
     redir /pgbadger /admin/pgbadger/
     handle_path /pgbadger/* {
       @pgbadger_report_missing not file {

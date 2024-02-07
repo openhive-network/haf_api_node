@@ -59,3 +59,22 @@ services:
   #       condition: service_healthy
   #   networks:
   #     - haf-network
+  #
+  # jussi can send metrics to statsd.  You can collect them by uncommenting this block, and
+  # adding a `--statsd_url=statsd://graphite:8125` command line argument (or the associated
+  # environment variable) to jussi
+  #graphite:
+  #  image: graphiteapp/graphite-statsd
+  #  profiles:
+  #    - servers
+  #  environment:
+  #    GRAPHITE_URL_ROOT: /admin/graphite
+  #  volumes:
+  #    - type: volume
+  #      source: graphite_config
+  #      target: /opt/graphite/conf
+  #  networks:
+  #    - haf-network
+  #volumes:
+  #  # this volume stores your graphite dashboard config
+  #  graphite_config:
