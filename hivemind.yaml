@@ -1,18 +1,4 @@
 services:
-  hivemind-install:
-    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
-    profiles:
-      - apps
-      - hivemind
-    networks:
-      haf-network:
-    command:
-      - "setup"
-      - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
-    depends_on:
-      haf:
-        condition: service_healthy
-
   hivemind-block-processing:
     image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
     profiles:
@@ -21,11 +7,19 @@ services:
     networks:
       haf-network:
     command:
-      - "--database-url=postgresql://hivemind@haf/haf_block_log"
       - "sync"
+      - "--database-url=postgresql://hivemind@haf/haf_block_log"
+      - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
+      - "--install-app"
+    healthcheck:
+      test: ["CMD-SHELL","/home/hivemind/block-processing-healthcheck.sh || exit 1"]
+      interval: 10s
+      timeout: 2s
+      retries: 10
+      start_period: 5m
     depends_on:
-      hivemind-install:
-        condition: service_completed_successfully
+      haf:
+        condition: service_healthy
 
   hivemind-server:
     image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
@@ -39,7 +33,24 @@ services:
       - "server"
     depends_on:
       hivemind-block-processing:
-        condition: service_started
+        condition: service_healthy
+
+  # note: the hivemind-install steps, which create/update the hivemind database schema, are also run automatically at the beginning
+  # of the hivemind-block-processing image's startup.  There is normally no reason to run this step separately.  If you do,
+  # be sure that the hivemind block-processor is not running at the same time as this install script, as doing so may corrupt your
+  # database
+  hivemind-install:
+    image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
+    profiles:
+      - hivemind-install
+    networks:
+      haf-network:
+    command:
+      - "setup"
+      - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
+    depends_on:
+      haf:
+        condition: service_healthy
 
   hivemind-uninstall:
     image: ${HIVEMIND_INSTANCE_IMAGE:-registry.gitlab.syncad.com/hive/hivemind/instance}:${HIVEMIND_INSTANCE_VERSION:-haf_api_node}
