@@ -29,3 +29,11 @@ Port number assignments are roughly based on what we use in haproxy's config:
 The haproxy frontend for hived is on port 7001.  With these config files, we'll
 expose the haproxy frontend for hived at 7001, the hived port itself at 17001 (frontend port + 10000)
 and the corresponding haproxy healthcheck for hived at 27001 (frontend port + 20000)
+
+### Warning
+There is a bug in docker tracked here: https://github.com/docker/compose/issues/11404 
+which will cause docker to generate an error when you include the compose.exposed.yml
+file as described above.  This bug has been fixed in the docker compose repo, but 
+new packages have not yet been published for Ubuntu 23.10.  There is no workaround,
+(other than merging in the desired changes by hand), let's hope the fix is  included 
+in the next release after 2.24.5
