@@ -34,6 +34,8 @@ services:
     depends_on:
       hivemind-block-processing:
         condition: service_healthy
+      haf:
+        condition: service_healthy
 
   # note: the hivemind-install steps, which create/update the hivemind database schema, are also run automatically at the beginning
   # of the hivemind-block-processing image's startup.  There is normally no reason to run this step separately.  If you do,

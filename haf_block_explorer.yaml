@@ -44,6 +44,8 @@ services:
     depends_on:
       block-explorer-install:
         condition: service_completed_successfully
+      haf:
+        condition: service_healthy
   block-explorer-postgrest:
     image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
@@ -68,3 +70,5 @@ services:
     depends_on:
       block-explorer-install:
         condition: service_completed_successfully
+      haf:
+        condition: service_healthy

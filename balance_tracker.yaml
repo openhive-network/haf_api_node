@@ -27,6 +27,8 @@ services:
     depends_on:
       balance-tracker-install:
         condition: service_completed_successfully
+      haf:
+        condition: service_healthy
   balance-tracker-block-processing:
     image: ${BALANCE_TRACKER_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_VERSION:-haf_api_node}
     profiles:
@@ -46,6 +48,8 @@ services:
     depends_on:
       balance-tracker-install:
         condition: service_completed_successfully
+      haf:
+        condition: service_healthy
   balance-tracker-postgrest:
     image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
@@ -68,6 +72,8 @@ services:
     networks:
       haf-network:
     depends_on:
+      balance-tracker-install:
+        condition: service_completed_successfully
       haf:
         condition: service_healthy
   balance-tracker-swagger:
