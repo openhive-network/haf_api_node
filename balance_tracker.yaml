@@ -25,8 +25,8 @@ services:
     command:
       - uninstall_app
     depends_on:
-      balance-tracker-install:
-        condition: service_completed_successfully
+      #      balance-tracker-install:
+      #  condition: service_completed_successfully
       haf:
         condition: service_healthy
   balance-tracker-block-processing:

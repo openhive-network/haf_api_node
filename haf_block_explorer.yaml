@@ -24,7 +24,8 @@ services:
     environment:
       POSTGRES_HOST: haf
     command:
-      - uninstall_app --skip-btracker
+      - uninstall_app
+      - --skip-btracker
     networks:
       haf-network:
     depends_on:

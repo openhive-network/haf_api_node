@@ -35,6 +35,7 @@ services:
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-install-1.${NETWORK_NAME}              trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-balance-tracker-1.${NETWORK_NAME}           trust\n
 
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-block-processing-1.${NETWORK_NAME}     trust\n
         host    haf_block_log    hafbe_user       ${COMPOSE_PROJECT_NAME}-block-explorer-postgrest-1.${NETWORK_NAME}            trust\n
