@@ -1,33 +1,39 @@
 services:
   drone:
-    image: ${DRONE_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/drone}:${DRONE_VERSION:-latest}
+    image: ${DRONE_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/drone}:${DRONE_VERSION:-beta}
     profiles:
       - servers
     volumes:
       - type: bind
-        source: ./drone/config.json
-        target: /config.json
+        source: ./drone/config.yaml
+        target: /config.yaml
         read_only: true
     depends_on:
       haproxy:
         condition: service_healthy
     networks:
       - haf-network
+        #  ports:
+        #    - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:9000:9000"
   # to use our log analysis tools, we need to capture drone's traffic using a 
   # specific nginx logging config.  To do this, rename the actual drone
   # service above to 'jussi-real', then uncomment the next section. 
-  #drone:
-  #  image: nginx
-  #  volumes:
-  #    - type: bind
-  #      source: ./jussi/nginx.conf
-  #      target: /etc/nginx/nginx.conf
-  #      read_only: true
-  #    - type: bind
-  #      source: ${HAF_LOG_DIRECTORY}/jussi
-  #      target: /var/log/jussi
-  #  depends_on:
-  #    jussi-real:
-  #      condition: service_started
-  #  networks:
-  #    - haf-network
+  # drone:
+  #   image: nginx
+  #   profiles:
+  #     - servers
+  #   volumes:
+  #     - type: bind
+  #       source: ./drone/nginx.conf
+  #       target: /etc/nginx/nginx.conf
+  #       read_only: true
+  #     - type: bind
+  #       source: ${HAF_LOG_DIRECTORY}/drone
+  #       target: /var/log/drone
+  #   depends_on:
+  #     drone-real:
+  #       condition: service_started
+  #   ports:
+  #     - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:9001:9000"
+  #   networks:
+  #     - haf-network
