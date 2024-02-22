@@ -24,10 +24,25 @@ services:
     environment:
       POSTGRES_HOST: haf
     command:
-      - uninstall_app
+      - uninstall_app --skip-btracker
     networks:
       haf-network:
     depends_on:
+      haf:
+        condition: service_healthy
+  block-explorer-uninstall-balance-tracker:
+    image: ${BALANCE_TRACKER_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_VERSION:-haf_api_node}
+    profiles:
+      - block-explorer-uninstall
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    command:
+      - uninstall_app
+    depends_on:
+      block-explorer-uninstall:
+        condition: service_completed_successfully
       haf:
         condition: service_healthy
   block-explorer-block-processing:
