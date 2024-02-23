@@ -11,6 +11,7 @@ services:
     environment:
       PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME}
       JSONRPC_API_SERVER_NAME: ${JSONRPC_API_SERVER_NAME:-jussi}
+      ADMIN_ENDPOINT_PROTOCOL: ${ADMIN_ENDPOINT_PROTOCOL:-https}
     volumes:
       - type: bind
         source: ./caddy/Caddyfile

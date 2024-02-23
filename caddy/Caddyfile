@@ -37,7 +37,21 @@
 
   # reverse-proxy to the admin tools
   redir /admin /admin/
-  handle_path /admin/* {
+
+  # restrict the /admin endpoints to the specified protocol.  This is for the
+  # usual case where you use basicauth to protect the endpoint, and want to prevent
+  # it from being accessed via http.
+  @admin_wrong_protocol {
+    not protocol {$ADMIN_ENDPOINT_PROTOCOL}
+    path /admin/*
+  }
+  respond @admin_wrong_protocol "Admin endpoints are only accessible via {$ADMIN_ENDPOINT_PROTOCOL}" 403
+  @admin {
+    protocol {$ADMIN_ENDPOINT_PROTOCOL}
+    path /admin/*
+  }
+  handle @admin {
+    uri strip_prefix /admin
     import admin-snippets/*.snippet
 
     # Route /admin/pgadmin to pgAdmin
