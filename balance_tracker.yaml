@@ -25,8 +25,6 @@ services:
     command:
       - uninstall_app
     depends_on:
-      balance-tracker-install:
-        condition: service_completed_successfully
       haf:
         condition: service_healthy
   balance-tracker-block-processing:
@@ -64,7 +62,7 @@ services:
       PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/btracker_api/
     # This healthcheck is untested, modify as necessary
     healthcheck:
-      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 'http://localhost:3000/rpc/get_balance_for_coin_by_block/?_account_name=miners&_coin_type=21&_start_block=2&_end_block=2' || exit 1"]
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider localhost:3001/ready || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 10
