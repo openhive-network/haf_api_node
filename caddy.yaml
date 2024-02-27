@@ -30,6 +30,10 @@ services:
         target: /etc/caddy/pgbadger
         read_only: true
       - type: bind
+        source: ${HAF_DATA_DIRECTORY}/logs/caddy
+        target: /var/log/caddy
+        read_only: false
+      - type: bind
         source: ${TLS_SELF_SIGNED_SNIPPET}
         target: /etc/caddy/tls-self-signed-snippets/self-signed.snippet
         read_only: true
