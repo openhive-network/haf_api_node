@@ -1,6 +1,6 @@
 services:
   drone:
-    image: ${DRONE_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/drone}:${DRONE_VERSION:-beta}
+    image: ${DRONE_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/drone}:${DRONE_VERSION:-beta}
     profiles:
       - servers
     volumes:

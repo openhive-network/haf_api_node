@@ -1,6 +1,6 @@
 services:
   balance-tracker-install:
-    image: ${BALANCE_TRACKER_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_VERSION:-haf_api_node}
+    image: ${BALANCE_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafbe
@@ -15,7 +15,7 @@ services:
       haf:
         condition: service_healthy
   balance-tracker-uninstall:
-    image: ${BALANCE_TRACKER_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_VERSION:-haf_api_node}
+    image: ${BALANCE_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - balance-tracker-uninstall
     environment:
@@ -28,7 +28,7 @@ services:
       haf:
         condition: service_healthy
   balance-tracker-block-processing:
-    image: ${BALANCE_TRACKER_REGISTRY:-registry.gitlab.syncad.com/hive/balance_tracker}:${BALANCE_TRACKER_VERSION:-haf_api_node}
+    image: ${BALANCE_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - balance-tracker-standalone
     environment:
