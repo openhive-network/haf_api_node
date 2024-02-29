@@ -19,11 +19,6 @@ backend haf_block_explorer {
     .port = "7005";
 }
 
-backend default {
-    .host = "haproxy";
-    .port = "7001";
-}
-
 sub recv_cachable_post {
     # many of the POST requests to PostgREST are cacheable, but varnish doesn't cache POST by default.
     # This section follows the tutorial at: https://docs.varnish-software.com/tutorials/caching-post-requests/ 
@@ -70,6 +65,8 @@ sub vcl_recv {
         }
     } elseif (req.url == "/varnishcheck") {
         return(synth(200, "Ok"));
+    } else {
+        return(synth(404, "Not found"));
     }
 }
 
