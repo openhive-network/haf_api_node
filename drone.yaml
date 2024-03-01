@@ -1,20 +1,20 @@
 services:
   drone:
-    image: ${DRONE_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/drone}:${DRONE_VERSION:-beta}
+    image: ${DRONE_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/drone}:${DRONE_VERSION:-latest}
     profiles:
       - servers
+    environment:
+      RUST_LOG: drone=trace
     volumes:
       - type: bind
-        source: ./drone/config.yaml
-        target: /config.yaml
+        source: ./drone/config.json
+        target: /config.json
         read_only: true
     depends_on:
       haproxy:
         condition: service_healthy
     networks:
       - haf-network
-        #  ports:
-        #    - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:9000:9000"
   # to use our log analysis tools, we need to capture drone's traffic using a 
   # specific nginx logging config.  To do this, rename the actual drone
   # service above to 'jussi-real', then uncomment the next section. 
