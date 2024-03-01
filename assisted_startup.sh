@@ -25,6 +25,11 @@ for arg in "$@"; do
     esac
 done
 
+if [ "$(id -u)" -ne 0 ]; then
+  echo "This script must be run as root"
+  exit 1
+fi
+
 touch startup.temp
 ## source will load the variable written later in the script if it exists
 source startup.temp
