@@ -12,6 +12,8 @@ services:
       - /var/lib/varnish/varnishd:exec
     environment:
       - VARNISH_SIZE=2G
+    command:
+      - -t 0
     depends_on:
       haproxy:
         condition: service_healthy
