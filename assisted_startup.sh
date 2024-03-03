@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Startup with a snapshot
 # After installing zfs and docker prequisites, run this script to configure the rest of the system
 # This script will aid in the .env setup, and will automatically create a zpool and zfs datasets if needed
@@ -318,7 +317,7 @@ echo "max_swap=$max_swap" >> startup.temp
 
 
 entered_livesync=0
-docker compose logs -f | while read -r line; do
+while read -r line; do
     if [[ $line == *"Block"* ]]; then
         echo "$line"
         mem_state=$(free -g | awk '/^Mem:/{print $3}')
@@ -374,7 +373,7 @@ docker compose logs -f | while read -r line; do
         docker compose down
         break
     fi
-done
+done < <(docker compose logs -f)
 
 if [ $entered_livesync -eq 0 ]; then
   echo "Failed to enter livesync, aborting..."
