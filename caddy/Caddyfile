@@ -111,7 +111,25 @@
     method POST
     path /
   }
-  reverse_proxy @post_to_root http://{$JSONRPC_API_SERVER_NAME}:9000
+  handle @post_to_root {
+    # Add CORS headers
+    header {
+      Access-Control-Allow-Origin "*"
+      Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+      Access-Control-Allow-Headers "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range"
+      Access-Control-Max-Age "3600"
+    }
+    reverse_proxy http://{$JSONRPC_API_SERVER_NAME}:9000 {
+      # remove any CORS headers sent by jussi/drone so we don't have duplicates
+      header_down -Access-Control-Allow-Origin
+      header_down -Access-Control-Allow-Methods
+      header_down -Access-Control-Allow-Headers
+      header_down -Access-Control-Max-Age
+      # we're not overriding these, they're added by drone but not necessary
+      header_down -Access-Control-Allow-Credentials
+      header_down -Access-Control-Expose-Headers
+    }
+  }
 
   # Route everything else (mostly new-style REST calls)
   reverse_proxy http://varnish
