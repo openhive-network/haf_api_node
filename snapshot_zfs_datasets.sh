@@ -6,7 +6,7 @@ print_help() {
   echo "Usage: $0 [--env-file=filename] snapshot-name"
 }
 
-OPTIONS=$(getopt -o he: --long env-file:,help,zpool:,top-level-dataset: -n "$0" -- "$@")
+OPTIONS=$(getopt -o he: --long env-file:,help,zpool:,top-level-dataset:,public-snapshot -n "$0" -- "$@")
 
 if [ $? -ne 0 ]; then
     print_help
@@ -17,6 +17,7 @@ ZPOOL=""
 TOP_LEVEL_DATASET=""
 ZPOOL_MOUNT_POINT=""
 TOP_LEVEL_DATASET_MOUNTPOINT=""
+PUBLIC_SNAPSHOT=0
 
 eval set -- "$OPTIONS"
 
@@ -33,6 +34,10 @@ while true; do
     --top-level-dataset)
       TOP_LEVEL_DATASET="$2"
       shift 2
+      ;;
+    --public-snapshot)
+      PUBLIC_SNAPSHOT=1
+      shift
       ;;
     --help|-h)
       print_help
@@ -105,6 +110,15 @@ check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}"
 echo "All datasets appear unmountable"
 
+if [ $PUBLIC_SNAPSHOT -eq 1 ]; then
+  stdbuf -o0 echo ""
+  stdbuf -o0 echo "Moving log files out of the dataset because this is a public snapshot... "
+  (cd "${TOP_LEVEL_DATASET_MOUNTPOINT}" && \
+   tar cvf /tmp/snapshot_zfs_datasets_saved_files.tar $(ls -d logs p2p docker_entrypoint.log 2>/dev/null) && \
+   rm -r logs/*/* p2p/* docker_entrypoint.log)
+  stdbuf -o0 echo "Done saving off log files"
+fi
+
 stdbuf -o0 echo -n "syncing filesystems..."
 sync; sync; sync
 echo " done"
@@ -141,6 +155,16 @@ remount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
+
+if [ $PUBLIC_SNAPSHOT -eq 1 ]; then
+  echo ""
+  stdbuf -o0 echo "Restoring log files..."
+  (cd "${TOP_LEVEL_DATASET_MOUNTPOINT}" && \
+   tar xvf /tmp/snapshot_zfs_datasets_saved_files_$$.tar &&
+   rm /tmp/snapshot_zfs_datasets_saved_files_$$.tar)
+  stdbuf -o0 echo "Done restoring log files."
+fi
+
 
 zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain@${SNAPSHOT_NAME}" \

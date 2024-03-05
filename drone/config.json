@@ -4,7 +4,7 @@
   "CACHE_TTL": 300,
   "CACHE_COUNT": 250,
   "OPERATOR_MESSAGE": "Drone by Deathwing",
-  "HAF_ENDPOINT": "http://haproxy:7001",
+  "HAF_ENDPOINT": "http://haproxy:7008",
   "HAFAH_ENDPOINT": "http://haproxy:7003",
   "HIVEMIND_ENDPOINT": "http://haproxy:7002",
   "MIDDLEWARE_CONNECTION_THREADS": 8
