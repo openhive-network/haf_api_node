@@ -3,7 +3,7 @@
 set -e
 
 print_help() {
-  echo "Usage: $0 [--env-file=filename] snapshot-name"
+  echo "Usage: $0 [--env-file=filename] [--public-snapshot] snapshot-name"
 }
 
 OPTIONS=$(getopt -o he: --long env-file:,help,zpool:,top-level-dataset:,public-snapshot -n "$0" -- "$@")
@@ -114,7 +114,7 @@ if [ $PUBLIC_SNAPSHOT -eq 1 ]; then
   stdbuf -o0 echo ""
   stdbuf -o0 echo "Moving log files out of the dataset because this is a public snapshot... "
   (cd "${TOP_LEVEL_DATASET_MOUNTPOINT}" && \
-   tar cvf /tmp/snapshot_zfs_datasets_saved_files.tar $(ls -d logs p2p docker_entrypoint.log 2>/dev/null) && \
+   tar cvf /tmp/snapshot_zfs_datasets_saved_files_$$.tar $(ls -d logs p2p docker_entrypoint.log 2>/dev/null) && \
    rm -r logs/*/* p2p/* docker_entrypoint.log)
   stdbuf -o0 echo "Done saving off log files"
 fi
