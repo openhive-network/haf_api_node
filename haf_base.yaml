@@ -83,7 +83,7 @@ services:
       retries: 10
       start_period: 72h
   logrotate:
-    image: registry.gitlab.syncad.com/hive/haf_api_node/logrotate
+    image: ${LOGROTATE_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/logrotate}:${LOGROTATE_VERSION:-latest}
     profiles:
       - logrotate
     init: true
@@ -93,7 +93,7 @@ services:
         target: /var/log/postgresql
       - type: bind
         source: ./logrotate/logrotate.d
-        target: /etc/logrotate.d
+        target: /etc/logrotate.d.sources
         read_only: true
   pgbadger:
     image: matsuu/pgbadger
