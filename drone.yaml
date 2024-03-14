@@ -1,14 +1,14 @@
 services:
   drone:
-    image: ${DRONE_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/drone}:${DRONE_VERSION:-latest}
+    image: ${DRONE_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/drone}:${DRONE_VERSION:-latest}
     profiles:
       - servers
     environment:
-      RUST_LOG: drone=trace
+      RUST_LOG: access_log=info
     volumes:
       - type: bind
-        source: ./drone/config.json
-        target: /config.json
+        source: ./drone/config.yaml
+        target: /config.yaml
         read_only: true
     depends_on:
       haproxy:

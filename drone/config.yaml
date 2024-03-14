@@ -2,7 +2,7 @@
 drone:
   port: 9000
   hostname: 0.0.0.0
-  cache_max_capacity: 4294967296
+  cache_max_capacity: 1073741824
   operator_message: "Drone by Deathwing"
   middleware_connection_threads: 8
 # a list of backends Jussi will send calls to, these are referenced 
