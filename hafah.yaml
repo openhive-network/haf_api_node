@@ -1,6 +1,6 @@
 services:
   hafah-install:
-    image: ${HAFAH_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah/setup}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HAFAH_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafah
@@ -16,7 +16,7 @@ services:
       haf:
         condition: service_healthy
   hafah-uninstall:
-    image: ${HAFAH_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah/setup}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HAFAH_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - hafah-uninstall
     environment:

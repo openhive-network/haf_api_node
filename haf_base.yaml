@@ -3,7 +3,7 @@ services:
     profiles:
       - core
       - block-explorer-uninstall
-    image: ${HAF_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf/minimal-instance}:${HAF_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HAF_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf}:${HAF_VERSION:-${HIVE_API_NODE_VERSION}}
     networks:
       - haf-network
     tty: true
