@@ -3,10 +3,19 @@
 set -e
 
 print_help() {
-  echo "Usage: $0 [--env-file=filename] [--public-snapshot] snapshot-name"
+  echo "Usage: $0 [--env-file=filename] [--public-snapshot] [--temp-dir=dir] [--swap-logs-with-dataset=dataset] snapshot-name"
+  echo "  --public-snapshot         move log files to /tmp before taking the snapshot, then"
+  echo "                            restore them afterwards"
+  echo "  --temp-dir                use a different temp directory (use if /tmp isn't big enough)"
+  echo "  --swap-logs-with-dataset  with extremely large log files, it's too slow to copy/restore log files."
+  echo "                            Use this if you want to maintain a separate dataset for logs that always"
+  echo "                            stays empty.  Before the snapshot, we swap the logs dataset with the empty"
+  echo "                            dataset, then swap back afterwards.  That way the large logs files aren't"
+  echo "                            of the snapshots.  This is a lot faster, but makes managing datasets more"
+  echo "                            complicated, so only use it if you really need to"
 }
 
-OPTIONS=$(getopt -o he: --long env-file:,help,zpool:,top-level-dataset:,public-snapshot -n "$0" -- "$@")
+OPTIONS=$(getopt -o he:pt:l: --long env-file:,help,zpool:,top-level-dataset:,public-snapshot,temp-dir:,swap-logs-with-dataset: -n "$0" -- "$@")
 
 if [ $? -ne 0 ]; then
     print_help
@@ -18,6 +27,8 @@ TOP_LEVEL_DATASET=""
 ZPOOL_MOUNT_POINT=""
 TOP_LEVEL_DATASET_MOUNTPOINT=""
 PUBLIC_SNAPSHOT=0
+SWAP_LOGS_DATASET=""
+TMPDIR=/tmp
 
 eval set -- "$OPTIONS"
 
@@ -35,9 +46,17 @@ while true; do
       TOP_LEVEL_DATASET="$2"
       shift 2
       ;;
-    --public-snapshot)
+    --public-snapshot|-p)
       PUBLIC_SNAPSHOT=1
       shift
+      ;;
+    --temp-dir|-t)
+      TMPDIR="$2"
+      shift 2
+      ;;
+    --swap-logs-with-dataset|-l)
+      SWAP_LOGS_DATASET="$2"
+      shift 2
       ;;
     --help|-h)
       print_help
@@ -108,14 +127,27 @@ check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/table
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}"
+if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
+  check_dataset_is_unmountable "${SWAP_LOGS_DATASET}"
+fi
+
 echo "All datasets appear unmountable"
 
 if [ $PUBLIC_SNAPSHOT -eq 1 ]; then
   stdbuf -o0 echo ""
   stdbuf -o0 echo "Moving log files out of the dataset because this is a public snapshot... "
+
+  LOGS_DIR="logs"
+  LOGS_DIR_FOR_RM="logs"
+  if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
+    LOGS_DIR=""
+    LOGS_DIR_FOR_RM="does_not_exist_123456789"
+  fi
+
   (cd "${TOP_LEVEL_DATASET_MOUNTPOINT}" && \
-   tar cvf /tmp/snapshot_zfs_datasets_saved_files_$$.tar $(ls -d logs p2p docker_entrypoint.log 2>/dev/null) && \
-   rm -r logs/*/* p2p/* docker_entrypoint.log)
+   tar cvf $TMPDIR/snapshot_zfs_datasets_saved_files_$$.tar $(ls -d $LOGS_DIR p2p docker_entrypoint.log 2>/dev/null) && \
+   rm -rf ${LOGS_DIR_FOR_RM}/*/* p2p/* docker_entrypoint.log)
+
   stdbuf -o0 echo "Done saving off log files"
 fi
 
@@ -132,6 +164,12 @@ unmount() {
   echo " done"
 }
 
+rename() {
+  stdbuf -o0 echo -n "Renaming $1 to $2..."
+  zfs rename "$1" "$2"
+  echo " done"
+}
+
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
@@ -139,9 +177,23 @@ unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
+if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
+  echo "Swapping logs dataset"
+  rename "${ZPOOL}/${TOP_LEVEL_DATASET}/logs" "${ZPOOL}/temp-saved-logs"
+  rename "${SWAP_LOGS_DATASET}" "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+  echo -n "Done swapping logs dataset"
+fi
+
 stdbuf -o0 echo -n "Taking snapshot..."
 zfs snap -r "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"
 echo " done"
+
+if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
+  echo "Restoring logs dataset"
+  rename "${ZPOOL}/${TOP_LEVEL_DATASET}/logs" "${SWAP_LOGS_DATASET}"
+  rename "${ZPOOL}/temp-saved-logs" "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+  echo "Done restoring logs dataset"
+fi
 
 remount() {
   stdbuf -o0 echo -n "Re-mounting $1..."
@@ -160,8 +212,8 @@ if [ $PUBLIC_SNAPSHOT -eq 1 ]; then
   echo ""
   stdbuf -o0 echo "Restoring log files..."
   (cd "${TOP_LEVEL_DATASET_MOUNTPOINT}" && \
-   tar xvf /tmp/snapshot_zfs_datasets_saved_files_$$.tar &&
-   rm /tmp/snapshot_zfs_datasets_saved_files_$$.tar)
+   tar xvf $TMPDIR/snapshot_zfs_datasets_saved_files_$$.tar &&
+   rm $TMPDIR/snapshot_zfs_datasets_saved_files_$$.tar)
   stdbuf -o0 echo "Done restoring log files."
 fi
 
