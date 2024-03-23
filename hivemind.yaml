@@ -62,5 +62,8 @@ services:
       haf-network:
     entrypoint:
       - /home/hivemind/app/uninstall_app.sh
+    depends_on:
+      haf:
+        condition: service_healthy
     command:
       - "--postgres-url=postgresql://haf_admin@haf/haf_block_log"
