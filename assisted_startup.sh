@@ -288,6 +288,8 @@ else
 
     if [[ $remove_shared_mem != 0 ]]; then
         sed -i "s#$original_HAF_SHM#$modified_HAF_SHM#g" .env
+        echo "original_HAF_SHM=$original_HAF_SHM"
+        echo "modified_HAF_SHM=$modified_HAF_SHM"
         echo "original_HAF_SHM=$original_HAF_SHM" >> startup.temp
         echo "modified_HAF_SHM=$modified_HAF_SHM" >> startup.temp
     fi
