@@ -94,6 +94,7 @@ check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/pgdat
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/tablespace"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}"
 echo "All datasets appear unmountable"
 
@@ -127,6 +128,7 @@ unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
+unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
 rollback() {
@@ -136,6 +138,7 @@ rollback() {
 }
 
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}"
+rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
@@ -149,6 +152,7 @@ remount() {
 }
 
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}"
+remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
@@ -156,6 +160,7 @@ remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 
 zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}" \
+         "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/logs" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace" \

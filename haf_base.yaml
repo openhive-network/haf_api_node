@@ -60,6 +60,7 @@ services:
         host    haf_block_log    btracker_user    ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
         "
       SHM_DIR: /home/hived/shm_dir
+      WAL_DIR: /home/hived/wal_dir
       # PGCTLTIMEOUT sets how long we allow PostgreSQL to startup before giving up and shutting down the container.
       # If you have an unclean shutdown, and postgres needs to do startup recovery, working through all of the old
       # write-ahead logs, this can take longer than the default timeout, which is something like 60 seconds.  
@@ -81,6 +82,9 @@ services:
       - type: bind
         source: ${HAF_SHM_DIRECTORY}/
         target: /home/hived/shm_dir
+      - type: bind
+        source: ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/haf_wal}
+        target: /home/hived/wal_dir
     shm_size: 4gb
     healthcheck:
       test: ["CMD-SHELL","curl -f localhost:8091"]

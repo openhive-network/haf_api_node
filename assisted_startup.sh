@@ -287,7 +287,7 @@ else
     sed -i "s/$original_line/$modified_line/g" .env
 
     if [[ $remove_shared_mem != 0 ]]; then
-        sed -i "s#$original_HAF_SHM#$modified_HAF_SHM#g" .env
+        sed -i "s#^$original_HAF_SHM#$modified_HAF_SHM#g" .env
         echo "original_HAF_SHM=$original_HAF_SHM"
         echo "modified_HAF_SHM=$modified_HAF_SHM"
         echo "original_HAF_SHM=$original_HAF_SHM" >> startup.temp
@@ -392,9 +392,9 @@ else
 
     # Move the shared_mem file to the blockchain directory
     if [[ $remove_shared_mem != 0 ]]; then
-        sed -i "s#$modified_HAF_SHM#$original_HAF_SHM#g" .env
-        sudo cp /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/blockchain
-        sudo chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/blockchain/shared_memory.bin
+        sed -i "s#^$modified_HAF_SHM#$original_HAF_SHM#g" .env
+        sudo cp /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory
+        sudo chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
         sudo umount /mnt/haf_shared_mem
     fi
 

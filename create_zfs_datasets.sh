@@ -86,9 +86,11 @@ zfs_postgres_options="" # or "-o recordsize=8k -o recordsize=16k", consider also
 zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
 # create an uncompressed dataset for the blockchain.  Blocks in it are already compressed, so won't compress further.
-# you may also have your shared_memory.bin file in this directory.  AFAIK we haven't done studies on whether compression
-# helps shared_memory.bin.
 zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
+
+# create an uncompressed dataset for the shared_memory.bin file and WAL.
+# AFAIK we haven't done studies on whether compression helps shared_memory.bin.
+zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 
 # create an unmountable dataset to serve as the parent for pgdata & tablespaces
 zfs create $zfs_common_options $zfs_compressed_options -o canmount=off "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store"
@@ -107,6 +109,9 @@ zfs create $zfs_common_options $zfs_compressed_options $zfs_postgres_options -o 
 
 # create a dataset for logs (hived and postgresql, for now)
 zfs create $zfs_common_options $zfs_compressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+
+# needs to exist to be bind-mounted, no real reason to make it a dataset of its own though
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/shared_memory/haf_wal"
 
 # 1000:100 is hived:users inside the container
 chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT"

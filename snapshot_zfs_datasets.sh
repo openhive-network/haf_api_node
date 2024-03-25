@@ -126,6 +126,7 @@ check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/pgdat
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/tablespace"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}"
 if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
   check_dataset_is_unmountable "${SWAP_LOGS_DATASET}"
@@ -175,6 +176,7 @@ unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
+unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
 if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
@@ -202,6 +204,7 @@ remount() {
 }
 
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}"
+remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
@@ -219,6 +222,7 @@ fi
 
 
 zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}" \
+         "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/logs@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace@${SNAPSHOT_NAME}" \
