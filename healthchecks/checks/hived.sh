@@ -6,7 +6,7 @@
 trap "trap - 2 15 && kill -- -\$\$ && wait" 2 15
 
 
-if ! WGET_RESULT=$(wget -q --timeout=15 -O - --post-data '{"jsonrpc": "2.0", "id": 1, "method": "node_status_api.get_node_status", "params": {}}' http://haf:8091/); then
+if ! WGET_RESULT=$(wget -q --timeout=15 -O - --post-data '{"jsonrpc": "2.0", "id": 1, "method": "node_status_api.get_node_status", "params": {}}' http://${HIVED_HOSTNAME:-haf}:8091/); then
   echo "down #wget returned an error"
   exit 1
 fi
