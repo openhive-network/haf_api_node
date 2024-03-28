@@ -224,7 +224,7 @@ fi
 zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain@${SNAPSHOT_NAME}" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/logs@${SNAPSHOT_NAME}" \
+         "${SWAP_LOGS_DATASET:-${ZPOOL}/${TOP_LEVEL_DATASET}/logs}@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal@${SNAPSHOT_NAME}"
