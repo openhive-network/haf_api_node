@@ -12,10 +12,19 @@ for arg in "$@"; do
         --no-autoswap)
             NO_AUTOSWAP=1
             ;;
+        --replay)
+            REPLAY=1
+            ;;
+        --snapshot-name)
+            SNAPSHOT_NAME=$2
+            shift
+            ;;
         --help)
             echo "Usage: startup_with_snapshot.sh [--no-ramdisk] [--no-autoswap]"
             echo "  --no-ramdisk: Do not use a RAM Disk for shared memory"
             echo "  --no-autoswap: Do not automatically grow swap"
+            echo "  --replay: Replay the blockchain"
+            echo "  --snapshot-name NAME: Name of the snapshot to use. default first_sync"
             exit 0
             ;;
         *)
@@ -28,6 +37,7 @@ if [ "$(id -u)" -ne 0 ]; then
   echo "This script must be run as root"
   exit 1
 fi
+
 
 touch startup.temp
 ## source will load the variable written later in the script if it exists
@@ -45,6 +55,17 @@ if command -v docker >/dev/null 2>&1; then
 else
     echo "Docker is not installed on your system."
     exit 1
+fi
+
+# if no snapshot name is provided, use the default
+if [[ $SNAPSHOT_NAME == "" ]]; then
+    SNAPSHOT_NAME="first_sync"
+fi
+
+echo "SNAPSHOT_NAME=$SNAPSHOT_NAME" >> startup.temp
+
+if [[ $REPLAY == 1 && $SNAPSHOT_NAME == "first_sync" ]]; then
+    zfs list -H -o name -t snapshot | xargs -n1 zfs destroy -r first_sync
 fi
 
 if [ ! -f .env ]; then
@@ -120,7 +141,7 @@ if [ ! -f .env ]; then
     read -p "What is your public hostname? (api.hive.blog) Leave blank if none: " choice
     if [[ "$choice" != "" ]]; then
         echo "Configuring $choice..."
-        sed -i "s/PUBLIC_HOSTNAME="$PUBLIC_HOSTNAME"/PUBLIC_HOSTNAME="$choice"/g" .env
+        sed -i "s/PUBLIC_HOSTNAME=\"$PUBLIC_HOSTNAME\"/PUBLIC_HOSTNAME=\"$choice\"/g" .env
         source .env
         echo "Caddy may attempt to get a real SSL certificate for $PUBLIC_HOSTNAME from LetsEncrypt."
         echo "If this server is behind a firewall or NAT, or $PUBLIC_HOSTNAME is misconfigured,"
@@ -219,87 +240,92 @@ if [[ $? == 1 ]]; then
     ./create_zfs_datasets.sh
 fi
 
-zfs list -t snapshot | grep first_sync &> /dev/null
+zfs list -t snapshot | grep $SNAPSHOT_NAME &> /dev/null
 if [[ $? == 0 ]]; then
-    echo "Snapshot found. Nothing to do"
-    rm startup.temp
+    echo "Snapshot found. Nothing to do. Use --snapshot-name to specify a different snapshot."
     exit 0
+fi
+
+if [[ $REPLAY == 1 ]]; then
+    sed -i "s/^ARGUMENTS=""/ARGUMENTS="--replay-blockchain"/g" .env
 fi
 
 if docker compose ps | grep haf | grep Up > /dev/null 2>&1; then
     echo "Docker Compose is up and running."
 else
     echo "Setting Up Startup..."
+    if [[ $original_line == "" ]]; then
+        # Optimize the system for replaying the blockchain
 
-    # Optimize the system for replaying the blockchain
-
-    physical_memory=$(free -g | awk '/^Mem:/{print $2}')
-    free_memory=$(free -g | awk '/^Mem:/{print $4}')
-    swap_memory=$(free -g | awk '/^Swap:/{print $2}')
-    free_space=$(df -BG / | awk 'NR==2 {print $4}' | sed "s/G//g")
-    swap_type=$(swapon --show=TYPE --noheadings)
-    swap_location=$(swapon --show=NAME --noheadings)
+        physical_memory=$(free -g | awk '/^Mem:/{print $2}')
+        free_memory=$(free -g | awk '/^Mem:/{print $4}')
+        swap_memory=$(free -g | awk '/^Swap:/{print $2}')
+        free_space=$(df -BG / | awk 'NR==2 {print $4}' | sed "s/G//g")
+        swap_type=$(swapon --show=TYPE --noheadings)
+        swap_location=$(swapon --show=NAME --noheadings)
 
 
-    if [[ $physical_memory -gt 60 && $free_memory -gt 30 && $NO_RAMDISK != 1 ]]; then
-        echo "There is more than 64 gigabytes of RAM. Mounting shared_mem..."
-        if [ ! -d "/mnt/haf_shared_mem" ]; then
-            sudo mkdir /mnt/haf_shared_mem
+        if [[ $physical_memory -gt 60 && $free_memory -gt 30 && $NO_RAMDISK != 1 ]]; then
+            echo "There is more than 64 gigabytes of RAM. Mounting shared_mem..."
+            if [ ! -d "/mnt/haf_shared_mem/haf_wal" ]; then
+                sudo mkdir /mnt/haf_shared_mem/haf_wal
+            fi
+            sudo mount -t tmpfs -o size=25g tmpfs /mnt/haf_shared_mem/haf_wal
+            sudo chown 1000:100 /mnt/haf_shared_mem/haf_wal
+            remove_shared_mem=25
+        else
+            remove_shared_mem=0
         fi
-        sudo mount -t tmpfs -o size=25g tmpfs /mnt/haf_shared_mem
-        sudo chown 1000:100 /mnt/haf_shared_mem
-        remove_shared_mem=25
-    else
-        remove_shared_mem=0
-    fi
-    echo "Available Memory: $(( physical_memory - remove_shared_mem + swap_memory ))G"
-    echo "Current swapsize: $swap_memory"
-    echo "64G of memory is recommended, with at least 8G of swap"
-    echo "This script will attempt to allocate aditional swap if needed"
+        echo "Available Memory: $(( physical_memory - remove_shared_mem + swap_memory ))G"
+        echo "Current swapsize: $swap_memory"
+        echo "64G of memory is recommended, with at least 8G of swap"
+        echo "This script will attempt to allocate aditional swap if needed"
 
-    # write variable to a temp file
-    echo "remove_shared_mem=$remove_shared_mem" > startup.temp
+        # write variable to a temp file
+        echo "remove_shared_mem=$remove_shared_mem" > startup.temp
 
-    # Modify the .env file to use only the core and admin profile and the shared_mem directory
+        # Modify the .env file to use only the core and admin profile and the shared_mem directory
+        while IFS= read -r line; do
+            if [[ $line == COMPOSE_PROFILES=* ]]; then
+                original_line="$line"
+                modified_line="COMPOSE_PROFILES=\"core,admin\""
+                # Print the original and modified lines
+                echo "Intended Profiles: $original_line"
+                echo "Startup Profiles: $modified_line"
+            fi
+            if [[ $line == HAF_SHM_DIRECTORY=* ]]; then
+                original_HAF_SHM="$line"
+                modified_HAF_SHM="HAF_SHM_DIRECTORY=\"/mnt/haf_shared_mem\""
 
-    while IFS= read -r line; do
-        if [[ $line == COMPOSE_PROFILES=* ]]; then
-            original_line="$line"
-            modified_line="COMPOSE_PROFILES=\"core,admin\""
-            # Print the original and modified lines
-            echo "Intended Profiles: $original_line"
-            echo "Startup Profiles: $modified_line"
+            fi
+
+            if [[ $line == ARGUMENTS=* && ($line == *--replay-blockchain* || $line == *--force-replay*) ]]; then
+                original_arguments="$line"
+                modified_arguments=$(echo "$line" | sed -E "s/(--replay-blockchain|--force-replay)//g")
+                echo "Using: $original_arguments"
+                echo "After Sync will use: $modified_arguments"
+                echo "If this isn't desired, manually change the arguments in .env before the sync is finished"
+            fi
+        done < .env
+
+        sed -i "s/$original_line/$modified_line/g" .env
+
+        if [[ $remove_shared_mem != 0 ]]; then
+            sed -i "s#^$original_HAF_SHM#$modified_HAF_SHM#g" .env
+            echo "original_HAF_SHM=$original_HAF_SHM"
+            echo "modified_HAF_SHM=$modified_HAF_SHM"
+            echo "original_HAF_SHM=$original_HAF_SHM" >> startup.temp
+            echo "modified_HAF_SHM=$modified_HAF_SHM" >> startup.temp
         fi
-        if [[ $line == HAF_SHM_DIRECTORY=* ]]; then
-            original_HAF_SHM="$line"
-            modified_HAF_SHM="HAF_SHM_DIRECTORY=\"/mnt/haf_shared_mem\""
 
+        echo "original_line=$original_line" >> startup.temp
+        echo "modified_line=$modified_line" >> startup.temp
+
+        if [[ $original_arguments != "" ]]; then
+            echo "original_arguments=$original_arguments" >> startup.temp
+            echo "modified_arguments=$modified_arguments" >> startup.temp
         fi
-        if [[ $line == ARGUMENTS=* && ($line == *--replay-blockchain* || $line == *--force-replay*) ]]; then
-            original_arguments="$line"
-            modified_arguments=$(echo "$line" | sed -E "s/(--replay-blockchain|--force-replay)//g")
-            echo "Using: $original_arguments"
-            echo "After Sync will use: $modified_arguments"
-            echo "If this isn't desired, manually change the arguments in .env before the sync is finished"
-        fi
-    done < .env
 
-    sed -i "s/$original_line/$modified_line/g" .env
-
-    if [[ $remove_shared_mem != 0 ]]; then
-        sed -i "s#^$original_HAF_SHM#$modified_HAF_SHM#g" .env
-        echo "original_HAF_SHM=$original_HAF_SHM"
-        echo "modified_HAF_SHM=$modified_HAF_SHM"
-        echo "original_HAF_SHM=$original_HAF_SHM" >> startup.temp
-        echo "modified_HAF_SHM=$modified_HAF_SHM" >> startup.temp
-    fi
-
-    echo "original_line=$original_line" >> startup.temp
-    echo "modified_line=$modified_line" >> startup.temp
-
-    if [[ $original_arguments != "" ]]; then
-        echo "original_arguments=$original_arguments" >> startup.temp
-        echo "modified_arguments=$modified_arguments" >> startup.temp
     fi
 
     if ! docker compose up -d; then
@@ -393,9 +419,9 @@ else
     # Move the shared_mem file to the blockchain directory
     if [[ $remove_shared_mem != 0 ]]; then
         sed -i "s#^$modified_HAF_SHM#$original_HAF_SHM#g" .env
-        sudo cp /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory
+        sudo cp /mnt/haf_shared_mem/haf_wal/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory
         sudo chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
-        sudo umount /mnt/haf_shared_mem
+        sudo umount /mnt/haf_shared_mem/haf_wal
     fi
 
 
@@ -405,7 +431,7 @@ else
     fi
 
     # Create a snapshot of the ZFS pool
-    sudo ./snapshot_zfs_datasets.sh first_sync
+    sudo ./snapshot_zfs_datasets.sh $SNAPSHOT_NAME
 
     # Restart Docker Compose
     docker compose up -d
