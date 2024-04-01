@@ -267,11 +267,11 @@ else
 
         if [[ $physical_memory -gt 60 && $free_memory -gt 30 && $NO_RAMDISK != 1 ]]; then
             echo "There is more than 64 gigabytes of RAM. Mounting shared_mem..."
-            if [ ! -d "/mnt/haf_shared_mem/haf_wal" ]; then
-                sudo mkdir /mnt/haf_shared_mem/haf_wal
+            if [ ! -d "/mnt/haf_shared_mem" ]; then
+                sudo mkdir /mnt/haf_shared_mem
             fi
-            sudo mount -t tmpfs -o size=25g tmpfs /mnt/haf_shared_mem/haf_wal
-            sudo chown 1000:100 /mnt/haf_shared_mem/haf_wal
+            sudo mount -t tmpfs -o size=25g tmpfs /mnt/haf_shared_mem
+            sudo chown 1000:100 /mnt/haf_shared_mem
             remove_shared_mem=25
         else
             remove_shared_mem=0
@@ -419,15 +419,15 @@ else
     # Move the shared_mem file to the blockchain directory
     if [[ $remove_shared_mem != 0 ]]; then
         sed -i "s#^$modified_HAF_SHM#$original_HAF_SHM#g" .env
-        sudo cp /mnt/haf_shared_mem/haf_wal/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory
+        sudo cp /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory
         sudo chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
-        sudo umount /mnt/haf_shared_mem/haf_wal
+        sudo umount /mnt/haf_shared_mem
     fi
 
 
     # Remove replay arguments
     if [[ $original_arguments != "" ]]; then
-        sed -i "s#$original_arguments#$modified_arguments#g" .env
+        sed -i "s#^$original_arguments#$modified_arguments#g" .env
     fi
 
     # Create a snapshot of the ZFS pool
