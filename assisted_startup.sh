@@ -3,7 +3,6 @@
 # After installing zfs and docker prequisites, run this script to configure the rest of the system
 # This script will aid in the .env setup, and will automatically create a zpool and zfs datasets if needed
 
-
 for arg in "$@"; do
     case $arg in
         --no-ramdisk)
@@ -39,9 +38,10 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 
-touch startup.temp
+#touch startup.temp
 ## source will load the variable written later in the script if it exists
-source startup.temp
+#source startup.temp
+rm -f startup.temp
 
 if command -v zfs >/dev/null 2>&1; then
     echo "Verifying Prerequisites..."
@@ -247,7 +247,7 @@ if [[ $? == 0 ]]; then
 fi
 
 if [[ $REPLAY == 1 ]]; then
-    sed -i "s/^ARGUMENTS=""/ARGUMENTS="--replay-blockchain"/g" .env
+    sed -i 's/^ARGUMENTS=""/ARGUMENTS="--replay-blockchain"/g' .env
 fi
 
 if docker compose ps | grep haf | grep Up > /dev/null 2>&1; then

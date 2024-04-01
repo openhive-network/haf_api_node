@@ -26,6 +26,8 @@ services:
     profiles:
       - apps
       - hivemind
+    ports:
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:17002:8080"
     networks:
       haf-network:
     command:
