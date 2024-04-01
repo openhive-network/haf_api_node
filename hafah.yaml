@@ -33,8 +33,6 @@ services:
     profiles:
       - apps
       - hafah
-    ports:
-      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:17003:3000"
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_DB_URI: postgresql://hafah_user@haf/haf_block_log
