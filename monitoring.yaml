@@ -1,0 +1,181 @@
+services:
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION}
+    profiles:
+      - monitoring
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=720h"
+      - "--web.enable-lifecycle"
+    restart: unless-stopped
+    expose:
+      - 9090
+    networks:
+      - haf-network
+    labels:
+      org.label-schema.group: "monitoring"
+
+  nodeexporter:
+    image: prom/node-exporter:${NODE_EXPORTER_VERSION}
+    profiles:
+      - monitoring
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)"
+    restart: unless-stopped
+    expose:
+      - 9100
+    networks:
+      - haf-network
+    labels:
+      org.label-schema.group: "monitoring"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:${CADVISOR_VERSION}
+    profiles:
+      - monitoring
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /data/docker:/data/docker:ro
+      - /cgroup:/cgroup:ro
+    restart: unless-stopped
+    expose:
+      - 8080
+    networks:
+      - haf-network
+    labels:
+      org.label-schema.group: "monitoring"
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION}
+    profiles:
+      - monitoring
+    depends_on:
+      - prometheus
+      - loki
+      - nodeexporter
+      - cadvisor
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    environment:
+      - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      - haf-network
+    labels:
+      org.label-schema.group: "monitoring"
+
+  loki:
+    image: grafana/loki:${LOKI_VERSION}
+    profiles:
+      - monitoring
+    volumes:
+      - loki_data:/loki
+      - ./monitoring/loki:/etc/loki
+    restart: unless-stopped
+    expose:
+      - 3100
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - haf-network
+    labels:
+      org.label-schema.group: "monitoring"
+
+  promtail:
+    image: grafana/promtail:${PROMTAIL_VERSION}
+    profiles:
+      - monitoring
+    depends_on:
+      - loki
+    volumes:
+      - ./monitoring/promtail:/etc/promtail
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+    networks:
+      - haf-network
+    labels:
+      org.label-schema.group: "monitoring"
+
+  hived-pme:
+    image: registry.gitlab.syncad.com/hive/hived-pme:${HIVED_PME_VERSION}
+    profiles:
+      - monitoring
+    restart: unless-stopped
+    expose:
+      - 9185
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - haf-network
+    healthcheck:
+      test: curl --fail  http://127.0.0.1:9185/healthz || exit 1
+      interval: 10s
+      retries: 3
+      start_period: 5s
+      timeout: 5s
+    labels:
+      org.label-schema.group: "monitoring"
+
+  postgresexporter:
+    image: quay.io/prometheuscommunity/postgres-exporter
+    profiles:
+      - monitoring
+    restart: unless-stopped
+    expose:
+      - 9187
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - haf-network
+    environment:
+      - DATA_SOURCE_NAME=${DATA_SOURCE}
+    labels:
+      org.label-schema.group: "monitoring"
+
+  blackboxexporter:
+    image: prom/blackbox-exporter:${BLACKBOX_VERSION}
+    profiles:
+      - monitoring
+    restart: unless-stopped
+    expose:
+      - 9115
+    depends_on:
+      - prometheus
+      - loki
+    volumes:
+      - ./monitoring/blackbox/config.yml:/etc/blackbox_exporter/config.yml
+    networks:
+      - haf-network
+    labels:
+      org.label-schema.group: "monitoring"
+
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+  loki_data: {}

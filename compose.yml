@@ -1,4 +1,4 @@
-version: "3.8"
+version: '3.8'
 name: ${PROJECT_NAME}
 
 include:
@@ -12,6 +12,7 @@ include:
   - ${JSONRPC_API_SERVER_NAME:-jussi}.yaml
   - haproxy.yaml
   - caddy.yaml
+  - monitoring.yaml
 
 networks:
   haf-network:
