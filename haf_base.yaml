@@ -87,7 +87,7 @@ services:
         target: /home/hived/wal_dir
     shm_size: 4gb
     healthcheck:
-      test: ["CMD-SHELL","curl -f localhost:8091"]
+      test: ["CMD-SHELL","curl -f 127.0.0.1:8091"]
       interval: 10s
       timeout: 2s
       retries: 10
