@@ -1,0 +1,6 @@
+@admin_restrict_ip {
+  protocol {$ADMIN_ENDPOINT_PROTOCOL}
+  not remote_ip 127.0.0.1
+  path /admin/*
+}
+respond @admin_restrict_ip "Access denied" 403
