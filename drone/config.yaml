@@ -5,6 +5,8 @@ drone:
   cache_max_capacity: 1073741824
   operator_message: "Drone by Deathwing"
   middleware_connection_threads: 8
+  add_cors_headers: false
+  add_jussi_headers: false
 # a list of backends Jussi will send calls to, these are referenced 
 # in the 'urls' section
 backends:
