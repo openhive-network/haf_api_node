@@ -51,3 +51,19 @@ basicauth @admin_password {
   haf_admin $2a$14$Wfk1vAajVfY52N7TL4nD3.Fls9PBL5NSjaZ.l4A8P1Az6XBemhTr2
 }
 ```
+
+## Enable compression
+
+Most of the data the API serves up compresses well.  Calls like get_block()
+generate a lot of data, and will typically compress 3x or better.  You can
+decrease your bandwidth (and your user's bandwidth) by enabling compression,
+at the expense of higher CPU usage on your server.  To do this, drop code
+like this in a file called, say, `compression.snippet`:
+
+```
+encode {
+  zstd
+  gzip
+  minimum_length 1024
+}
+```
