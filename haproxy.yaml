@@ -1,6 +1,6 @@
 services:
   haproxy:
-    image: haproxy:2.9.3-alpine
+    image: ${HAPROXY_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy}:${HAPROXY_VERSION:-latest}
     profiles:
       - servers
     environment:
@@ -24,5 +24,6 @@ services:
       POSTGRES_URL_BTRACKER: postgresql://btracker_user@haf/haf_block_log
     profiles:
       - servers
+      - haproxy-healthchecks
     networks:
       - haf-network

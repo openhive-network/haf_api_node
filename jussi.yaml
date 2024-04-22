@@ -27,7 +27,7 @@ services:
         read_only: true
     command: --server_workers=4 --upstream_config_file=/home/jussi/config.json
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2 wget -nv -t1 --spider http://localhost:9000/health || exit 1"]
+      test: ["CMD-SHELL", "timeout 2 wget -nv -t1 --spider http://127.0.0.1:9000/health || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 10

@@ -30,6 +30,17 @@ The haproxy frontend for hived is on port 7001.  With these config files, we'll
 expose the haproxy frontend for hived at 7001, the hived port itself at 17001 (frontend port + 10000)
 and the corresponding haproxy healthcheck for hived at 27001 (frontend port + 20000)
 
+### Changing the port numbers
+
+You have a very small amount of control over the port numbers using the variables 
+`HAF_API_NODE_EXPOSED_PORT_PREFIX` and `HAF_API_NODE_EXPOSED_HEALTHCHECK_PORT_PREFIX`.
+These have the default values of 1 and 2 respectively, which is what causes the exposed
+ports to start with a 1 for the API servers (e.g. 17001) and 2 for the health checks
+(e.g. 27001).  If those ports conflict with something else, you can use these two
+variables to change the first digit.  We use this to allow us to run two stacks
+on a single machine, one exposed on ports 1xxxx and 2xxxx, and the other on 
+3xxxx and 4xxxx.  
+
 ### Note
 There was a bug in docker tracked here: https://github.com/docker/compose/issues/11404 
 which will cause docker to generate an error when you include the compose.exposed.yml
