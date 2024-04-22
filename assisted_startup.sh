@@ -174,8 +174,8 @@ if [[ $? == 1 ]]; then
         fi
     done
     NVME_PARTITIONS=$(lsblk  --noheadings --fs | awk '$1~/nvme.*[[:digit:]]/ && $2==""' | sed 's/└─\|├─//g' | awk '{print $1}' | grep "p")
-    echo "Availible NVME drives: $NVME_DRIVES"
-    echo "Availible NVME partitions: $NVME_PARTITIONS"
+    echo "Available NVME drives: $NVME_DRIVES"
+    echo "Available NVME partitions: $NVME_PARTITIONS"
     TOTAL_SPACE=0
     # count free space on NVME drives
     echo $NVME_DRIVES
