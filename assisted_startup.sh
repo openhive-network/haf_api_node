@@ -18,11 +18,15 @@ for arg in "$@"; do
             SNAPSHOT_NAME=$2
             shift
             ;;
+        --skip-disk-size-reqt)
+            SKIP_DISK_SIZE_REQT=1
+            ;;
         --help)
             echo "Usage: startup_with_snapshot.sh [--no-ramdisk] [--no-autoswap]"
             echo "  --no-ramdisk: Do not use a RAM Disk for shared memory"
             echo "  --no-autoswap: Do not automatically grow swap"
             echo "  --replay: Replay the blockchain"
+            echo "  --skip-disk-size-reqt: Do not stop the script if less than 4T disk partitions found"
             echo "  --snapshot-name NAME: Name of the snapshot to use. default first_sync"
             exit 0
             ;;
@@ -211,7 +215,8 @@ if [[ $? == 1 ]]; then
         echo "No NVME drives found. Please manually create a zpool."
         exit 1
     fi
-    if [[ $TOTAL_SPACE -lt 4000000000000 ]]; then
+    #only bail out if user did not choose to skip min disk size reqt
+    if [[ $SKIP_DISK_SIZE_REQT != 1 && $TOTAL_SPACE -lt 4000000000000 ]]; then
         echo "Less than 4T of free space found. Please manually create a zpool."
         exit 1
     fi
