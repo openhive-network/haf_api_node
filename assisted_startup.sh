@@ -22,10 +22,10 @@ for arg in "$@"; do
             SKIP_DISK_SIZE_REQT=1
             ;;
         --help)
-            echo "Usage: startup_with_snapshot.sh [--no-ramdisk] [--no-autoswap]"
+            echo "Usage: assisted_startup.sh [--no-ramdisk] [--no-autoswap]"
             echo "  --no-ramdisk: Do not use a RAM Disk for shared memory"
             echo "  --no-autoswap: Do not automatically grow swap"
-            echo "  --replay: Replay the blockchain"
+            echo "  --replay: Replay the blockchain, use only on first run, and not rerun if this script exits before snapshot"
             echo "  --skip-disk-size-reqt: Do not stop the script if less than 4T disk partitions found"
             echo "  --snapshot-name NAME: Name of the snapshot to use. default first_sync"
             exit 0
@@ -41,11 +41,15 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+touch startup.temp
 
-#touch startup.temp
-## source will load the variable written later in the script if it exists
-#source startup.temp
-rm -f startup.temp
+# Get or remove data if rerunning the script after a premature exit
+
+if [[ $REPLAY == 1 ]]; then
+    rm -f startup.temp
+else
+    source startup.temp
+fi
 
 if command -v zfs >/dev/null 2>&1; then
     echo "Verifying Prerequisites..."
