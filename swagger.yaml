@@ -1,0 +1,21 @@
+services:
+  swagger:
+    image: swaggerapi/swagger-ui
+    profiles:
+      - servers
+    environment:
+      URLS: >-
+        [{url: "https://${PUBLIC_HOSTNAME}/hafbe/", name: "HAF Block Explorer"},
+         {url: "https://${PUBLIC_HOSTNAME}/btracker/", name: "Balance Tracker"},
+         {url: "https://${PUBLIC_HOSTNAME}/hafah/", name: "HAfAH"}]
+    networks:
+      haf-network:
+    #healthcheck:
+    #  test: ["CMD-SHELL","curl -f localhost:8080"]
+    depends_on:
+      balance-tracker-postgrest:
+        condition: service_started
+      hafah-postgrest:
+        condition: service_started
+      block-explorer-postgrest:
+        condition: service_started

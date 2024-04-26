@@ -11,6 +11,7 @@ include:
   - ${JSONRPC_API_SERVER_NAME:-jussi}.yaml
   - haproxy.yaml
   - caddy.yaml
+  - swagger.yaml
 
 networks:
   haf-network:

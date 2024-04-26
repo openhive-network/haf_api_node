@@ -131,6 +131,14 @@
     }
   }
 
+  @rest_apis {
+    path /hafah/* /btracker/* /hafbe/* 
+  }
+
+  handle @rest_apis {
+    reverse_proxy http://varnish
+  }
+
   # Route everything else (mostly new-style REST calls)
-  reverse_proxy http://varnish
+  reverse_proxy http://swagger:8080
 }
