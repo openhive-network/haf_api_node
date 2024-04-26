@@ -19,6 +19,11 @@ backend haf_block_explorer {
     .port = "7005";
 }
 
+# backend haf_block_explorer_swagger { 
+#     .host = "block-explorer-swagger";
+#     .port = "80";
+# }
+
 sub recv_cachable_post {
     # many of the POST requests to PostgREST are cacheable, but varnish doesn't cache POST by default.
     # This section follows the tutorial at: https://docs.varnish-software.com/tutorials/caching-post-requests/ 
@@ -39,7 +44,10 @@ sub recv_cachable_post {
 }
 
 sub vcl_recv {
-    if (req.url ~ "^/hafah/") {
+    if (req.url == "/hafah/") {
+        set req.url = "/";
+        set req.backend_hint = hafah;
+    } elseif (req.url ~ "^/hafah/") {
         # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
         set req.url = regsub(req.url, "^/hafah/(.*)$", "/rpc/\1");
         set req.backend_hint = hafah;
@@ -47,6 +55,10 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url == "/btracker/") {
+        # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
+        set req.url = "/";
+        set req.backend_hint = balance_tracker;
     } elseif (req.url ~ "^/btracker/") {
         # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
         set req.url = regsub(req.url, "^/btracker/(.*)$", "/rpc/\1");
@@ -57,7 +69,7 @@ sub vcl_recv {
         }
     } elseif (req.url ~ "^/hafbe/") {
         # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
-        set req.url = regsub(req.url, "^/hafbe/(.*)$", "/rpc/\1");
+        set req.url = regsub(req.url, "^/hafbe/(.*)$", "/\1");
         set req.backend_hint = haf_block_explorer;
 
         if (req.method == "POST") {

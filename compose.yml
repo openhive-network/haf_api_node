@@ -12,6 +12,7 @@ include:
   - haproxy.yaml
   - caddy.yaml
   - monitoring.yaml
+  - swagger.yaml
 
 networks:
   haf-network:
