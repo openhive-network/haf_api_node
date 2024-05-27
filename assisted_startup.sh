@@ -18,11 +18,15 @@ for arg in "$@"; do
             SNAPSHOT_NAME=$2
             shift
             ;;
+        --skip-disk-size-reqt)
+            SKIP_DISK_SIZE_REQT=1
+            ;;
         --help)
-            echo "Usage: startup_with_snapshot.sh [--no-ramdisk] [--no-autoswap]"
+            echo "Usage: assisted_startup.sh [--no-ramdisk] [--no-autoswap]"
             echo "  --no-ramdisk: Do not use a RAM Disk for shared memory"
             echo "  --no-autoswap: Do not automatically grow swap"
-            echo "  --replay: Replay the blockchain"
+            echo "  --replay: Replay the blockchain, use only on first run, and not rerun if this script exits before snapshot"
+            echo "  --skip-disk-size-reqt: Do not stop the script if less than 4T disk partitions found"
             echo "  --snapshot-name NAME: Name of the snapshot to use. default first_sync"
             exit 0
             ;;
@@ -37,11 +41,15 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+touch startup.temp
 
-#touch startup.temp
-## source will load the variable written later in the script if it exists
-#source startup.temp
-rm -f startup.temp
+# Get or remove data if rerunning the script after a premature exit
+
+if [[ $REPLAY == 1 ]]; then
+    rm -f startup.temp
+else
+    source startup.temp
+fi
 
 if command -v zfs >/dev/null 2>&1; then
     echo "Verifying Prerequisites..."
@@ -174,8 +182,8 @@ if [[ $? == 1 ]]; then
         fi
     done
     NVME_PARTITIONS=$(lsblk  --noheadings --fs | awk '$1~/nvme.*[[:digit:]]/ && $2==""' | sed 's/└─\|├─//g' | awk '{print $1}' | grep "p")
-    echo "Availible NVME drives: $NVME_DRIVES"
-    echo "Availible NVME partitions: $NVME_PARTITIONS"
+    echo "Available NVME drives: $NVME_DRIVES"
+    echo "Available NVME partitions: $NVME_PARTITIONS"
     TOTAL_SPACE=0
     # count free space on NVME drives
     echo $NVME_DRIVES
@@ -211,7 +219,8 @@ if [[ $? == 1 ]]; then
         echo "No NVME drives found. Please manually create a zpool."
         exit 1
     fi
-    if [[ $TOTAL_SPACE -lt 4000000000000 ]]; then
+    #only bail out if user did not choose to skip min disk size reqt
+    if [[ $SKIP_DISK_SIZE_REQT != 1 && $TOTAL_SPACE -lt 4000000000000 ]]; then
         echo "Less than 4T of free space found. Please manually create a zpool."
         exit 1
     fi
