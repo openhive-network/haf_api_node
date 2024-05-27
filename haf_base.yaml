@@ -13,7 +13,7 @@ services:
       - /home/haf_admin/docker_entrypoint.sh
       - ${ARGUMENTS}
     # after requesting a shutdown with SIGTERM, allow the container two minutes to exit
-    # before killing it.  The default of ten seconds isn't enough for postgresql to 
+    # before killing it.  The default of ten seconds isn't enough for postgresql to
     # cleanly shut down, and would often make PostgreSQL perform crash recovery at the
     # next startup
     stop_grace_period: 2m
@@ -58,19 +58,21 @@ services:
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
         host    haf_block_log    hafbe_user       ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
         host    haf_block_log    btracker_user    ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
+
+        host    postgres         postgres         ${COMPOSE_PROJECT_NAME}-postgresexporter-1.${NETWORK_NAME}                    trust\n
         "
       SHM_DIR: /home/hived/shm_dir
       WAL_DIR: /home/hived/wal_dir
       # PGCTLTIMEOUT sets how long we allow PostgreSQL to startup before giving up and shutting down the container.
       # If you have an unclean shutdown, and postgres needs to do startup recovery, working through all of the old
-      # write-ahead logs, this can take longer than the default timeout, which is something like 60 seconds.  
+      # write-ahead logs, this can take longer than the default timeout, which is something like 60 seconds.
       # 5 minutes is probably long enough that anyone using NVMes will be able to recover their database at
       # startup.  If you're on slower drives or older hardware, you may need to increase this.
       PGCTLTIMEOUT: 300
-    # when mounting volumes, declare the directories you want to bind-mount here, 
+    # when mounting volumes, declare the directories you want to bind-mount here,
     # using either the short or long syntax.  Don't declare them as top-level named
     # volumes and mount them by name.  Declaring them inline here always results
-    # in a recursive bind.  The behavior when declaring the volumes at the top-level 
+    # in a recursive bind.  The behavior when declaring the volumes at the top-level
     # seems to vary from system to system (even when `o: rbind` is specified).
     volumes:
       - type: bind
