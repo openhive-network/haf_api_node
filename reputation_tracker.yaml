@@ -1,10 +1,10 @@
 services:
-  balance-tracker-install:
-    image: ${BALANCE_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+  reputation-tracker-install:
+    image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafbe
-      - balance-tracker-setup
+      - reputation-tracker-setup
     environment:
       POSTGRES_HOST: haf
     networks:
@@ -14,10 +14,10 @@ services:
     depends_on:
       haf:
         condition: service_healthy
-  balance-tracker-uninstall:
-    image: ${BALANCE_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+  reputation-tracker-uninstall:
+    image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
-      - balance-tracker-uninstall
+      - reputation-tracker-uninstall
     environment:
       POSTGRES_HOST: haf
     networks:
@@ -27,10 +27,10 @@ services:
     depends_on:
       haf:
         condition: service_healthy
-  balance-tracker-block-processing:
-    image: ${BALANCE_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+  reputation-tracker-block-processing:
+    image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
-      - balance-tracker-standalone
+      - reputation-tracker-standalone
     environment:
       POSTGRES_HOST: haf
     networks:
@@ -44,25 +44,25 @@ services:
       retries: 3
       start_period: 48h
     depends_on:
-      balance-tracker-install:
+      reputation-tracker-install:
         condition: service_completed_successfully
       haf:
         condition: service_healthy
-  balance-tracker-postgrest:
+  reputation-tracker-postgrest:
     image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
-      - balance-tracker-standalone
+      - reputation-tracker-standalone
       - hafbe
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
-      PGRST_DB_URI: postgresql://btracker_user@haf/haf_block_log
-      PGRST_DB_SCHEMA: btracker_endpoints
-      PGRST_DB_ANON_ROLE: btracker_user
+      PGRST_DB_URI: postgresql://reptracker_user@haf/haf_block_log
+      PGRST_DB_SCHEMA: reptracker_endpoints
+      PGRST_DB_ANON_ROLE: reptracker_user
       PGRST_DB_POOL: 20
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
-      PGRST_DB_EXTRA_SEARCH_PATH: btracker_app
-      # PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/btracker_api/
+      PGRST_DB_EXTRA_SEARCH_PATH: reptracker_app
+      # PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/reptracker_user/
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
       interval: 10s
@@ -72,14 +72,14 @@ services:
     networks:
       haf-network:
     depends_on:
-      balance-tracker-install:
+      reputation-tracker-install:
         condition: service_completed_successfully
       haf:
         condition: service_healthy
-  balance-tracker-swagger:
+  reputation-tracker-swagger:
     image: ${SWAGGER_REGISTRY:-swaggerapi/swagger-ui}:${SWAGGER_VERSION:-latest}
     profiles:
-      # right now, btracker doesn't have the correct annotations to generate a
+      # right now, reptracker doesn't have the correct annotations to generate a
       # usable swagger UI, so we haven't plumbed swagger into the stack, and you
       # probably shouldn't bother running it.
       # Once they work, we should put these services into the same groups as their
@@ -87,11 +87,11 @@ services:
       # effectively disable them
       - swagger
     environment:
-      API_URL: http://${PUBLIC_HOSTNAME}/btracker_api/
+      API_URL: http://${PUBLIC_HOSTNAME}/reptracker_user/
     networks:
       haf-network:
     #healthcheck:
     #  test: ["CMD-SHELL","curl -f 127.0.0.1:8080"]
     depends_on:
-      balance-tracker-postgrest:
+      reputation-tracker-postgrest:
         condition: service_started

@@ -22,6 +22,7 @@ services:
       POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
       POSTGRES_URL_HAFBE: postgresql://hafbe_user@haf/haf_block_log
       POSTGRES_URL_BTRACKER: postgresql://btracker_user@haf/haf_block_log
+      POSTGRES_URL_REPTRACKER: postgresql://reptracker_user@haf/haf_block_log
     profiles:
       - servers
       - haproxy-healthchecks
