@@ -1,3 +1,5 @@
+ci/.env
+ci/haf-datadir/
 .env
 repo_versions.txt
 *.sw?
