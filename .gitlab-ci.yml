@@ -1,0 +1,321 @@
+stages:
+  - build
+  - replay
+  - test
+  - cleanup
+
+variables:
+  # Variables required by Common CI jobs
+  CI_COMMON_JOB_VERSION: "1ce04340ebfe838fd7fa09aebdde3bd7e1218bce"
+  DOCKER_BUILDER_TAG: "$CI_COMMON_JOB_VERSION"
+  DOCKER_DIND_TAG: "$CI_COMMON_JOB_VERSION"
+  IMAGE_REMOVER_TAG: "$CI_COMMON_JOB_VERSION"
+
+  # Git configuration
+  GIT_STRATEGY: clone
+  GIT_SUBMODULE_STRATEGY: recursive
+
+  # Replay confioguration
+  HAF_VERSION: "173c1698"
+  HIVEMIND_INSTANCE_VERSION: "c7067988"
+  HAFAH_VERSION: "2a232f66"
+  REPUTATION_TRACKER_VERSION: "2367d5bf"
+  BLOCK_LOG_SOURCE_DIR: "/blockchain/block_log_5m"
+  REPLAY_DIRECTORY_PREFIX: "/cache/replay_data_haf_api_node"
+  REPLAY_DIRECTORY: "${REPLAY_DIRECTORY_PREFIX}_${CI_COMMIT_SHORT_SHA}_${HAF_VERSION}_${HIVEMIND_INSTANCE_VERSION}_${HAFAH_VERSION}_${REPUTATION_TRACKER_VERSION}"
+  REPLAY_PIPELINE_DIRECTORY: "${REPLAY_DIRECTORY_PREFIX}_${CI_PIPELINE_ID}"
+  DOCKER_TLS_CERTDIR: "${REPLAY_PIPELINE_DIRECTORY}_certs"
+
+  # Other settings
+  HAFAH_PROJECT_ID: 308
+  HIVEMIND_PROJECT_ID: 213
+  HAF_API_NODE_PROJECT_ID: 444
+  REPUTATION_TRACKER_PROJECT_ID: 418
+  PIPELINE_TRIGGER_TAG: "2.9.0"
+  TEST_IMAGE_TAG: ":ubuntu22.04-12"
+
+include:
+  - template: Workflows/Branch-Pipelines.gitlab-ci.yml
+  - project: hive/common-ci-configuration
+    ref: 1ce04340ebfe838fd7fa09aebdde3bd7e1218bce
+    file:
+      - /templates/docker_image_jobs.gitlab-ci.yml
+      - /templates/cache_cleanup.gitlab-ci.yml
+  - project: 'hive/haf'
+    ref: 173c1698edaa683779cf317c38cd0a63a5970980 #develop
+    file: '/scripts/ci-helpers/prepare_data_image_job.yml'
+  - local: ci/node-replay.gitlab-ci.yml
+
+######## Templates ########
+
+# All jobs other than those necessary to build HAF_API_Node Docker images need to extend this
+# template or include the following rules (if they need additional restrictions)
+.rules:
+  rules:
+    - if: $CI_PIPELINE_TRIGGERED
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - when: on_success
+
+# For some reason a regular trigger job fails to recognize temporary tags, so we have to use a workaround
+.external-build:
+  extends: 
+    - .job-defaults
+    - .rules
+  stage: build
+  image: registry.gitlab.com/finestructure/pipeline-trigger:${PIPELINE_TRIGGER_TAG}
+  needs:
+    - create-temporary-tags
+  variables:
+    PIPELINE_TOKEN:
+    PROJECT_ID:
+  script: 
+    - trigger --verbose --api-token "${API_TOKEN}" --pipeline-token "${PIPELINE_TOKEN}" --target-ref ${CI_PIPELINE_ID} --host "${CI_SERVER_HOST}" ${PROJECT_ID}
+  tags:
+    - public-runner-docker
+
+######## End templates ########
+
+######## Build ########
+
+# We need to creat temporary tags to be used with Trigger API since it doesn't work with commit SHAs.
+# We also need to skip CI when pushing tags, since we want to run just the Docker build job and not the
+# entire pipeline.
+create-temporary-tags:
+  extends: 
+    - .job-defaults
+    - .rules
+  stage: build
+  image: "registry.gitlab.syncad.com/hive/hive/ci-base-image${TEST_IMAGE_TAG}"
+  before_script:
+    - |
+      set -e
+      git config --global user.email "${GITLAB_USER_EMAIL}"
+      git config --global user.name "${GITLAB_USER_NAME}"
+      git clone https://gitlab-ci-token:${HAFAH_ACCESS_TOKEN}@gitlab.syncad.com/hive/HAfAH.git hafah
+      git clone https://gitlab-ci-token:${HIVEMIND_ACCESS_TOKEN}@gitlab.syncad.com/hive/hivemind.git hivemind
+      git clone https://gitlab-ci-token:${REPUTATION_TRACKER_ACCESS_TOKEN}@gitlab.syncad.com/hive/reputation_tracker.git reptracker
+  script:
+    - |
+      set -e
+      
+      pushd hafah
+      git tag ${CI_PIPELINE_ID} ${HAFAH_VERSION}
+      git push origin ${CI_PIPELINE_ID} -o ci.skip
+      popd
+
+      pushd hivemind
+      git tag ${CI_PIPELINE_ID} ${HIVEMIND_INSTANCE_VERSION}
+      git push origin ${CI_PIPELINE_ID} -o ci.skip
+      popd
+
+      pushd reptracker
+      git tag ${CI_PIPELINE_ID} ${REPUTATION_TRACKER_VERSION}
+      git push origin ${CI_PIPELINE_ID} -o ci.skip
+      popd
+  tags:
+    - public-runner-docker
+
+docker-build:
+  extends: 
+    - .docker_image_builder_job_template
+  stage: build
+  variables:
+    TAG: "${CI_COMMIT_SHORT_SHA}"
+  before_script:
+    - !reference [.docker_image_builder_job_template, before_script]
+    - |
+      echo -e "\e[0Ksection_start:$(date +%s):login[collapsed=true]\r\e[0KLogging to Docker registry..."
+      docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+      echo -e "\e[0Ksection_end:$(date +%s):login\r\e[0K"
+  script:
+    - |
+      echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking Docker images..."
+      function image-exists() {
+        local image=$1
+        docker manifest inspect "$image" > /dev/null
+        return $?
+      }
+      if image-exists "${CI_REGISTRY_IMAGE}/compose:${TAG}" && image-exists "${CI_REGISTRY_IMAGE}/dind:${TAG}"
+      then
+          echo "Images ${CI_REGISTRY_IMAGE}/compose:${TAG} and ${CI_REGISTRY_IMAGE}/dind:${TAG} already exist. Skipping build..."
+          exit 0
+      fi
+      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "ci"
+      echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
+  tags:
+    - public-runner-docker
+    - hived-for-tests
+
+haf-build:
+  stage: build
+  extends: 
+    - .prepare_haf_image
+    - .rules
+  variables:
+    SUBMODULE_DIR: "${CI_PROJECT_DIR}/haf"
+    REGISTRY_USER: "${HAF_REGISTRY_USER}"
+    REGISTRY_PASS: "${HAF_REGISTRY_PASSWORD}"
+    BINARY_CACHE_PATH: "${CI_PROJECT_DIR}/hived-mainnet-binaries"
+  before_script:
+    - !reference [.prepare_haf_image, before_script]
+    - |
+      set -e
+      rm -rf "${SUBMODULE_DIR}"
+      git config --global advice.detachedHead "false"
+      git clone https://gitlab.syncad.com/hive/haf.git "${SUBMODULE_DIR}"
+      pushd "${SUBMODULE_DIR}"
+      git checkout "${HAF_VERSION}"
+      git submodule update --init --recursive
+      popd
+  tags:
+    - public-runner-docker
+    - hived-for-tests
+
+hafah-build:
+  extends: .external-build
+  variables:
+    PIPELINE_TOKEN: ${HAFAH_PIPELINE_TOKEN}
+    PROJECT_ID: ${HAFAH_PROJECT_ID}
+
+hivemind-build:
+  extends: .external-build
+  variables:
+    PIPELINE_TOKEN: ${HIVEMIND_PIPELINE_TOKEN}
+    PROJECT_ID: ${HIVEMIND_PROJECT_ID}
+
+reputation-tracker-build:
+  extends: .external-build
+  variables:
+    PIPELINE_TOKEN: ${REPUTATION_TRACKER_PIPELINE_TOKEN}
+    PROJECT_ID: ${REPUTATION_TRACKER_PROJECT_ID}
+
+remove-temporary-tags:
+  extends:
+    - .job-defaults
+    - .rules
+  stage: build
+  needs:
+    - hafah-build
+    - hivemind-build
+  image: "registry.gitlab.syncad.com/hive/hive/ci-base-image${TEST_IMAGE_TAG}"
+  before_script:
+    - !reference [create-temporary-tags, before_script]
+  script:
+    - |
+      set -e
+      
+      pushd hafah
+      git push origin :refs/tags/${CI_PIPELINE_ID}
+      popd
+
+      pushd hivemind
+      git push origin :refs/tags/${CI_PIPELINE_ID}
+      popd
+
+      pushd reptracker
+      git push origin :refs/tags/${CI_PIPELINE_ID}
+      popd
+  tags:
+    - public-runner-docker
+
+######## End build ########
+
+######## Replay ########
+
+haf-node-replay:
+  extends: 
+    - .haf-node-replay
+    - .rules
+  stage: replay
+  needs:
+    - docker-build
+    - haf-build
+    - hafah-build
+    - hivemind-build
+  tags:
+    - data-cache-storage
+
+######## End replay ########
+
+######## Test ########
+
+# Creates a copy of replay data to be used in the tests
+haf_api_node_replay_data_copy:
+  extends: 
+    - .haf_api_node_replay_data_copy
+    - .rules
+  stage: test
+  needs:
+    - haf-node-replay
+  tags:
+    - data-cache-storage
+
+# Tests if HAF API node is working properly
+haf_api_node_test:
+  extends: 
+    - .haf_api_node_test
+    - .rules
+  stage: test
+  needs:
+    - haf_api_node_replay_data_copy
+    - docker-build
+    - haf-build
+    - hafah-build
+    - hivemind-build
+  tags:
+    - data-cache-storage
+
+######## End test ########
+
+######## Cleanup ########
+
+# Deletes replay data used by the tests and created by haf_api_node_replay_data_copy
+cleanup_haf_api_node_pipeline_cache:
+  needs:
+    - haf_api_node_replay_data_copy
+    - haf_api_node_test
+  extends: 
+    - .cleanup_cache_manual_template
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_PIPELINE_DIRECTORY}*"
+  rules:
+    - if: $CI_PIPELINE_TRIGGERED
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - when: always
+  tags:
+    - data-cache-storage
+
+# Deletes all HAF API node replay data
+cleanup_haf_api_node_cache_manual:
+  extends: 
+    - .cleanup_cache_manual_template
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
+  rules:
+    - if: $CI_PIPELINE_TRIGGERED
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - when: manual
+      allow_failure: true
+  tags:
+    - data-cache-storage
+
+# Deletes HAF API node replay data older than 7 days
+cleanup_old_haf_api_node_cache:
+  extends:
+    - .cleanup_old_cache_template
+    - .rules
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
+  tags:
+    - data-cache-storage
+
+######## End cleanup ########
