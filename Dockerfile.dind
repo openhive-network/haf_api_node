@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1.5
+FROM docker:26.1.4-dind
+
+ENV HIVE_API_NODE_VERSION=1.27.5 
+ENV HAF_VERSION=${HIVE_API_NODE_VERSION}rc9 HIVEMIND_INSTANCE_VERSION=${HIVE_API_NODE_VERSION}rc9 HAFAH_VERSION=${HIVE_API_NODE_VERSION}rc9
+
+RUN <<-EOF
+    set -e
+
+    mkdir -p /haf-api-node/caddy/snippets
+    mkdir -p /haf-api-node/caddy/admin_html
+    mkdir -p /haf-api-node/jussi
+    mkdir -p /haf-api-node/pgadmin
+    mkdir -p /haf-api-node/varnish
+    mkdir -p /haf-pool/haf-datadir/blockchain
+    mkdir -p /haf-pool/haf-datadir/shared_memory/haf_wal
+    mkdir -p /haf-pool/haf-datadir/logs/caddy
+    mkdir -p /haf-pool/haf-datadir/logs/pgbadger
+    mkdir -p /haf-pool/haf-datadir/logs/postgresql
+
+    chown -R 1000:100 /haf-pool/haf-datadir
+EOF
+
+WORKDIR /haf-api-node
+
+COPY caddy/Caddyfile caddy/Caddyfile
+COPY caddy/snippets caddy/snippets
+COPY caddy/admin_html caddy/admin_html
+COPY caddy/self-signed.snippet caddy/self-signed.snippet
+COPY haproxy/haproxy.cfg haproxy/haproxy.cfg
+COPY jussi/config.json jussi/config.json
+COPY pgadmin/pgpass pgadmin/pgpass
+COPY pgadmin/servers.json pgadmin/servers.json
+COPY varnish/default.vcl varnish/default.vcl

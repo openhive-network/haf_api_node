@@ -1,0 +1,31 @@
+name: 'haf_api_node_dind'
+services:
+  docker:
+    image: haf_api_node:dind
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    volumes:
+      - type: volume
+        source: docker-certs-ca
+        target: /certs/ca
+      - type: volume
+        source: docker-certs-client
+        target: /certs/client
+      - type: volume
+        source: docker-certs-server
+        target: /certs/server
+      - type: volume
+        source: docker-lib
+        target: /var/lib/docker
+    networks:
+      - docker
+volumes:
+  docker-certs-ca:
+  docker-certs-client:
+    name: docker-certs-client
+  docker-certs-server:
+  docker-lib:
+networks:
+  docker:    
+    name: docker
