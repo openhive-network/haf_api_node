@@ -4,6 +4,8 @@ services:
     profiles:
       - apps
       - hivemind
+    environment:
+      HIVEMIND_SYNC_ARGS:
     networks:
       haf-network:
     command:
@@ -11,6 +13,7 @@ services:
       - "--database-url=postgresql://hivemind@haf/haf_block_log"
       - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
       - "--install-app"
+      - "${HIVEMIND_SYNC_ARGS:-}"
     healthcheck:
       test: ["CMD-SHELL","/home/hivemind/block-processing-healthcheck.sh || exit 1"]
       interval: 10s
@@ -22,6 +25,11 @@ services:
         condition: service_healthy
       reputation-tracker-install-schema:
         condition: service_completed_successfully
+      # Without this dependency, error
+      # psql:/home/hivemind/app/install_app.sql:13: ERROR:  Reputation tracker is not installed
+      # may occur  
+      # reputation-tracker-install:
+      #   condition: service_completed_successfully
 
   hivemind-server:
     image: ${HIVEMIND_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_VERSION:-${HIVE_API_NODE_VERSION}}
