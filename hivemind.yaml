@@ -20,8 +20,11 @@ services:
     depends_on:
       haf:
         condition: service_healthy
-          #      reputation-tracker-install:
-#        condition: service_completed_successfully
+      # Without this dependency, error
+      # psql:/home/hivemind/app/install_app.sql:13: ERROR:  Reputation tracker is not installed
+      # may occur  
+      reputation-tracker-install:
+        condition: service_completed_successfully
 
   hivemind-server:
     image: ${HIVEMIND_INSTANCE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_INSTANCE_VERSION:-${HIVE_API_NODE_VERSION}}
