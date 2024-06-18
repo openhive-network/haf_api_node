@@ -1,2 +1,4 @@
+ci/.env
+ci/haf-datadir/
 .env
 *.sw?
