@@ -1,0 +1,89 @@
+variables:
+  API_NODE_TAG: ${CI_COMMIT_SHORT_SHA}
+
+.api-node-job:
+  extends: .job-defaults
+  variables:
+    HIVE_API_NODE_VERSION: "1.27.7rc16"
+    HAF_VERSION: "${HIVE_API_NODE_VERSION}"
+    HIVEMIND_VERSION: "${HIVE_API_NODE_VERSION}"
+    HAFAH_VERSION: "${HIVE_API_NODE_VERSION}"
+    REPUTATION_TRACKER_VERSION: "${HIVE_API_NODE_VERSION}"
+    HIVE_API_NODE_REGISTRY: "registry.gitlab.syncad.com/hive"
+    HAF_IMAGE: "${HIVE_API_NODE_REGISTRY}/haf"
+    HAFAH_IMAGE: "${HIVE_API_NODE_REGISTRY}/hafah"
+    HAFAH_REWRITER_IMAGE: "${HIVE_API_NODE_REGISTRY}/hafah/postgrest-rewriter"
+    HIVEMIND_IMAGE: "${HIVE_API_NODE_REGISTRY}/hivemind"
+    HIVEMIND_REWRITER_IMAGE: "${HIVE_API_NODE_REGISTRY}/hivemind/postgrest-rewriter"
+    REPUTATION_TRACKER_IMAGE: "${HIVE_API_NODE_REGISTRY}/reputation_tracker"
+    REPUTATION_TRACKER_REWRITER_IMAGE: "${HIVE_API_NODE_REGISTRY}/reputation_tracker/postgrest-rewriter"
+    LAST_BLOCK_NUMBER: "5000000"
+    ARGUMENTS: "--replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
+    HIVEMIND_SYNC_ARGS: "--community-start-block=4998000"
+    USE_ALTERNATE_HAPROXY_CONFIG: "true"
+    PUBLIC_HOSTNAME: "dind"
+    DOCKER_DRIVER: "overlay2"
+    DOCKER_HOST: "tcp://${PUBLIC_HOSTNAME}:2376"
+    DOCKER_TLS_SAN: "DNS:${PUBLIC_HOSTNAME}"
+    CI_DEBUG_SERVICES: "false" # Change to true to debug services in this job
+    GIT_STRATEGY: "none"
+    ADDITIONAL_CONFIGURATION_SCRIPT: "/haf-api-node/ci/scripts/copy-haf-config.sh"
+  image: 
+    name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${API_NODE_TAG}
+    entrypoint: [ "" ]
+  services:
+    - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${API_NODE_TAG}
+      alias: dind
+      variables:
+        HEALTHCHECK_TCP_PORT: '2376'
+
+.haf-node-replay:
+  extends: .api-node-job
+  timeout: 2 hours
+  variables:
+    TOP_LEVEL_DATASET_MOUNTPOINT: "${REPLAY_DIRECTORY}"
+    HAF_DB_URL_HIVEMIND: "postgresql://hivemind@haf/haf_block_log"
+    HAF_DB_URL_REPTRACKER: "postgresql://reptracker_owner@haf/haf_block_log"
+    PSQL_COMMAND_HIVEMIND: "SELECT current_block_num FROM hafd.contexts WHERE name = 'hivemind_app'"
+    PSQL_COMMAND_REPTRACKER: "SELECT current_block_num FROM hafd.contexts WHERE name = 'reptracker_app'"
+  script:
+    - docker-entrypoint.sh /haf-api-node/ci/scripts/replay-api-node.sh
+  after_script:
+    - docker-entrypoint.sh /haf-api-node/ci/scripts/after-script.sh
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - "*.txt"
+      - "*.log"
+      - "logs/"
+      - "*.json"
+
+.haf_api_node_replay_data_copy:
+  extends: .job-defaults
+  image: 
+    name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${API_NODE_TAG}
+    entrypoint: [ "" ]
+  script:
+    - /haf-api-node/ci/scripts/copy-datadir.sh
+
+.haf_api_node_test:
+  extends: .api-node-job
+  variables:
+    TOP_LEVEL_DATASET_MOUNTPOINT: "${REPLAY_PIPELINE_DIRECTORY}"
+    FF_NETWORK_PER_BUILD: "true"
+  services:
+    - !reference [.api-node-job, services]
+    - name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${API_NODE_TAG}
+  script:
+    - docker-entrypoint.sh /haf-api-node/ci/scripts/test-api-node.sh
+  after_script:
+    - docker-entrypoint.sh /haf-api-node/ci/scripts/after-script.sh
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths: # Must include paths from .haf-node-replay, !reference doesn't work
+      - "*.txt"
+      - "*.log"
+      - "logs/"
+      - "*.json"

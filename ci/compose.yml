@@ -1,0 +1,95 @@
+name: 'haf_api_node'
+services:
+  docker:
+    image: registry.gitlab.syncad.com/hive/haf_api_node/dind:${DIND_TAG:-latest}
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+      TOP_LEVEL_DATASET_MOUNTPOINT: /cache/haf-datadir
+    volumes:
+      - type: volume
+        source: docker-certs-ca
+        target: /certs/ca
+      - type: volume
+        source: docker-certs-client
+        target: /certs/client
+      - type: volume
+        source: docker-certs-server
+        target: /certs/server
+      - type: volume
+        source: docker-lib
+        target: /var/lib/docker
+      - type: volume
+        source: haf-datadir
+        target: /cache/haf-datadir
+    networks:
+      - docker
+    ports:
+      - name: docker-tls
+        target: 2376
+        published: 2376
+      - name: http
+        target: 80
+        published: 8080
+      - name: https
+        target: 443
+        published: 8443
+    healthcheck:
+      test: [ "CMD", "docker", "version"]
+      interval: 5s
+      timeout: 5s
+  compose:
+    image: registry.gitlab.syncad.com/hive/haf_api_node/compose:${COMPOSE_TAG:-latest}
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+      DOCKER_HOST: 
+      ARGUMENTS: 
+      TOP_LEVEL_DATASET_MOUNTPOINT: /cache/haf-datadir
+      PUBLIC_HOSTNAME:
+      FAKETIME:
+      USE_ALTERNATE_HAPROXY_CONFIG:
+      HIVEMIND_SYNC_ARGS:
+      HIVE_API_NODE_VERSION:
+      HAF_IMAGE:
+      HIVEMIND_IMAGE:
+      HIVEMIND_REWRITER_IMAGE:
+      HAFAH_IMAGE:
+      HAFAH_REWRITER_IMAGE:
+      REPUTATION_TRACKER_IMAGE:
+      REPUTATION_TRACKER_REWRITER_IMAGE:
+      HAF_VERSION:
+      HIVEMIND_VERSION:
+      HAFAH_VERSION:
+      REPUTATION_TRACKER_VERSION:
+      
+    volumes:
+      - type: volume
+        source: docker-certs-client
+        target: /certs/client
+      - type: volume
+        source: haf-datadir
+        target: /cache/haf-datadir  
+    networks:
+      - docker
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --timeout=2 -nv -t1 --spider http://127.0.0.1 || exit 1" ] 
+      interval: 5s
+      timeout: 5s
+    depends_on:
+      docker:
+        condition: service_healthy
+volumes:
+  docker-certs-ca:
+  docker-certs-client:
+    name: docker-certs-client
+  docker-certs-server:
+  docker-lib:
+  haf-datadir:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: ${HAF_DATA_DIRECTORY}/
+networks:
+  docker:    
+    name: docker
