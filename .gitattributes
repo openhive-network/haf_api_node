@@ -1,0 +1,9 @@
+*.sh text eol=lf
+caddy/Dockerfile text eol=lf
+ci/compose/Dockerfile text eol=lf
+ci/dind/Dockerfile text eol=lf
+haproxy/Dockerfile text eol=lf
+healthchecks/Dockerfile text eol=lf
+logrotate/Dockerfile text eol=lf
+postgrest/Dockerfile text eol=lf
+version-display/Dockerfile text eol=lf
