@@ -1,5 +1,103 @@
 stages:
+  - build
+  - replay
+  - test
   - publish
+  - cleanup
+
+variables:
+  # Variables required by Common CI jobs
+  CI_COMMON_JOB_VERSION: "1ce04340ebfe838fd7fa09aebdde3bd7e1218bce"
+  DOCKER_BUILDER_TAG: "$CI_COMMON_JOB_VERSION"
+  DOCKER_DIND_TAG: "$CI_COMMON_JOB_VERSION"
+  IMAGE_REMOVER_TAG: "$CI_COMMON_JOB_VERSION"
+
+  # Git configuration
+  GIT_STRATEGY: clone
+  GIT_SUBMODULE_STRATEGY: recursive
+
+  # Replay confioguration
+  BLOCK_LOG_SOURCE_DIR: "/blockchain/block_log_5m"
+  REPLAY_DIRECTORY_PREFIX: "/cache/replay_data_api_node"
+  REPLAY_DIRECTORY: "${REPLAY_DIRECTORY_PREFIX}_${CI_COMMIT_SHORT_SHA}_1.27.8"
+  REPLAY_PIPELINE_DIRECTORY: "${REPLAY_DIRECTORY_PREFIX}_${CI_PIPELINE_ID}"
+  DOCKER_TLS_CERTDIR: "${REPLAY_PIPELINE_DIRECTORY}_certs"
+
+  # Other settings
+  TEST_IMAGE_TAG: ":ubuntu22.04-12"
+
+include:
+  - template: Workflows/Branch-Pipelines.gitlab-ci.yml
+  - project: hive/common-ci-configuration
+    ref: 1ce04340ebfe838fd7fa09aebdde3bd7e1218bce
+    file:
+      - /templates/docker_image_jobs.gitlab-ci.yml
+      - /templates/cache_cleanup.gitlab-ci.yml
+  - local: ci/node-replay.gitlab-ci.yml
+
+######## Build ########
+
+docker-build:
+  extends: 
+    - .docker_image_builder_job_template
+  stage: build
+  variables:
+    TAG: "${CI_COMMIT_SHORT_SHA}"
+  before_script:
+    - !reference [.docker_image_builder_job_template, before_script]
+    - |
+      echo -e "\e[0Ksection_start:$(date +%s):login[collapsed=true]\r\e[0KLogging to Docker registry..."
+      docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+      echo -e "\e[0Ksection_end:$(date +%s):login\r\e[0K"
+  script:
+    - |
+      echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking Docker images..."
+      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "ci"
+      echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
+  tags:
+    - public-runner-docker
+    - hived-for-tests
+
+######## End build ########
+
+######## Replay ########
+
+haf-node-replay:
+  extends: 
+    - .haf-node-replay
+  stage: replay
+  needs:
+    - docker-build
+  tags:
+    - data-cache-storage
+
+######## End replay ########
+
+######## Test ########
+
+# Creates a copy of replay data to be used in the tests
+haf_api_node_replay_data_copy:
+  extends: 
+    - .haf_api_node_replay_data_copy
+  stage: test
+  needs:
+    - haf-node-replay
+  tags:
+    - data-cache-storage
+
+# Tests if HAF API node is working properly
+haf_api_node_test:
+  extends: 
+    - .haf_api_node_test
+  stage: test
+  needs:
+    - haf_api_node_replay_data_copy
+  tags:
+    - data-cache-storage
+
+######## End test ########
+
+######## Publish ########
 
 build_haproxy_healthchecks_docker_image:
   stage: publish
@@ -19,5 +117,61 @@ build_haproxy_healthchecks_docker_image:
   tags:
     - public-runner-docker
   rules:
+    - if: $CI_PIPELINE_TRIGGERED
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
     - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^1\..+$/
       when: always
+
+######## End publish ########
+
+######## Cleanup ########
+
+# Deletes replay data used by the tests and created by haf_api_node_replay_data_copy
+cleanup_haf_api_node_pipeline_cache:
+  needs:
+    - haf_api_node_replay_data_copy
+    - haf_api_node_test
+  extends: 
+    - .cleanup_cache_manual_template
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_PIPELINE_DIRECTORY}*"
+  rules:
+    - if: $CI_PIPELINE_TRIGGERED
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - when: always
+  tags:
+    - data-cache-storage
+
+# Deletes all HAF API node replay data
+cleanup_haf_api_node_cache_manual:
+  extends: 
+    - .cleanup_cache_manual_template
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
+  rules:
+    - if: $CI_PIPELINE_TRIGGERED
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - when: manual
+      allow_failure: true
+  tags:
+    - data-cache-storage
+
+# Deletes HAF API node replay data older than 7 days
+cleanup_old_haf_api_node_cache:
+  extends:
+    - .cleanup_old_cache_template
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
+  tags:
+    - data-cache-storage
+
+######## End cleanup ########

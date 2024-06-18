@@ -80,9 +80,9 @@ services:
       # PGCTLTIMEOUT sets how long we allow PostgreSQL to startup before giving up and shutting down the container.
       # If you have an unclean shutdown, and postgres needs to do startup recovery, working through all of the old
       # write-ahead logs, this can take longer than the default timeout, which is something like 60 seconds.
-      # 5 minutes is probably long enough that anyone using NVMes will be able to recover their database at
+      # 10 minutes is probably long enough that anyone using NVMes will be able to recover their database at
       # startup.  If you're on slower drives or older hardware, you may need to increase this.
-      PGCTLTIMEOUT: 300
+      PGCTLTIMEOUT: 600
       # HACK, do not commit
       OVERRIDE_LD_PRELOAD: ""
     # when mounting volumes, declare the directories you want to bind-mount here,

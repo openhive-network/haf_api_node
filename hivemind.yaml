@@ -20,12 +20,15 @@ services:
     profiles:
       - apps
       - hivemind
+    environment:
+      HIVEMIND_SYNC_ARGS:
     networks:
       haf-network:
     command:
       - "sync"
       - "--database-url=postgresql://hivemind@haf/haf_block_log"
       - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
+      - "${HIVEMIND_SYNC_ARGS:-}"
     healthcheck:
       test: ["CMD-SHELL","/home/hivemind/block-processing-healthcheck.sh || exit 1"]
       interval: 10s
@@ -82,6 +85,7 @@ services:
       PGRST_OPENAPI_MODE: "disabled" # unclear why this is set, I guess because we currently only support json-rpc?
       # when debugging, you can enable this
       # PGRST_DB_PLAN_ENABLED: true
+      PGRST_LOG_LEVEL: ${HIVEMIND_SERVER_LOG_LEVEL}
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
       interval: 10s
