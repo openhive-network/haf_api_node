@@ -1,0 +1,6 @@
+.env
+.gitlab-ci.yml
+.git/
+ci/haf-datadir/
+docker-bake.hcl
+*/Dockerfile
