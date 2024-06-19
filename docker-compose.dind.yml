@@ -4,7 +4,8 @@ services:
     image: haf_api_node:dind
     privileged: true
     environment:
-      - DOCKER_TLS_CERTDIR=/certs
+      DOCKER_TLS_CERTDIR: /certs
+      TOP_LEVEL_DATASET_MOUNTPOINT: /cache/haf-datadir
     volumes:
       - type: volume
         source: docker-certs-ca
@@ -18,6 +19,9 @@ services:
       - type: volume
         source: docker-lib
         target: /var/lib/docker
+      - type: volume
+        source: haf_datadir
+        target: /cache/haf-datadir
     networks:
       - docker
 volumes:
@@ -26,6 +30,12 @@ volumes:
     name: docker-certs-client
   docker-certs-server:
   docker-lib:
+  haf_datadir:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: ${HAF_DATA_DIRECTORY}/
 networks:
   docker:    
     name: docker

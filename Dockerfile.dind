@@ -1,8 +1,7 @@
 # syntax=docker/dockerfile:1.5
 FROM docker:26.1.4-dind
 
-ENV HIVE_API_NODE_VERSION=1.27.5 
-ENV HAF_VERSION=${HIVE_API_NODE_VERSION}rc9 HIVEMIND_INSTANCE_VERSION=${HIVE_API_NODE_VERSION}rc9 HAFAH_VERSION=${HIVE_API_NODE_VERSION}rc9
+ENV TOP_LEVEL_DATASET_MOUNTPOINT=/haf-pool/haf-datadir
 
 RUN <<-EOF
     set -e
@@ -12,16 +11,25 @@ RUN <<-EOF
     mkdir -p /haf-api-node/jussi
     mkdir -p /haf-api-node/pgadmin
     mkdir -p /haf-api-node/varnish
-    mkdir -p /haf-pool/haf-datadir/blockchain
-    mkdir -p /haf-pool/haf-datadir/shared_memory/haf_wal
-    mkdir -p /haf-pool/haf-datadir/logs/caddy
-    mkdir -p /haf-pool/haf-datadir/logs/pgbadger
-    mkdir -p /haf-pool/haf-datadir/logs/postgresql
-
-    chown -R 1000:100 /haf-pool/haf-datadir
 EOF
 
 WORKDIR /haf-api-node
+
+COPY --chmod=755 <<EOF entrypoint.sh
+#!/bin/sh
+
+set -e 
+
+mkdir -p "\${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
+mkdir -p "\${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/haf_wal"
+mkdir -p "\${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/caddy"
+mkdir -p "\${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/pgbadger"
+mkdir -p "\${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/postgresql"
+
+chown -R 1000:100 "\${TOP_LEVEL_DATASET_MOUNTPOINT}"
+
+dockerd-entrypoint.sh "\$@"
+EOF
 
 COPY caddy/Caddyfile caddy/Caddyfile
 COPY caddy/snippets caddy/snippets
@@ -32,3 +40,8 @@ COPY jussi/config.json jussi/config.json
 COPY pgadmin/pgpass pgadmin/pgpass
 COPY pgadmin/servers.json pgadmin/servers.json
 COPY varnish/default.vcl varnish/default.vcl
+
+EXPOSE 2375 2376 80 443
+
+ENTRYPOINT ["/haf-api-node/entrypoint.sh"]
+CMD []

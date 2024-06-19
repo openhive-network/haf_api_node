@@ -8,17 +8,11 @@ ENV HIVE_API_NODE_REGISTRY=registry.gitlab.syncad.com/hive \
     HAFAH_VERSION=${HIVE_API_NODE_VERSION}rc9 \
     PUBLIC_HOSTNAME="haf_api_node"
 
-RUN <<-EOF
-    set -e
-
-    mkdir /haf-api-node
-EOF
-
 WORKDIR /haf-api-node
 
-COPY . .
-
-RUN cp .env.example .env
+COPY *.yaml /haf-api-node/
+COPY compose.yml compose.yml
+COPY .env.example .env
 
 ENTRYPOINT [ "docker-entrypoint.sh", "docker", "compose" ]
 CMD [ "up" ]
