@@ -52,6 +52,8 @@ docker-build:
 haf-node-replay:
   extends: .job-defaults
   stage: replay
+  needs:
+    - docker-build
   variables:
     HAF_DATA_DIRECTORY: "${REPLAY_DIRECTORY}"
     TOP_LEVEL_DATASET_MOUNTPOINT: "${REPLAY_DIRECTORY}"
