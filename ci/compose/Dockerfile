@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.5
-FROM docker:26.1.4-cli
+FROM registry.gitlab.syncad.com/hive/haf_api_node/docker:26.1.4-cli
 
 ENV HIVE_API_NODE_VERSION=1.27.5 
 ENV HIVE_API_NODE_REGISTRY=registry.gitlab.syncad.com/hive \
