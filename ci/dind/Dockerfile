@@ -18,7 +18,9 @@ WORKDIR /haf-api-node
 COPY --chmod=755 <<EOF entrypoint.sh
 #!/bin/sh
 
-set -e 
+set -e
+
+echo "Creating HAF's mountpoint at \${TOP_LEVEL_DATASET_MOUNTPOINT}..."
 
 mkdir -p "\${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
 mkdir -p "\${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/haf_wal"
@@ -27,6 +29,8 @@ mkdir -p "\${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/pgbadger"
 mkdir -p "\${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/postgresql"
 
 chown -R 1000:100 "\${TOP_LEVEL_DATASET_MOUNTPOINT}"
+
+echo "Starting dockerd"
 
 dockerd-entrypoint.sh "\$@"
 EOF

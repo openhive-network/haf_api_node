@@ -14,6 +14,14 @@ variables:
   GIT_STRATEGY: clone
   GIT_SUBMODULE_STRATEGY: recursive
 
+  # Replay confioguration
+  HIVE_API_NODE_VERSION: 1.27.5
+  HAF_VERSION: ${HIVE_API_NODE_VERSION}rc9
+  HIVEMIND_INSTANCE_VERSION: ${HIVE_API_NODE_VERSION}rc9
+  HAFAH_VERSION: ${HIVE_API_NODE_VERSION}rc9
+  BLOCK_LOG_SOURCE_DIR: "/blockchain/block_log_5m"
+  REPLAY_DIRECTORY: "/cache/replay_data_haf_api_node_${CI_COMMIT_SHORT_SHA}_${HAF_VERSION}_${HIVEMIND_INSTANCE_VERSION}_${HAFAH_VERSION}"
+
 include:
   - template: Workflows/Branch-Pipelines.gitlab-ci.yml
   - project: hive/common-ci-configuration
@@ -25,7 +33,7 @@ docker-build:
   extends: .docker_image_builder_job_template
   stage: build
   variables:
-    TAG: "$CI_COMMIT_SHORT_SHA"
+    TAG: "${CI_COMMIT_SHORT_SHA}"
   before_script:
     - !reference [.docker_image_builder_job_template, before_script]
     - |
@@ -34,9 +42,77 @@ docker-build:
       echo -e "\e[0Ksection_end:$(date +%s):login\r\e[0K"
   script:
     - |
-      echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking $NAME${BASE_REPO_NAME:+/$BASE_REPO_NAME} image..."
+      echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking Docker images..."
       docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "ci"
       echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
   tags:
     - public-runner-docker
     - hived-for-tests
+
+haf-node-replay:
+  extends: .job-defaults
+  stage: replay
+  variables:
+    HAF_DATA_DIRECTORY: "${REPLAY_DIRECTORY}"
+    TOP_LEVEL_DATASET_MOUNTPOINT: "${REPLAY_DIRECTORY}"
+    ARGUMENTS: "--plugin database_api --exit-at-block 5000000"
+    PUBLIC_HOSTNAME: "docker"
+    DOCKER_DRIVER: "overlay2"
+    DOCKER_TLS_CERTDIR: "/certs"
+    CI_DEBUG_SERVICES: "true"
+    GIT_STRATEGY: "none"
+  image: registry.gitlab.syncad.com/hive/haf_api_node/compose:${CI_COMMIT_SHORT_SHA}
+  services:
+    - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${DOCKER_DIND_TAG}
+      alias: docker
+  script:
+   - |
+     echo -e "\e[0Ksection_start:$(date +%s):check[collapsed=true]\r\e[0KChecking replay status..."
+     while [[ -f "${REPLAY_DIRECTORY}/replay_running" ]]; do
+      echo "Another replay is running in $DATA_CACHE. Waiting for it to end..."
+      sleep 60
+     done
+     if [[ -f "${REPLAY_DIRECTORY}/status" ]];
+     then
+      echo "Previous replay exit code"
+      status=$(cat "${REPLAY_DIRECTORY}/status")
+      echo "$status"
+      if [ "$status" -eq 0 ];
+      then
+        echo "Previous replay datadir is valid, exiting"
+        exit 0
+      fi
+     fi
+     touch "${REPLAY_DIRECTORY}/replay_running"
+     echo -e "\e[0Ksection_end:$(date +%s):check\r\e[0K"
+
+     echo -e "\e[0Ksection_start:$(date +%s):prepare[collapsed=true]\r\e[0KPreparing replay directory..."
+     echo "Hardlinking the block_log..."
+     mkdir -p "${REPLAY_DIRECTORY}/blockchain"
+     ln "${BLOCK_LOG_SOURCE_DIR}/block_log" "${REPLAY_DIRECTORY}/blockchain/block_log"
+     if [ -e $BLOCK_LOG_SOURCE_DIR/block_log.artifacts ];
+     then
+      echo "Copying the artifacts file..." 
+      cp "${BLOCK_LOG_SOURCE_DIR}/block_log.artifacts" "${REPLAY_DIRECTORY}/blockchain/block_log.artifacts"
+     fi
+     chown -R 1000:100 "${REPLAY_DIRECTORY}/blockchain"
+     echo -e "\e[0Ksection_end:$(date +%s):prepare\r\e[0K"
+     
+     echo -e "\e[0Ksection_start:$(date +%s):replay[collapsed=true]\r\e[0KReplaying HAF API node..."
+     docker version
+     docker compose up --detach
+     status=$(docker wait haf-world-haf-1)
+     echo "$status" > "${REPLAY_DIRECTORY}/status"
+     echo -e "\e[0Ksection_end:$(date +%s):replay\r\e[0K"
+  after_script:
+    - |
+      docker compose logs --no-color > haf_api_node.log
+      docker compose down --volumes
+      rm -f "${REPLAY_DIRECTORY}/replay_running"
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - haf_api_node.log
+  tags:
+    - data-cache-storage
