@@ -19,6 +19,10 @@ group "default" {
   targets = ["compose", "dind"]
 }
 
+group "ci" {
+  targets = ["compose-ci", "dind-ci"]
+}
+
 target "compose" {
   dockerfile = "ci/compose/Dockerfile"
   tags = [
