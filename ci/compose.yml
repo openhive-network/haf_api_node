@@ -1,7 +1,7 @@
 name: 'haf_api_node_dind'
 services:
   docker:
-    image: haf_api_node:dind
+    image: registry.gitlab.syncad.com/hive/haf_api_node/dind:${TAG:-latest}
     privileged: true
     environment:
       DOCKER_TLS_CERTDIR: /certs
