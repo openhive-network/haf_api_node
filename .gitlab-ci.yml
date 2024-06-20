@@ -63,9 +63,10 @@ haf-node-replay:
     DOCKER_TLS_CERTDIR: "/certs"
     CI_DEBUG_SERVICES: "true"
     GIT_STRATEGY: "none"
+    TINI_SUBREAPER: "true"
   image: 
     name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${CI_COMMIT_SHORT_SHA}
-    entrypoint: []
+    entrypoint: [ "" ]
   services:
     - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${CI_COMMIT_SHORT_SHA}
       alias: docker
