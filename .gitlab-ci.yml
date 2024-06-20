@@ -35,7 +35,7 @@ docker-build:
   script:
     - |
       echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking $NAME${BASE_REPO_NAME:+/$BASE_REPO_NAME} image..."
-      docker buildx bake --provenance=false --progress="plain" "ci"
+      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "ci"
       echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
   tags:
     - public-runner-docker
