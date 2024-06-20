@@ -2,6 +2,7 @@ stages:
   - build
   - replay
   - test
+  - cleanup
 
 variables:
   # Variables required by Common CI jobs
@@ -20,7 +21,8 @@ variables:
   HIVEMIND_INSTANCE_VERSION: ${HIVE_API_NODE_VERSION}rc9
   HAFAH_VERSION: ${HIVE_API_NODE_VERSION}rc9
   BLOCK_LOG_SOURCE_DIR: "/blockchain/block_log_5m"
-  REPLAY_DIRECTORY: "/cache/replay_data_haf_api_node_${CI_COMMIT_SHORT_SHA}_${HAF_VERSION}_${HIVEMIND_INSTANCE_VERSION}_${HAFAH_VERSION}"
+  REPLAY_DIRECTORY_PREFIX: "cache/replay_data_haf_api_node_"
+  REPLAY_DIRECTORY: "${REPLAY_DIRECTORY_PREFIX}${CI_COMMIT_SHORT_SHA}_${HAF_VERSION}_${HIVEMIND_INSTANCE_VERSION}_${HAFAH_VERSION}"
 
 include:
   - template: Workflows/Branch-Pipelines.gitlab-ci.yml
@@ -28,6 +30,9 @@ include:
     ref: a3e97d90268154fae7933ea98e50e3c1c7c72d43
     file:
       - /templates/docker_image_jobs.gitlab-ci.yml
+      - /templates/cache_cleanup.gitlab-ci.yml
+
+######## Build ########
 
 docker-build:
   extends: .docker_image_builder_job_template
@@ -48,6 +53,10 @@ docker-build:
   tags:
     - public-runner-docker
     - hived-for-tests
+
+######## End build ########
+
+######## Replay ########
 
 haf-node-replay:
   extends: .job-defaults
@@ -126,3 +135,31 @@ haf-node-replay:
       - haf_api_node.log
   tags:
     - data-cache-storage
+
+######## End replay ########
+
+######## Test ########
+
+######## End test ########
+
+######## Cleanup ########
+
+cleanup_haf_api_node_cache_manual:
+  extends: 
+    - .cleanup_cache_manual_template
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}_*"
+  tags:
+    - data-cache-storage
+
+cleanup_old_haf_api_node_cache:
+  extends:
+    - .cleanup_old_cache_template
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
+  tags:
+    - data-cache-storage
+
+######## End cleanup ########
