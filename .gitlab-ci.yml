@@ -106,18 +106,18 @@ haf-node-replay:
      
      echo -e "\e[0Ksection_start:$(date +%s):replay[collapsed=true]\r\e[0KReplaying HAF API node..."
      docker-entrypoint.sh docker version
-     pushd /haf-api-node
+     cd /haf-api-node
      docker-entrypoint.sh docker compose up --detach
-     popd
+     cd "${CI_PROJECT_DIR}"
      status=$(docker wait haf-world-haf-1)
      echo "$status" > "${REPLAY_DIRECTORY}/status"
      echo -e "\e[0Ksection_end:$(date +%s):replay\r\e[0K"
   after_script:
     - |
-      pushd /haf-api-node
+      cd /haf-api-node
       docker-entrypoint.sh docker compose logs --no-color > "${CI_PROJECT_DIR}/haf_api_node.log"
       docker-entrypoint.sh docker compose down --volumes
-      popd
+      cd "${CI_PROJECT_DIR}"
       rm -f "${REPLAY_DIRECTORY}/replay_running"
   artifacts:
     when: always
