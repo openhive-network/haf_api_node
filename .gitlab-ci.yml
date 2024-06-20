@@ -94,7 +94,8 @@ haf-node-replay:
      echo -e "\e[0Ksection_start:$(date +%s):prepare[collapsed=true]\r\e[0KPreparing replay directory..."
      echo "Hardlinking the block_log..."
      mkdir -p "${REPLAY_DIRECTORY}/blockchain"
-     ln "${BLOCK_LOG_SOURCE_DIR}/block_log" "${REPLAY_DIRECTORY}/blockchain/block_log"
+     cp -u "${BLOCK_LOG_SOURCE_DIR}/block_log" "${REPLAY_DIRECTORY}/..${BLOCK_LOG_SOURCE_DIR}/block_log"
+     ln "${REPLAY_DIRECTORY}/..${BLOCK_LOG_SOURCE_DIR}/block_log" "${REPLAY_DIRECTORY}/blockchain/block_log"
      if [ -e $BLOCK_LOG_SOURCE_DIR/block_log.artifacts ];
      then
       echo "Copying the artifacts file..." 
@@ -105,14 +106,18 @@ haf-node-replay:
      
      echo -e "\e[0Ksection_start:$(date +%s):replay[collapsed=true]\r\e[0KReplaying HAF API node..."
      docker version
+     pushd /haf-api-node
      docker compose up --detach
+     popd
      status=$(docker wait haf-world-haf-1)
      echo "$status" > "${REPLAY_DIRECTORY}/status"
      echo -e "\e[0Ksection_end:$(date +%s):replay\r\e[0K"
   after_script:
     - |
-      docker compose logs --no-color > haf_api_node.log
+      pushd /haf-api-node
+      docker compose logs --no-color > "${CI_PROJECT_DIR}/haf_api_node.log"
       docker compose down --volumes
+      popd
       rm -f "${REPLAY_DIRECTORY}/replay_running"
   artifacts:
     when: always
