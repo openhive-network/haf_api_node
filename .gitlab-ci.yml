@@ -65,7 +65,7 @@ haf-node-replay:
     GIT_STRATEGY: "none"
   image: registry.gitlab.syncad.com/hive/haf_api_node/compose:${CI_COMMIT_SHORT_SHA}
   services:
-    - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${DOCKER_DIND_TAG}
+    - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${CI_COMMIT_SHORT_SHA}
       alias: docker
   script:
    - |
