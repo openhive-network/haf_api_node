@@ -5,6 +5,7 @@ services:
     privileged: true
     environment:
       DOCKER_TLS_CERTDIR: /certs
+      TINI_SUBREAPER: "true"
       TOP_LEVEL_DATASET_MOUNTPOINT: /cache/haf-datadir
     volumes:
       - type: volume
