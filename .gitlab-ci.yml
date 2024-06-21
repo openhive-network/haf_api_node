@@ -61,11 +61,12 @@ docker-build:
 haf-node-replay:
   extends: .job-defaults
   stage: replay
+  timeout: 2 hours
   needs:
     - docker-build
   variables:
     TOP_LEVEL_DATASET_MOUNTPOINT: "${REPLAY_DIRECTORY}"
-    ARGUMENTS: "--plugin database_api --replay-blockchain --exit-at-block 5000000"
+    ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block 5000000"
     PUBLIC_HOSTNAME: "docker"
     DOCKER_DRIVER: "overlay2"
     DOCKER_TLS_CERTDIR: "/certs"
@@ -80,6 +81,8 @@ haf-node-replay:
       alias: docker
   script:
    - |
+     set -e
+     
      echo -e "\e[0Ksection_start:$(date +%s):check[collapsed=true]\r\e[0KChecking replay status..."
      while [[ -f "${REPLAY_DIRECTORY}/replay_running" ]]; do
       echo "Another replay is running in $DATA_CACHE. Waiting for it to end..."
@@ -96,6 +99,9 @@ haf-node-replay:
         exit 0
       fi
      fi
+     echo "Didn't find a valid replay, performing a fresh one..."
+     ls "${REPLAY_DIRECTORY}" -lath
+     rm "${REPLAY_DIRECTORY}/*" -rf
      touch "${REPLAY_DIRECTORY}/replay_running"
      echo -e "\e[0Ksection_end:$(date +%s):check\r\e[0K"
 
@@ -117,7 +123,13 @@ haf-node-replay:
      cd /haf-api-node
      docker-entrypoint.sh docker compose up --detach --quiet-pull
      cd "${CI_PROJECT_DIR}"
-     status=$(docker-entrypoint.sh docker wait haf-world-haf-1)
+     until [[ $(docker-entrypoint.sh docker inspect --format "{{.State.Status}}" haf-world-hivemind-block-processing-1) == "running" ]]
+     do 
+      echo "Waiting for Hivemind replay to finish..."
+      sleep 10
+     done
+     docker-entrypoint.sh docker compose stop
+     status=$(docker-entrypoint.sh docker inspect haf-world-haf-1 --format="{{.State.ExitCode}}"")
      echo "$status" > "${REPLAY_DIRECTORY}/status"
      echo -e "\e[0Ksection_end:$(date +%s):replay\r\e[0K"
   after_script:
