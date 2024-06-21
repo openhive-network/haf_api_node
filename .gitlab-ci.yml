@@ -66,13 +66,16 @@ haf-node-replay:
     - docker-build
   variables:
     TOP_LEVEL_DATASET_MOUNTPOINT: "${REPLAY_DIRECTORY}"
-    ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block 5000000"
+    LAST_BLOCK_NUMBER: "5000000"
+    ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
     PUBLIC_HOSTNAME: "docker"
     DOCKER_DRIVER: "overlay2"
     DOCKER_TLS_CERTDIR: "/certs"
     CI_DEBUG_SERVICES: "false" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
     TINI_SUBREAPER: "true"
+    HAF_DB_URL: "postgresql://hivemind@haf/haf_block_log"
+    PSQL_COMMAND: "SELECT current_block_num FROM hive.contexts WHERE name = 'hivemind_app'"
   image: 
     name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${CI_COMMIT_SHORT_SHA}
     entrypoint: [ "" ]
@@ -123,8 +126,7 @@ haf-node-replay:
      cd /haf-api-node
      docker-entrypoint.sh docker compose up --detach --quiet-pull
      cd "${CI_PROJECT_DIR}"
-     docker-entrypoint.sh docker inspect --format "{{.State.Health.Status}}" haf-world-hivemind-block-processing-1
-     until [[ $(docker-entrypoint.sh docker inspect --format "{{.State.Health.Status}}" haf-world-hivemind-block-processing-1) == "healthy" ]]
+     until [[ $(docker-entrypoint.sh docker exec haf-world-hivemind-block-processing-1 psql "${HAF_DB_URL}" --quiet --tuples-only --no-align --command "${PSQL_COMMAND}") == "${LAST_BLOCK_NUMBER}" ]]
      do 
       echo "Waiting for Hivemind replay to finish..."
       sleep 10
