@@ -123,7 +123,7 @@ haf-node-replay:
      cd /haf-api-node
      docker-entrypoint.sh docker compose up --detach --quiet-pull
      cd "${CI_PROJECT_DIR}"
-     until [[ $(docker-entrypoint.sh docker inspect --format "{{.State.Status}}" haf-world-hivemind-block-processing-1) == "running" ]]
+     until [[ $(docker-entrypoint.sh docker inspect --format "{{.State.Health.Status}}" haf-world-hivemind-block-processing-1) == "healthy" ]]
      do 
       echo "Waiting for Hivemind replay to finish..."
       sleep 10
