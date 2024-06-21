@@ -131,7 +131,7 @@ haf-node-replay:
      cd /haf-api-node
      docker-entrypoint.sh docker compose stop
      cd "${CI_PROJECT_DIR}"
-     status=$(docker-entrypoint.sh docker inspect haf-world-haf-1 --format="{{.State.ExitCode}}"")
+     status=$(docker-entrypoint.sh docker inspect haf-world-haf-1 --format="{{.State.ExitCode}}")
      echo "$status" > "${REPLAY_DIRECTORY}/status"
      echo -e "\e[0Ksection_end:$(date +%s):replay\r\e[0K"
   after_script:
