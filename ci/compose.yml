@@ -25,6 +25,40 @@ services:
         target: /cache/haf-datadir
     networks:
       - docker
+    ports:
+      - name: docker
+        target: 2375
+        published: 2375
+      - name: docker-tls
+        target: 2376
+        published: 2376
+      - name: http
+        target: 80
+        published: 8080
+      - name: https
+        target: 443
+        published: 8443
+    healthcheck:
+      test: [ "CMD", "docker", "version"]
+      interval: 5s
+      timeout: 5s
+  compose:
+    image: registry.gitlab.syncad.com/hive/haf_api_node/compose:latest
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+      DOCKER_HOST: 
+      ARGUMENTS: 
+      TOP_LEVEL_DATASET_MOUNTPOINT: /cache/haf-datadir
+      PUBLIC_HOSTNAME:
+    volumes:
+      - type: volume
+        source: docker-certs-client
+        target: /certs/client
+    networks:
+      - docker
+    depends_on:
+      docker:
+        condition: service_healthy
 volumes:
   docker-certs-ca:
   docker-certs-client:
