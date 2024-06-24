@@ -163,7 +163,7 @@ haf_api_node_replay_data_copy:
   extends: .job-defaults
   stage: test
   needs:
-    - docker-build
+    - haf-node-replay
   image: 
     name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${CI_COMMIT_SHORT_SHA}
     entrypoint: [ "" ]
@@ -179,7 +179,6 @@ haf_api_node_test:
   extends: .job-defaults
   stage: test
   needs:
-    - docker-build
     - haf_api_node_replay_data_copy
   image: 
     name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${CI_COMMIT_SHORT_SHA}
