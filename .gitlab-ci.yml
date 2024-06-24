@@ -126,9 +126,10 @@ haf-node-replay:
      cd /haf-api-node
      docker-entrypoint.sh docker compose up --detach --quiet-pull
      cd "${CI_PROJECT_DIR}"
-     until [[ $(docker-entrypoint.sh docker exec haf-world-hivemind-block-processing-1 psql "${HAF_DB_URL}" --quiet --tuples-only --no-align --command "${PSQL_COMMAND}") == "${LAST_BLOCK_NUMBER}" ]]
-     do 
-      echo "Waiting for Hivemind replay to finish..."
+     until [[ $(docker-entrypoint.sh docker exec --env LC_ALL="C" haf-world-hivemind-block-processing-1 psql "${HAF_DB_URL}" --quiet --tuples-only --no-align --command "${PSQL_COMMAND}") == "${LAST_BLOCK_NUMBER}" ]]
+     do
+      CURRENT_BLOCK=$(docker-entrypoint.sh docker exec --env LC_ALL="C" haf-world-hivemind-block-processing-1 psql "${HAF_DB_URL}" --quiet --tuples-only --no-align --command "${PSQL_COMMAND}")
+      echo -e "Waiting for Hivemind replay to finish...\n Current block: ${CURRENT_BLOCK}"
       sleep 10
      done
      cd /haf-api-node
