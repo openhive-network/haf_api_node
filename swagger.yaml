@@ -6,8 +6,8 @@ services:
     environment:
       URLS: >-
         [{url: "https://${PUBLIC_HOSTNAME}/hafbe/", name: "HAF Block Explorer"},
-         {url: "https://${PUBLIC_HOSTNAME}/btracker/", name: "Balance Tracker"},
-         {url: "https://${PUBLIC_HOSTNAME}/reptracker/", name: "Reputation Tracker"},
+         {url: "https://${PUBLIC_HOSTNAME}/hafbe_btracker/", name: "Balance Tracker"},
+         {url: "https://${PUBLIC_HOSTNAME}/hafbe_reptracker/", name: "Reputation Tracker"},
          {url: "https://${PUBLIC_HOSTNAME}/hafah/", name: "HAfAH"}]
     networks:
       haf-network:
