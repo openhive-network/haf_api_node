@@ -25,6 +25,13 @@ COPY --chmod=644 <<EOF index.html
 <html><body><h1>A webpage served by netcat</h1></body></html>
 EOF
 
+COPY --chmod=644 <<EOF faketime.yaml
+services:
+  haf:
+    environment:
+      FAKETIME:
+EOF
+
 COPY --chmod=755 <<EOF entrypoint.sh
 #!/bin/sh
 
@@ -36,6 +43,14 @@ if [[ "\${USE_ALTERNATE_HAPROXY_CONFIG:-}" == "true" ]]; then
 else
   echo "Using default HAproxy configuration"
   [[ -f haproxy.yaml.bak ]] && mv haproxy.yaml.bak haproxy.yaml
+fi
+
+if [[ -n "\${FAKETIME:-}" ]]; then
+  echo "Enabling faketime for HAF"
+  mv faketime.yaml compose.override.yml
+else
+  echo "Disabling faketime for HAF"
+  [[ -f compose.override.yml ]] && mv compose.override.yml faketime.yaml
 fi
 
 echo "Waiting for Docker to start..."

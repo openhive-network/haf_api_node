@@ -189,6 +189,7 @@ haf_api_node_test:
     DOCKER_DRIVER: "overlay2"
     CI_DEBUG_SERVICES: "true" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
+    FF_NETWORK_PER_BUILD: 1
   services:
     - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${CI_COMMIT_SHORT_SHA}
       alias: docker
@@ -232,6 +233,9 @@ haf_api_node_test:
 
 # Deletes replay data used by the tests and created by haf_api_node_replay_data_copy
 cleanup_haf_api_node_pipeline_cache:
+  needs:
+    - haf_api_node_replay_data_copy
+    - haf_api_node_test
   extends: 
     - .cleanup_cache_manual_template
   stage: cleanup

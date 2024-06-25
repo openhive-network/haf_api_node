@@ -1,4 +1,4 @@
-name: 'haf_api_node_dind'
+name: 'haf_api_node'
 services:
   docker:
     image: registry.gitlab.syncad.com/hive/haf_api_node/dind:${DIND_TAG:-latest}
@@ -25,9 +25,6 @@ services:
     networks:
       - docker
     ports:
-      - name: docker
-        target: 2375
-        published: 2375
       - name: docker-tls
         target: 2376
         published: 2376
@@ -49,6 +46,7 @@ services:
       ARGUMENTS: 
       TOP_LEVEL_DATASET_MOUNTPOINT: /cache/haf-datadir
       PUBLIC_HOSTNAME:
+      FAKETIME:
       USE_ALTERNATE_HAPROXY_CONFIG:
     volumes:
       - type: volume
