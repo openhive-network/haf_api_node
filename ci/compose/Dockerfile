@@ -8,17 +8,19 @@ ENV HIVE_API_NODE_REGISTRY=registry.gitlab.syncad.com/hive \
     HAFAH_VERSION=${HIVE_API_NODE_VERSION}rc9 \
     PUBLIC_HOSTNAME="haf_api_node"
 
+RUN <<EOF
+set -e
+
+apk add --no-cache tini busybox-extras
+EOF
+
 WORKDIR /haf-api-node
 
 COPY *.yaml /haf-api-node/
 COPY compose.yml compose.yml
 COPY .env.example .env
 
-COPY --chmod=644 <<EOF index.http
-HTTP/1.1 200 OK
-Content-Type: text/html; charset=UTF-8
-Server: netcat!
-
+COPY --chmod=644 <<EOF index.html
 <!doctype html>
 <html><body><h1>A webpage served by netcat</h1></body></html>
 EOF
@@ -44,12 +46,12 @@ do
 done
 
 # Necessary for GitLab CI service healthcheck
-(while true; do cat index.http | nc -l 8000; done) &
+httpd
 
 docker-entrypoint.sh docker compose "\$@"
 EOF
 
-EXPOSE 8000 
+EXPOSE 80
 
-ENTRYPOINT [ "/haf-api-node/entrypoint.sh" ]
+ENTRYPOINT [ "/sbin/tini", "-g", "--", "/haf-api-node/entrypoint.sh" ]
 CMD [ "up" ]

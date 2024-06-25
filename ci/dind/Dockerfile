@@ -35,7 +35,7 @@ chown -R 1000:100 "\${TOP_LEVEL_DATASET_MOUNTPOINT}"
 
 echo "Starting dockerd"
 
-dockerd-entrypoint.sh "\$@"
+exec dockerd-entrypoint.sh "\$@"
 EOF
 
 COPY caddy/Caddyfile caddy/Caddyfile

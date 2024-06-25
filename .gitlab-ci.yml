@@ -74,7 +74,6 @@ haf-node-replay:
     DOCKER_TLS_CERTDIR: "/certs"
     CI_DEBUG_SERVICES: "false" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
-    TINI_SUBREAPER: "true"
     HAF_DB_URL: "postgresql://hivemind@haf/haf_block_log"
     PSQL_COMMAND: "SELECT current_block_num FROM hive.contexts WHERE name = 'hivemind_app'"
   image: 
@@ -191,7 +190,6 @@ haf_api_node_test:
     DOCKER_TLS_CERTDIR: "/certs"
     CI_DEBUG_SERVICES: "true" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
-    TINI_SUBREAPER: "true"
   services:
     - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${CI_COMMIT_SHORT_SHA}
       alias: docker
