@@ -188,7 +188,7 @@ haf_api_node_test:
     ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block 5000000"
     PUBLIC_HOSTNAME: "docker"
     DOCKER_DRIVER: "overlay2"
-    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_CERTDIR: ""
     CI_DEBUG_SERVICES: "true" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
     TINI_SUBREAPER: "true"
