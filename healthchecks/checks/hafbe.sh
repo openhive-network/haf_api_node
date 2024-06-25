@@ -11,14 +11,14 @@ check_haf_lib
 REPTRACKER_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_REPTRACKER" --quiet --no-align --tuples-only --command="select extract('epoch' from now() - created_at)::integer from hive.blocks where num = (select hive.app_get_current_block_num('reptracker_app'))")
 if [ "$REPTRACKER_LAST_PROCESSED_BLOCK_AGE" -gt 60 ]; then
   age_string=$(format_seconds "$REPTRACKER_LAST_PROCESSED_BLOCK_AGE")
-  echo "down #reptracker block over a minute old ($age_string)"
+  echo "down #hafbe_reptracker block over a minute old ($age_string)"
   exit 3
 fi
 
 BTRACKER_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_BTRACKER" --quiet --no-align --tuples-only --command="select extract('epoch' from now() - created_at)::integer from hive.blocks where num = (select hive.app_get_current_block_num('btracker_app'))")
 if [ "$BTRACKER_LAST_PROCESSED_BLOCK_AGE" -gt 60 ]; then
   age_string=$(format_seconds "$BTRACKER_LAST_PROCESSED_BLOCK_AGE")
-  echo "down #btracker block over a minute old ($age_string)"
+  echo "down #hafbe_btracker block over a minute old ($age_string)"
   exit 3
 fi
 
