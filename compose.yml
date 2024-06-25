@@ -5,6 +5,7 @@ include:
   - backend.yaml
   - hafah.yaml
   - hivemind.yaml
+  - hivemind_reptracker.yaml
   - balance_tracker.yaml
   - reputation_tracker.yaml
   - haf_block_explorer.yaml
