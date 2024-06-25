@@ -24,6 +24,7 @@ variables:
   REPLAY_DIRECTORY_PREFIX: "/cache/replay_data_haf_api_node"
   REPLAY_DIRECTORY: "${REPLAY_DIRECTORY_PREFIX}_${CI_COMMIT_SHORT_SHA}_${HAF_VERSION}_${HIVEMIND_INSTANCE_VERSION}_${HAFAH_VERSION}"
   REPLAY_PIPELINE_DIRECTORY: "${REPLAY_DIRECTORY_PREFIX}_${CI_PIPELINE_ID}"
+  DOCKER_TLS_CERTDIR: "${REPLAY_PIPELINE_DIRECTORY}_certs"
 
 include:
   - template: Workflows/Branch-Pipelines.gitlab-ci.yml
@@ -71,7 +72,6 @@ haf-node-replay:
     ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
     PUBLIC_HOSTNAME: "docker"
     DOCKER_DRIVER: "overlay2"
-    DOCKER_TLS_CERTDIR: "/certs"
     CI_DEBUG_SERVICES: "false" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
     HAF_DB_URL: "postgresql://hivemind@haf/haf_block_log"
@@ -187,7 +187,6 @@ haf_api_node_test:
     ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block 5000000"
     PUBLIC_HOSTNAME: "docker"
     DOCKER_DRIVER: "overlay2"
-    DOCKER_TLS_CERTDIR: "/certs"
     CI_DEBUG_SERVICES: "true" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
   services:
@@ -237,7 +236,7 @@ cleanup_haf_api_node_pipeline_cache:
     - .cleanup_cache_manual_template
   stage: cleanup
   variables:
-    CLEANUP_PATH_PATTERN: "${REPLAY_PIPELINE_DIRECTORY}"
+    CLEANUP_PATH_PATTERN: "${REPLAY_PIPELINE_DIRECTORY}*"
   when: always
   tags:
     - data-cache-storage
@@ -248,7 +247,7 @@ cleanup_haf_api_node_cache_manual:
     - .cleanup_cache_manual_template
   stage: cleanup
   variables:
-    CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}_*"
+    CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
   tags:
     - data-cache-storage
 
