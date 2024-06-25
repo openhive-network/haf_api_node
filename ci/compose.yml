@@ -1,7 +1,7 @@
 name: 'haf_api_node_dind'
 services:
   docker:
-    image: registry.gitlab.syncad.com/hive/haf_api_node/dind:${TAG:-latest}
+    image: registry.gitlab.syncad.com/hive/haf_api_node/dind:${DIND_TAG:-latest}
     privileged: true
     environment:
       DOCKER_TLS_CERTDIR: /certs
@@ -43,13 +43,14 @@ services:
       interval: 5s
       timeout: 5s
   compose:
-    image: registry.gitlab.syncad.com/hive/haf_api_node/compose:latest
+    image: registry.gitlab.syncad.com/hive/haf_api_node/compose:${COMPOSE_TAG:-latest}
     environment:
       DOCKER_TLS_CERTDIR: /certs
       DOCKER_HOST: 
       ARGUMENTS: 
       TOP_LEVEL_DATASET_MOUNTPOINT: /cache/haf-datadir
       PUBLIC_HOSTNAME:
+      USE_ALTERNATE_HAPROXY_CONFIG:
     volumes:
       - type: volume
         source: docker-certs-client

@@ -43,6 +43,7 @@ COPY caddy/snippets caddy/snippets
 COPY caddy/admin_html caddy/admin_html
 COPY caddy/self-signed.snippet caddy/self-signed.snippet
 COPY haproxy/haproxy.cfg haproxy/haproxy.cfg
+COPY haproxy/haproxy-alternate.cfg haproxy/haproxy-alternate.cfg
 COPY jussi/config.json jussi/config.json
 COPY pgadmin/pgpass pgadmin/pgpass
 COPY pgadmin/servers.json pgadmin/servers.json

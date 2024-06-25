@@ -188,7 +188,7 @@ haf_api_node_test:
     ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block 5000000"
     PUBLIC_HOSTNAME: "docker"
     DOCKER_DRIVER: "overlay2"
-    DOCKER_TLS_CERTDIR: ""
+    DOCKER_TLS_CERTDIR: "/certs"
     CI_DEBUG_SERVICES: "true" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
     TINI_SUBREAPER: "true"
@@ -207,20 +207,6 @@ haf_api_node_test:
       until [[ $(docker-entrypoint.sh docker inspect --format "{{.State.Health.Status}}" haf-world-haproxy-1) == "healthy" ]]
       do
         echo "Waiting for HAproxy to start..."
-        sleep 10
-      done
-      
-      echo "Disabling healthchecks..."
-      docker-entrypoint.sh docker exec -it haf-world-haproxy-1 sh -c "echo 'disable health hived/haf;disable health hived-http/haf;disable health hafah/hafah-postgrest;disable health hivemind/hivemind' | socat stdio unix-connect:/run/haproxy/admin.sock"
-      docker-entrypoint.sh docker exec -it haf-world-haproxy-1 sh -c "echo 'disable agent hived/haf;disable agent hived-http/haf;disable agent hafah/hafah-postgrest;disable agent hivemind/hivemind' | socat stdio unix-connect:/run/haproxy/admin.sock"
-      docker-entrypoint.sh docker exec -it haf-world-haproxy-1 sh -c "echo 'set server hived/haf health up;set server hived-http/haf health up;set server hafah/hafah-postgrest health up;set server hivemind/hivemind health up' | socat stdio unix-connect:/run/haproxy/admin.sock"
-      sleep 10
-      
-      echo "Restarting Jussi..."
-      docker-entrypoint.sh docker start haf-world-jussi-1
-      until [[ $(docker-entrypoint.sh docker inspect --format "{{.State.Health.Status}}" haf-world-jussi-1) == "healthy" ]]
-      do
-        echo "Waiting for Jussi to start..."
         sleep 10
       done
 

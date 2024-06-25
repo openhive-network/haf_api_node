@@ -14,5 +14,42 @@ COPY *.yaml /haf-api-node/
 COPY compose.yml compose.yml
 COPY .env.example .env
 
-ENTRYPOINT [ "docker-entrypoint.sh", "docker", "compose" ]
+COPY --chmod=644 <<EOF index.http
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=UTF-8
+Server: netcat!
+
+<!doctype html>
+<html><body><h1>A webpage served by netcat</h1></body></html>
+EOF
+
+COPY --chmod=755 <<EOF entrypoint.sh
+#!/bin/sh
+
+set -e
+
+if [[ "\${USE_ALTERNATE_HAPROXY_CONFIG:-}" == "true" ]]; then
+  echo "Using alternate HAproxy configuration"
+  sed -i.bak -e 's#source: ./haproxy/haproxy.cfg#source: ./haproxy/haproxy-alternate.cfg#' haproxy.yaml
+else
+  echo "Using default HAproxy configuration"
+  [[ -f haproxy.yaml.bak ]] && mv haproxy.yaml.bak haproxy.yaml
+fi
+
+echo "Waiting for Docker to start..."
+until docker-entrypoint.sh docker version &>/dev/null
+do 
+  echo "Waiting for Docker to start..."
+  sleep 10
+done
+
+# Necessary for GitLab CI service healthcheck
+(while true; do cat index.http | nc -l 8000; done) &
+
+docker-entrypoint.sh docker compose "\$@"
+EOF
+
+EXPOSE 8000 
+
+ENTRYPOINT [ "/haf-api-node/entrypoint.sh" ]
 CMD [ "up" ]
