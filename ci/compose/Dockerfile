@@ -11,7 +11,7 @@ ENV HIVE_API_NODE_REGISTRY=registry.gitlab.syncad.com/hive \
 RUN <<EOF
 set -e
 
-apk add --no-cache tini busybox-extras
+apk add --no-cache tini busybox-extras curl
 EOF
 
 WORKDIR /haf-api-node
