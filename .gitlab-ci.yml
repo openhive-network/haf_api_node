@@ -198,14 +198,17 @@ haf_api_node_test:
     - |
       set -e
       
-      sleep 60
+      sleep 60s
       docker-entrypoint.sh docker ps --all
 
       echo "Waiting for HAproxy to start..."
+      count=0
       until [[ $(docker-entrypoint.sh docker inspect --format "{{.State.Health.Status}}" haf-world-haproxy-1) == "healthy" ]]
       do
         echo "Waiting for HAproxy to start..."
-        sleep 10
+        count=$((count+10))
+        [[ $count -eq 600 ]] && exit 1
+        sleep 10s
       done
 
       echo -e "Testing endpoints...\nHive..."
