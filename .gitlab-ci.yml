@@ -213,6 +213,8 @@ haf_api_node_test:
         sleep 10s
       done
 
+      docker-entrypoint.sh docker ps --all
+
       echo -e "Testing endpoints...\nHive..."
       curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hive
       echo "HAfAH..."
