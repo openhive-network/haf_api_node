@@ -142,6 +142,7 @@ haf-node-replay:
   after_script:
     - |
       cd /haf-api-node
+      docker-entrypoint.sh docker compose ps --all > "${CI_PROJECT_DIR}/compose_processes.txt"
       docker-entrypoint.sh docker compose logs --no-color > "${CI_PROJECT_DIR}/haf_api_node.log"
       docker-entrypoint.sh docker compose down --volumes
       cd "${CI_PROJECT_DIR}"
@@ -150,6 +151,7 @@ haf-node-replay:
     when: always
     expire_in: 1 week
     paths:
+      - compose_processes.txt
       - haf_api_node.log
   tags:
     - data-cache-storage
@@ -213,8 +215,6 @@ haf_api_node_test:
         sleep 10s
       done
 
-      docker-entrypoint.sh docker ps --all
-
       echo -e "Testing endpoints...\nHive..."
       curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hive
       echo "HAfAH..."
@@ -224,12 +224,14 @@ haf_api_node_test:
   after_script:
     - |
       cd /haf-api-node
+      docker-entrypoint.sh docker compose ps --all > "${CI_PROJECT_DIR}/compose_processes.txt"
       docker-entrypoint.sh docker compose logs --no-color > "${CI_PROJECT_DIR}/haf_api_node.log"
       docker-entrypoint.sh docker compose down --volumes
   artifacts:
     when: always
     expire_in: 1 week
     paths:
+      - compose_processes.txt
       - haf_api_node.log
   tags:
     - data-cache-storage
