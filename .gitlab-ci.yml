@@ -189,7 +189,7 @@ haf_api_node_test:
     USE_ALTERNATE_HAPROXY_CONFIG: "true"
     PUBLIC_HOSTNAME: "docker"
     DOCKER_DRIVER: "overlay2"
-    CI_DEBUG_SERVICES: "true" # Change to true to debug services in this job
+    CI_DEBUG_SERVICES: "false" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
     FF_NETWORK_PER_BUILD: 1
   services:
@@ -214,11 +214,11 @@ haf_api_node_test:
       done
 
       echo -e "Testing endpoints...\nHive..."
-      curl -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' https://nb-kbotor-3:8443/ # Hive
+      curl -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hive
       echo "HAfAH..."
-      curl -vk -X POST https://nb-kbotor-3:8443/hafah/get_version # HAfAH
+      curl -vk -X POST "https://${PUBLIC_HOSTNAME}/hafah/get_version" # HAfAH
       echo "Hivemind..."
-      curl -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_trending_tags", "id":1}' https://nb-kbotor-3:8443/ # Hivemind
+      curl -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_trending_tags", "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hivemind
   after_script:
     - |
       cd /haf-api-node
