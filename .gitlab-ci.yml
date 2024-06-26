@@ -214,11 +214,11 @@ haf_api_node_test:
       done
 
       echo -e "Testing endpoints...\nHive..."
-      curl -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hive
+      curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hive
       echo "HAfAH..."
       curl -vk -X POST "https://${PUBLIC_HOSTNAME}/hafah/get_version" # HAfAH
       echo "Hivemind..."
-      curl -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_trending_tags", "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hivemind
+      curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_trending_tags", "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hivemind
   after_script:
     - |
       cd /haf-api-node
