@@ -187,13 +187,14 @@ haf_api_node_test:
     entrypoint: [ "" ]
   variables:
     TOP_LEVEL_DATASET_MOUNTPOINT: "${REPLAY_PIPELINE_DIRECTORY}"
-    ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block 5000000"
+    LAST_BLOCK_NUMBER: "5000000"
+    ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
     USE_ALTERNATE_HAPROXY_CONFIG: "true"
     PUBLIC_HOSTNAME: "docker"
     DOCKER_DRIVER: "overlay2"
     CI_DEBUG_SERVICES: "false" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
-    FF_NETWORK_PER_BUILD: 1
+    FF_NETWORK_PER_BUILD: "true"
   services:
     - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${CI_COMMIT_SHORT_SHA}
       alias: docker
@@ -215,9 +216,22 @@ haf_api_node_test:
         sleep 10s
       done
 
+      echo "Checking HAproxy state..."
       docker-entrypoint.sh docker exec haf-world-haproxy-1 sh -c "echo 'show servers conn' | socat stdio unix-connect:/run/haproxy/admin.sock"
+      docker-entrypoint.sh docker exec haf-world-haproxy-1 sh -c "echo 'show servers state' | socat stdio unix-connect:/run/haproxy/admin.sock"
 
-      echo -e "Testing endpoints...\nHive..."
+      echo "Networking information..."
+      cat /etc/hosts
+      echo $(hostname)
+
+      echo "Caddy configuration..."
+      apk add --no-cache jq
+      docker-entrypoint.sh docker exec haf-world-caddy-1 sh -c "cat /config/caddy/autosave.json" | jq | tee caddy-autosave.json
+
+      echo -e "Testing endpoints...\nCaddy"
+      curl -v "http://${PUBLIC_HOSTNAME}/"
+      curl -vk "https://${PUBLIC_HOSTNAME}/"
+      echo "Hive..."
       curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hive
       echo "HAfAH..."
       curl -vk -X POST "https://${PUBLIC_HOSTNAME}/hafah/get_version" # HAfAH
@@ -235,6 +249,7 @@ haf_api_node_test:
     paths:
       - compose_processes.txt
       - haf_api_node.log
+      - caddy-autosave.json
   tags:
     - data-cache-storage
 
