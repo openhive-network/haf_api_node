@@ -20,7 +20,7 @@ services:
         source: docker-lib
         target: /var/lib/docker
       - type: volume
-        source: haf_datadir
+        source: haf-datadir
         target: /cache/haf-datadir
     networks:
       - docker
@@ -67,7 +67,7 @@ volumes:
     name: docker-certs-client
   docker-certs-server:
   docker-lib:
-  haf_datadir:
+  haf-datadir:
     driver: local
     driver_opts:
       o: bind

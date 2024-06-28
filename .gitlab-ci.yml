@@ -202,7 +202,7 @@ haf_api_node_test:
     - |
       set -e
       
-      sleep 60s
+      sleep 120s
       docker-entrypoint.sh docker ps --all
 
       echo "Waiting for HAproxy to start..."
@@ -215,7 +215,7 @@ haf_api_node_test:
         sleep 10s
       done
 
-      docker-entrypoint.sh docker exec -it haf-world-haproxy-1 sh -c "echo 'show servers conn' | socat stdio unix-connect:/run/haproxy/admin.sock"
+      docker-entrypoint.sh docker exec haf-world-haproxy-1 sh -c "echo 'show servers conn' | socat stdio unix-connect:/run/haproxy/admin.sock"
 
       echo -e "Testing endpoints...\nHive..."
       curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hive
