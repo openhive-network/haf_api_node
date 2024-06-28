@@ -83,6 +83,8 @@ haf-node-replay:
   services:
     - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${CI_COMMIT_SHORT_SHA}
       alias: docker
+      variables:
+        HEALTHCHECK_TCP_PORT: '2376'
   script:
    - |
      set -e
@@ -198,6 +200,8 @@ haf_api_node_test:
   services:
     - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${CI_COMMIT_SHORT_SHA}
       alias: docker
+      variables:
+        HEALTHCHECK_TCP_PORT: '2376'
     - name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${CI_COMMIT_SHORT_SHA}
   script:
     - |
@@ -226,7 +230,10 @@ haf_api_node_test:
 
       echo "Caddy configuration..."
       apk add --no-cache jq
-      docker-entrypoint.sh docker exec haf-world-caddy-1 sh -c "cat /config/caddy/autosave.json" | jq | tee caddy-autosave.json
+
+      docker-entrypoint.sh sh -c "echo DOCKER_HOSTNAME=\$DOCKER_HOSTNAME"
+      docker-entrypoint.sh docker info > docker-info.txt
+      docker-entrypoint.sh docker exec haf-world-caddy-1 sh -c "cat /config/caddy/autosave.json" | jq > caddy-autosave.json
 
       echo -e "Testing endpoints...\nCaddy"
       curl -v "http://${PUBLIC_HOSTNAME}/"
@@ -247,9 +254,10 @@ haf_api_node_test:
     when: always
     expire_in: 1 week
     paths:
+      - caddy-autosave.json
+      - docker-info.txt
       - compose_processes.txt
       - haf_api_node.log
-      - caddy-autosave.json
   tags:
     - data-cache-storage
 
