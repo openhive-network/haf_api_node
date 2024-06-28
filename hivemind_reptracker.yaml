@@ -53,25 +53,24 @@ services:
         condition: service_completed_successfully
       haf:
         condition: service_healthy
-  hivemind-rtracker-swagger:
-    image: ${SWAGGER_REGISTRY:-swaggerapi/swagger-ui}:${SWAGGER_VERSION:-latest}
+  hivemind-rtracker-postgrest-rewriter:
+    image: nginx
     profiles:
-      # right now, hafbe_reptracker doesn't have the correct annotations to generate a
-      # usable swagger UI, so we haven't plumbed swagger into the stack, and you
-      # probably shouldn't bother running it.
-      # Once they work, we should put these services into the same groups as their
-      # postgrest siblings, but for now we put them into a "swagger" group to
-      # effectively disable them
-      - swagger
-    environment:
-      API_URL: http://${PUBLIC_HOSTNAME}/reptracker_user/
-    networks:
-      haf-network:
-    #healthcheck:
-    #  test: ["CMD-SHELL","curl -f 127.0.0.1:8080"]
+      - hivemind
+    volumes:
+      - type: bind
+        source: hivemind_rtracker/hivemind_rtracker_nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+      - type: bind
+        source: hivemind_rtracker/rewrite_rules.conf
+        target: /etc/nginx/rewrite_rules.conf
+        read_only: true
     depends_on:
       hivemind-rtracker-postgrest:
-        condition: service_started
+        condition: service_healthy
+    networks:
+      - haf-network
   semaphore:
     image: busybox
     depends_on:

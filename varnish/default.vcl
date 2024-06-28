@@ -14,6 +14,11 @@ backend reputation_tracker {
     .port = "7009";
 }
 
+backend hivemind_rtracker {
+    .host = "haproxy";
+    .port = "7010";
+}
+
 backend balance_tracker {
     .host = "haproxy";
     .port = "7004";
@@ -60,22 +65,26 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
-    } elseif (req.url == "/hafbe_btracker/") {
+    } elseif (req.url ~ "^/hafbe_bal/") {
         # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
-        set req.url = "/";
+        set req.url = regsub(req.url, "^/hafbe_bal/(.*)$", "/\1");
         set req.backend_hint = balance_tracker;
-    } elseif (req.url ~ "^/hafbe_btracker/") {
+
+        if (req.method == "POST") {
+            call recv_cachable_post;
+        }
+    } elseif (req.url ~ "^/hafbe_rep/") {
         # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
-        set req.url = regsub(req.url, "^/hafbe_btracker/(.*)$", "/rpc/\1");
-        set req.backend_hint = balance_tracker;
-    } elseif (req.url == "/hafbe_reptracker/") {
-        # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
-        set req.url = "/";
+        set req.url = regsub(req.url, "^/hafbe_rep/(.*)$", "/\1");
         set req.backend_hint = reputation_tracker;
-    } elseif (req.url ~ "^/hafbe_reptracker/") {
+
+        if (req.method == "POST") {
+            call recv_cachable_post;
+        }
+    } elseif (req.url ~ "^/reptracker_app/") {
         # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
-        set req.url = regsub(req.url, "^/hafbe_reptracker/(.*)$", "/rpc/\1");
-        set req.backend_hint = reputation_tracker;
+        set req.url = regsub(req.url, "^/reptracker_app/(.*)$", "/\1");
+        set req.backend_hint = hivemind_rtracker;
 
         if (req.method == "POST") {
             call recv_cachable_post;
@@ -121,14 +130,16 @@ sub vcl_deliver {
 sub vcl_hash {
     # the hashing happens after the vcl_recv function, so it only sees the rewritten form of
     # the req.url.  So by default, it would cache, e.g., requests for /hafah/get_status
-    # and return them for /hafbe_btracker/get_status.
+    # and return them for /hafbe_bal/get_status.
     # Add the name of the backend to the hash to prevent this
     if (req.backend_hint == hafah) {
         hash_data("hafah");
     } else if (req.backend_hint == balance_tracker) {
-        hash_data("hafbe_btracker");
+        hash_data("hafbe_bal");
     } else if (req.backend_hint == reputation_tracker) {
-        hash_data("hafbe_reptracker");
+        hash_data("hafbe_rep");
+    } else if (req.backend_hint == hivemind_rtracker) {
+        hash_data("reptracker_app");
     } else if (req.backend_hint == haf_block_explorer) {
         hash_data("hafbe");
     }
