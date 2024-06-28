@@ -63,6 +63,7 @@ services:
       PGRST_DB_SCHEMA: reptracker_endpoints
       PGRST_DB_ANON_ROLE: reptracker_user
       PGRST_DB_POOL: 20
+      PGRST_DB_ROOT_SPEC: root
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_DB_EXTRA_SEARCH_PATH: ${REPTRACKER_SCHEMA:-hafbe_rep}
       # PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/reptracker_user/
@@ -79,22 +80,23 @@ services:
         condition: service_completed_successfully
       haf:
         condition: service_healthy
-  reputation-tracker-swagger:
-    image: ${SWAGGER_REGISTRY:-swaggerapi/swagger-ui}:${SWAGGER_VERSION:-latest}
+  reputation-tracker-postgrest-rewriter:
+    image: nginx
     profiles:
-      # right now, hafbe_reptracker doesn't have the correct annotations to generate a
-      # usable swagger UI, so we haven't plumbed swagger into the stack, and you
-      # probably shouldn't bother running it.
-      # Once they work, we should put these services into the same groups as their
-      # postgrest siblings, but for now we put them into a "swagger" group to
-      # effectively disable them
-      - swagger
-    environment:
-      API_URL: http://${PUBLIC_HOSTNAME}/reptracker_user/
-    networks:
-      haf-network:
-    #healthcheck:
-    #  test: ["CMD-SHELL","curl -f 127.0.0.1:8080"]
+      - apps
+      - reputation-tracker-standalone
+      - hafbe
+    volumes:
+      - type: bind
+        source: reputation_tracker/reputation_tracker_nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+      - type: bind
+        source: reputation_tracker/rewrite_rules.conf
+        target: /etc/nginx/rewrite_rules.conf
+        read_only: true
     depends_on:
       reputation-tracker-postgrest:
-        condition: service_started
+        condition: service_healthy
+    networks:
+      - haf-network
