@@ -74,7 +74,7 @@ haf-node-replay:
     PUBLIC_HOSTNAME: "dind"
     DOCKER_DRIVER: "overlay2"
     DOCKER_HOST: "tcp://${PUBLIC_HOSTNAME}:2376"
-    DOCKER_TLS_SAN: "${PUBLIC_HOSTNAME}"
+    DOCKER_TLS_SAN: "DNS:${PUBLIC_HOSTNAME}"
     CI_DEBUG_SERVICES: "false" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
     HAF_DB_URL: "postgresql://hivemind@haf/haf_block_log"
@@ -197,7 +197,7 @@ haf_api_node_test:
     PUBLIC_HOSTNAME: "dind"
     DOCKER_DRIVER: "overlay2"
     DOCKER_HOST: "tcp://${PUBLIC_HOSTNAME}:2376"
-    DOCKER_TLS_SAN: "${PUBLIC_HOSTNAME}"
+    DOCKER_TLS_SAN: "DNS:${PUBLIC_HOSTNAME}"
     CI_DEBUG_SERVICES: "false" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
     FF_NETWORK_PER_BUILD: "true"
