@@ -164,7 +164,7 @@ haf-node-replay:
 
 ######## Test ########
 
-# Creates a copy of replay data to b used in the tests
+# Creates a copy of replay data to be used in the tests
 haf_api_node_replay_data_copy:
   extends: .job-defaults
   stage: test
@@ -210,6 +210,16 @@ haf_api_node_test:
   script:
     - |
       set -e
+
+      echo -e "\nWaiting for Docker to start..."
+      count=0
+      until docker version > /dev/null 2>&1
+      do
+        echo "Waiting for HAproxy to start..."
+        count=$((count+10))
+        [[ $count -eq 600 ]] && exit 1
+        sleep 10s
+      done
       
       echo "Docker info (saved to docker-info.txt)"
       docker-entrypoint.sh docker info > docker-info.txt
