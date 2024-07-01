@@ -71,8 +71,10 @@ haf-node-replay:
     LAST_BLOCK_NUMBER: "5000000"
     ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
     USE_ALTERNATE_HAPROXY_CONFIG: "true"
-    PUBLIC_HOSTNAME: "docker"
+    PUBLIC_HOSTNAME: "dind"
     DOCKER_DRIVER: "overlay2"
+    DOCKER_HOST: "tcp://${PUBLIC_HOSTNAME}:2376"
+    DOCKER_TLS_SAN: "${PUBLIC_HOSTNAME}"
     CI_DEBUG_SERVICES: "false" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
     HAF_DB_URL: "postgresql://hivemind@haf/haf_block_log"
@@ -82,7 +84,7 @@ haf-node-replay:
     entrypoint: [ "" ]
   services:
     - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${CI_COMMIT_SHORT_SHA}
-      alias: docker
+      alias: dind
       variables:
         HEALTHCHECK_TCP_PORT: '2376'
   script:
@@ -174,7 +176,7 @@ haf_api_node_replay_data_copy:
   script:
     - |
       echo "Copying replay data to ${REPLAY_PIPELINE_DIRECTORY}"
-      cp --recursive "${REPLAY_DIRECTORY}" "${REPLAY_PIPELINE_DIRECTORY}"
+      cp --recursive  --preserve "${REPLAY_DIRECTORY}" "${REPLAY_PIPELINE_DIRECTORY}"
   tags:
     - data-cache-storage
 
@@ -192,14 +194,16 @@ haf_api_node_test:
     LAST_BLOCK_NUMBER: "5000000"
     ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
     USE_ALTERNATE_HAPROXY_CONFIG: "true"
-    PUBLIC_HOSTNAME: "docker"
+    PUBLIC_HOSTNAME: "dind"
     DOCKER_DRIVER: "overlay2"
+    DOCKER_HOST: "tcp://${PUBLIC_HOSTNAME}:2376"
+    DOCKER_TLS_SAN: "${PUBLIC_HOSTNAME}"
     CI_DEBUG_SERVICES: "false" # Change to true to debug services in this job
     GIT_STRATEGY: "none"
     FF_NETWORK_PER_BUILD: "true"
   services:
     - name: registry.gitlab.syncad.com/hive/haf_api_node/dind:${CI_COMMIT_SHORT_SHA}
-      alias: docker
+      alias: dind
       variables:
         HEALTHCHECK_TCP_PORT: '2376'
     - name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${CI_COMMIT_SHORT_SHA}
@@ -207,12 +211,14 @@ haf_api_node_test:
     - |
       set -e
       
-      sleep 120s
-      export DOCKER_HOST='tcp://192.168.4.199:2376'
+      echo "Docker info (saved to docker-info.txt)"
+      docker-entrypoint.sh docker info > docker-info.txt
+      echo -e "\nDocker processes"
       docker-entrypoint.sh docker ps --all
+      echo -e "\nDocker networks"
       docker-entrypoint.sh docker network ls
 
-      echo "Waiting for HAproxy to start..."
+      echo -e "\nWaiting for HAproxy to start..."
       count=0
       until [[ $(docker-entrypoint.sh docker inspect --format "{{.State.Health.Status}}" haf-world-haproxy-1) == "healthy" ]]
       do
@@ -222,27 +228,17 @@ haf_api_node_test:
         sleep 10s
       done
 
-      echo "Checking HAproxy state..."
+      echo -e "\nChecking HAproxy state..."
       docker-entrypoint.sh docker exec haf-world-haproxy-1 sh -c "echo 'show servers conn' | socat stdio unix-connect:/run/haproxy/admin.sock"
       docker-entrypoint.sh docker exec haf-world-haproxy-1 sh -c "echo 'show servers state' | socat stdio unix-connect:/run/haproxy/admin.sock"
 
-      echo "Networking information..."
-      cat /etc/hosts
-      echo $(hostname)
-
-      echo "Caddy configuration..."
+      echo -e "\nCaddy configuration... (saved to caddy-autosave.json)"
       apk add --no-cache jq
-
-      docker-entrypoint.sh sh -c "export"
-      docker-entrypoint.sh docker info > docker-info.txt
       docker-entrypoint.sh docker exec haf-world-caddy-1 sh -c "cat /config/caddy/autosave.json" | jq > caddy-autosave.json
 
-      echo -e "Testing endpoints..."
-      # curl -v "http://${PUBLIC_HOSTNAME}/"
-      # curl -vk "https://${PUBLIC_HOSTNAME}/"
-      echo -e "\nHive..."
+      echo -e "\nTesting endpoints...\nHive (via container link, simulating CI service)..."
       docker-entrypoint.sh docker run --rm --link haf-world-caddy-1:${PUBLIC_HOSTNAME} --network haf curlimages/curl:8.8.0 -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' https://${PUBLIC_HOSTNAME}/
-      echo -e "\nHive again..."
+      echo -e "\nHive directly..."
       curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hive
       echo -e "\nHAfAH..."
       curl -vk -X POST "https://${PUBLIC_HOSTNAME}/hafah/get_version" # HAfAH
@@ -258,8 +254,8 @@ haf_api_node_test:
     when: always
     expire_in: 1 week
     paths:
+      - docker-info.txt 
       - caddy-autosave.json
-      - docker-info.txt
       - compose_processes.txt
       - haf_api_node.log
   tags:
