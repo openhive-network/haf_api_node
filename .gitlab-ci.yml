@@ -208,6 +208,7 @@ haf_api_node_test:
       set -e
       
       sleep 120s
+      export DOCKER_HOST='tcp://192.168.4.199:2376'
       docker-entrypoint.sh docker ps --all
       docker-entrypoint.sh docker network ls
 
@@ -236,15 +237,16 @@ haf_api_node_test:
       docker-entrypoint.sh docker info > docker-info.txt
       docker-entrypoint.sh docker exec haf-world-caddy-1 sh -c "cat /config/caddy/autosave.json" | jq > caddy-autosave.json
 
-      echo -e "Testing endpoints...\nCaddy"
+      echo -e "Testing endpoints..."
       # curl -v "http://${PUBLIC_HOSTNAME}/"
       # curl -vk "https://${PUBLIC_HOSTNAME}/"
-      echo "Hive..."
+      echo -e "\nHive..."
       docker-entrypoint.sh docker run --rm --link haf-world-caddy-1:${PUBLIC_HOSTNAME} --network haf curlimages/curl:8.8.0 -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' https://${PUBLIC_HOSTNAME}/
+      echo -e "\nHive again..."
       curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hive
-      echo "HAfAH..."
+      echo -e "\nHAfAH..."
       curl -vk -X POST "https://${PUBLIC_HOSTNAME}/hafah/get_version" # HAfAH
-      echo "Hivemind..."
+      echo -e "\nHivemind..."
       curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_trending_tags", "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hivemind
   after_script:
     - |
