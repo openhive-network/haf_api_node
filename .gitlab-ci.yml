@@ -88,69 +88,9 @@ haf-node-replay:
       variables:
         HEALTHCHECK_TCP_PORT: '2376'
   script:
-   - |
-     set -e
-     
-     echo -e "\e[0Ksection_start:$(date +%s):check[collapsed=true]\r\e[0KChecking replay status..."
-     while [[ -f "${REPLAY_DIRECTORY}/replay_running" ]]; do
-      echo "Another replay is running in $DATA_CACHE. Waiting for it to end..."
-      sleep 60
-     done
-     if [[ -f "${REPLAY_DIRECTORY}/status" ]];
-     then
-      echo "Previous replay exit code"
-      status=$(cat "${REPLAY_DIRECTORY}/status")
-      echo "$status"
-      if [ "$status" -eq 0 ];
-      then
-        echo "Previous replay datadir is valid, exiting"
-        exit 0
-      fi
-     fi
-     echo "Didn't find a valid replay, performing a fresh one..."
-     ls "${REPLAY_DIRECTORY}" -lath
-     rm "${REPLAY_DIRECTORY}/*" -rf
-     touch "${REPLAY_DIRECTORY}/replay_running"
-     echo -e "\e[0Ksection_end:$(date +%s):check\r\e[0K"
-
-     echo -e "\e[0Ksection_start:$(date +%s):prepare[collapsed=true]\r\e[0KPreparing replay directory..."
-     echo "Hardlinking the block_log..."
-     mkdir -p "${REPLAY_DIRECTORY}/blockchain"
-     cp -u "${BLOCK_LOG_SOURCE_DIR}/block_log" "${REPLAY_DIRECTORY}/..${BLOCK_LOG_SOURCE_DIR}/block_log"
-     ln "${REPLAY_DIRECTORY}/..${BLOCK_LOG_SOURCE_DIR}/block_log" "${REPLAY_DIRECTORY}/blockchain/block_log"
-     if [ -e $BLOCK_LOG_SOURCE_DIR/block_log.artifacts ];
-     then
-      echo "Copying the artifacts file..." 
-      cp "${BLOCK_LOG_SOURCE_DIR}/block_log.artifacts" "${REPLAY_DIRECTORY}/blockchain/block_log.artifacts"
-     fi
-     chown -R 1000:100 "${REPLAY_DIRECTORY}/blockchain"
-     echo -e "\e[0Ksection_end:$(date +%s):prepare\r\e[0K"
-     
-     echo -e "\e[0Ksection_start:$(date +%s):replay[collapsed=true]\r\e[0KReplaying HAF API node..."
-     docker-entrypoint.sh docker version
-     cd /haf-api-node
-     docker-entrypoint.sh docker compose up --detach --quiet-pull
-     cd "${CI_PROJECT_DIR}"
-     until [[ $(docker-entrypoint.sh docker exec --env LC_ALL="C" haf-world-hivemind-block-processing-1 psql "${HAF_DB_URL}" --quiet --tuples-only --no-align --command "${PSQL_COMMAND}") == "${LAST_BLOCK_NUMBER}" ]]
-     do
-      CURRENT_BLOCK=$(docker-entrypoint.sh docker exec --env LC_ALL="C" haf-world-hivemind-block-processing-1 psql "${HAF_DB_URL}" --quiet --tuples-only --no-align --command "${PSQL_COMMAND}")
-      echo -e "Waiting for Hivemind replay to finish...\n Current block: ${CURRENT_BLOCK}"
-      sleep 10
-     done
-     cd /haf-api-node
-     docker-entrypoint.sh docker compose stop
-     cd "${CI_PROJECT_DIR}"
-     status=$(docker-entrypoint.sh docker inspect haf-world-haf-1 --format="{{.State.ExitCode}}")
-     echo "$status" > "${REPLAY_DIRECTORY}/status"
-     echo -e "\e[0Ksection_end:$(date +%s):replay\r\e[0K"
+    - ci/scripts/replay-api-node.sh
   after_script:
-    - |
-      cd /haf-api-node
-      docker-entrypoint.sh docker compose ps --all > "${CI_PROJECT_DIR}/compose_processes.txt"
-      docker-entrypoint.sh docker compose logs --no-color > "${CI_PROJECT_DIR}/haf_api_node.log"
-      docker-entrypoint.sh docker compose down --volumes
-      cd "${CI_PROJECT_DIR}"
-      rm -f "${REPLAY_DIRECTORY}/replay_running"
+    - ci/scripts/after-script.sh
   artifacts:
     when: always
     expire_in: 1 week
@@ -174,9 +114,7 @@ haf_api_node_replay_data_copy:
     name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${CI_COMMIT_SHORT_SHA}
     entrypoint: [ "" ]
   script:
-    - |
-      echo "Copying replay data to ${REPLAY_PIPELINE_DIRECTORY}"
-      cp -a "${REPLAY_DIRECTORY}" "${REPLAY_PIPELINE_DIRECTORY}"
+    - ci/scripts/copy-datadir.sh
   tags:
     - data-cache-storage
 
@@ -208,58 +146,9 @@ haf_api_node_test:
         HEALTHCHECK_TCP_PORT: '2376'
     - name: registry.gitlab.syncad.com/hive/haf_api_node/compose:${CI_COMMIT_SHORT_SHA}
   script:
-    - |
-      set -e
-
-      echo -e "\nWaiting for Docker to start..."
-      count=0
-      until docker version > /dev/null 2>&1
-      do
-        echo "Waiting for HAproxy to start..."
-        count=$((count+10))
-        [[ $count -eq 600 ]] && exit 1
-        sleep 10s
-      done
-      
-      echo "Docker info (saved to docker-info.txt)"
-      docker-entrypoint.sh docker info > docker-info.txt
-      echo -e "\nDocker processes"
-      docker-entrypoint.sh docker ps --all
-      echo -e "\nDocker networks"
-      docker-entrypoint.sh docker network ls
-
-      echo -e "\nWaiting for HAproxy to start..."
-      count=0
-      until [[ $(docker-entrypoint.sh docker inspect --format "{{.State.Health.Status}}" haf-world-haproxy-1) == "healthy" ]]
-      do
-        echo "Waiting for HAproxy to start..."
-        count=$((count+10))
-        [[ $count -eq 600 ]] && exit 1
-        sleep 10s
-      done
-
-      echo -e "\nChecking HAproxy state..."
-      docker-entrypoint.sh docker exec haf-world-haproxy-1 sh -c "echo 'show servers conn' | socat stdio unix-connect:/run/haproxy/admin.sock"
-      docker-entrypoint.sh docker exec haf-world-haproxy-1 sh -c "echo 'show servers state' | socat stdio unix-connect:/run/haproxy/admin.sock"
-
-      echo -e "\nCaddy configuration... (saved to caddy-autosave.json)"
-      apk add --no-cache jq
-      docker-entrypoint.sh docker exec haf-world-caddy-1 sh -c "cat /config/caddy/autosave.json" | jq > caddy-autosave.json
-
-      echo -e "\nTesting endpoints...\nHive (via container link, simulating CI service)..."
-      docker-entrypoint.sh docker run --rm --link haf-world-caddy-1:${PUBLIC_HOSTNAME} --network haf curlimages/curl:8.8.0 -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' https://${PUBLIC_HOSTNAME}/
-      echo -e "\nHive directly..."
-      curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hive
-      echo -e "\nHAfAH..."
-      curl -vk -X POST "https://${PUBLIC_HOSTNAME}/hafah/get_version" # HAfAH
-      echo -e "\nHivemind..."
-      curl -vk --data '{"jsonrpc":"2.0", "method":"condenser_api.get_trending_tags", "id":1}' "https://${PUBLIC_HOSTNAME}/" # Hivemind
+    - ci/scripts/test-api-node.sh
   after_script:
-    - |
-      cd /haf-api-node
-      docker-entrypoint.sh docker compose ps --all > "${CI_PROJECT_DIR}/compose_processes.txt"
-      docker-entrypoint.sh docker compose logs --no-color > "${CI_PROJECT_DIR}/haf_api_node.log"
-      docker-entrypoint.sh docker compose down --volumes
+    - ci/scripts/after-script.sh
   artifacts:
     when: always
     expire_in: 1 week

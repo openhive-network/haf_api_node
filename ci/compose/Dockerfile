@@ -11,11 +11,12 @@ ENV HIVE_API_NODE_REGISTRY=registry.gitlab.syncad.com/hive \
 RUN <<EOF
 set -e
 
-apk add --no-cache tini busybox-extras curl
+apk add --no-cache tini busybox-extras curl bash jq
 EOF
 
 WORKDIR /haf-api-node
 
+COPY ci/scripts /haf-api-node/ci/scripts
 COPY *.yaml /haf-api-node/
 COPY compose.yml compose.yml
 COPY .env.example .env
@@ -33,7 +34,7 @@ services:
 EOF
 
 COPY --chmod=755 <<EOF entrypoint.sh
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
