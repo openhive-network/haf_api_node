@@ -40,16 +40,16 @@ chown -R 1000:100 "${REPLAY_DIRECTORY:?}/blockchain"
 echo -e "\e[0Ksection_end:$(date +%s):prepare\r\e[0K"
 
 echo -e "\e[0Ksection_start:$(date +%s):replay[collapsed=true]\r\e[0KReplaying HAF API node..."
-docker-entrypoint.sh docker version
+docker version
 
 cd /haf-api-node
-docker-entrypoint.sh docker compose up --detach --quiet-pull
+docker compose up --detach --quiet-pull
 
 cd "${CI_PROJECT_DIR:?}"
 count=0
-until [[ $(docker-entrypoint.sh docker exec --env LC_ALL="C" haf-world-hivemind-block-processing-1 psql "${HAF_DB_URL:?}" --quiet --tuples-only --no-align --command "${PSQL_COMMAND:?}") == "${LAST_BLOCK_NUMBER:?}" ]]
+until [[ $(docker exec --env LC_ALL="C" haf-world-hivemind-block-processing-1 psql "${HAF_DB_URL:?}" --quiet --tuples-only --no-align --command "${PSQL_COMMAND:?}") == "${LAST_BLOCK_NUMBER:?}" ]]
 do
-    CURRENT_BLOCK=$(docker-entrypoint.sh docker exec --env LC_ALL="C" haf-world-hivemind-block-processing-1 psql "${HAF_DB_URL:?}" --quiet --tuples-only --no-align --command "${PSQL_COMMAND:?}")
+    CURRENT_BLOCK=$(docker exec --env LC_ALL="C" haf-world-hivemind-block-processing-1 psql "${HAF_DB_URL:?}" --quiet --tuples-only --no-align --command "${PSQL_COMMAND:?}")
     echo -e "Waiting for Hivemind replay to finish...\n Current block: ${CURRENT_BLOCK:?}"
     count=$((count+10))
     [[ $count -eq 6000 ]] && exit 1
@@ -57,9 +57,9 @@ do
 done
 
 cd /haf-api-node
-docker-entrypoint.sh docker compose stop
+docker compose stop
 
 cd "${CI_PROJECT_DIR:?}"
-status=$(docker-entrypoint.sh docker inspect haf-world-haf-1 --format="{{.State.ExitCode}}")
+status=$(docker inspect haf-world-haf-1 --format="{{.State.ExitCode}}")
 echo "${status}" > "${REPLAY_DIRECTORY:?}/status"
 echo -e "\e[0Ksection_end:$(date +%s):replay\r\e[0K"

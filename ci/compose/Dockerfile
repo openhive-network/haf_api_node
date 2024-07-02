@@ -31,41 +31,14 @@ services:
   haf:
     environment:
       FAKETIME:
+      LD_PRELOAD: "/home/hived_admin/hive_base_config/faketime/src/libfaketime.so.1"
+      OVERRIDE_LD_PRELOAD: ${LD_PRELOAD}
+      FAKETIME_DONT_FAKE_MONOTONIC: 1
+      FAKETIME_DONT_RESET: 1
+      TZ: "UTC"
 EOF
 
-COPY --chmod=755 <<EOF entrypoint.sh
-#!/bin/bash
-
-set -e
-
-if [[ "\${USE_ALTERNATE_HAPROXY_CONFIG:-}" == "true" ]]; then
-  echo "Using alternate HAproxy configuration"
-  sed -i.bak -e 's#source: ./haproxy/haproxy.cfg#source: ./haproxy/haproxy-alternate.cfg#' haproxy.yaml
-else
-  echo "Using default HAproxy configuration"
-  [[ -f haproxy.yaml.bak ]] && mv haproxy.yaml.bak haproxy.yaml
-fi
-
-if [[ -n "\${FAKETIME:-}" ]]; then
-  echo "Enabling faketime for HAF"
-  mv faketime.yaml compose.override.yml
-else
-  echo "Disabling faketime for HAF"
-  [[ -f compose.override.yml ]] && mv compose.override.yml faketime.yaml
-fi
-
-echo "Waiting for Docker to start..."
-until docker-entrypoint.sh docker version &>/dev/null
-do 
-  echo "Waiting for Docker to start..."
-  sleep 10
-done
-
-# Necessary for GitLab CI service healthcheck
-httpd
-
-docker-entrypoint.sh docker compose "\$@"
-EOF
+COPY --chmod=755 ci/compose/entrypoint.sh entrypoint.sh
 
 EXPOSE 80
 
