@@ -4,9 +4,9 @@ set -e
 
 echo -e "\nWaiting for Docker to start..."
 count=0
-until docker version > /dev/null 2>&1
+until docker-entrypoint.sh docker version > /dev/null 2>&1
 do
-    echo "Waiting for HAproxy to start..."
+    echo "Waiting for Docker to start..."
     count=$((count+5))
     [[ $count -eq 600 ]] && exit 1
     sleep 5s
