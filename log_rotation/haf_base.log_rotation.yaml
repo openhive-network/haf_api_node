@@ -1,0 +1,16 @@
+services:
+  haf:
+    logging:
+      driver: local
+      options:
+        max-size: "100m"
+        max-file: 10
+  logrotate:
+    logging:
+      driver: local
+  pgbadger:
+    logging:
+      driver: local
+  ofelia:
+    logging:
+      driver: local

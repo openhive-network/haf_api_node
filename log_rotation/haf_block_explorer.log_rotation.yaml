@@ -1,0 +1,22 @@
+services:
+  block-explorer-block-processing:
+    logging:
+      driver: local
+      options:
+        max-size: "100m"
+        max-file: 10
+  block-explorer-install:
+    logging:
+      driver: local
+  block-explorer-postgrest:
+    logging:
+      driver: local
+      options:
+        max-size: "100m"
+        max-file: 10
+  block-explorer-uninstall:
+    logging:
+      driver: local
+  block-explorer-uninstall-balance-tracker:
+    logging:
+      driver: local

@@ -1,0 +1,7 @@
+services:
+  pghero:
+    logging:
+      driver: local
+  pgadmin:
+    logging:
+      driver: local
