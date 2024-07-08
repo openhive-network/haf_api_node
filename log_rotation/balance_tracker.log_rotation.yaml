@@ -1,0 +1,16 @@
+services:
+  balance-tracker-install:
+    logging:
+      driver: local
+  balance-tracker-uninstall:
+    logging:
+      driver: local
+  balance-tracker-block-processing:
+    logging:
+      driver: local
+  balance-tracker-postgrest:
+    logging:
+      driver: local
+  balance-tracker-swagger:
+    logging:
+      driver: local

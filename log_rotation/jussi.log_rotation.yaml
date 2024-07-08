@@ -1,0 +1,10 @@
+services:
+  jussi:
+    logging:
+      driver: local
+      options:
+        max-size: "1000m"
+        max-file: 5
+  redis:
+    logging:
+      driver: local
