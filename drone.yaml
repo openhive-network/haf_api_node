@@ -17,7 +17,7 @@ services:
       - haf-network
   # to use our log analysis tools, we need to capture drone's traffic using a 
   # specific nginx logging config.  To do this, rename the actual drone
-  # service above to 'jussi-real', then uncomment the next section. 
+  # service above to 'drone-real', then uncomment the next section. 
   # drone:
   #   image: nginx
   #   profiles:
@@ -33,7 +33,17 @@ services:
   #   depends_on:
   #     drone-real:
   #       condition: service_started
+  #   networks:
+  #     - haf-network
+  # drone:
+  #   image: mitmproxy/mitmproxy
+  #   profiles:
+  #     - servers
   #   ports:
-  #     - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:9001:9000"
+  #     - 8081:8081
+  #   command: mitmweb --listen-port 9000 --web-host 0.0.0.0 --mode reverse:http://drone-real:9000
+  #   depends_on:
+  #     drone-real:
+  #       condition: service_started
   #   networks:
   #     - haf-network
