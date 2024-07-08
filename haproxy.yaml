@@ -1,6 +1,6 @@
 services:
   haproxy:
-    image: ${HAPROXY_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy}:${HAPROXY_VERSION:-latest}
+    image: ${HAPROXY_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy}:${HAPROXY_VERSION:-latest}
     profiles:
       - servers
     environment:
