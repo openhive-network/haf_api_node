@@ -9,6 +9,12 @@
   # put your real TLS config in a file in the snippets directory
   import tls-self-signed-snippets/*.snippet
 
+  # Import a snippet that will restrict admin access to localhost by default.  
+  # To allow admin access from other hosts, bind-mount an empty file here and then
+  # put secure the admin interface by putting another config file in the 
+  # snippets directory
+  import local-admin-only-snippets/*.snippet
+
   import snippets/*.snippet
 
   # Block API abusers outright
