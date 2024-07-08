@@ -46,6 +46,8 @@ services:
   # service above to 'jussi-real', then uncomment the next section. 
   # jussi:
   #   image: nginx
+  #   profiles:
+  #     - servers
   #   volumes:
   #     - type: bind
   #       source: ./jussi/nginx.conf
