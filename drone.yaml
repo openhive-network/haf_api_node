@@ -4,7 +4,7 @@ services:
     profiles:
       - servers
     environment:
-      RUST_LOG: access_log=info
+      RUST_LOG: ${DRONE_LOG_LEVEL:-warn,access_log=info}
     volumes:
       - type: bind
         source: ./drone/config.yaml
