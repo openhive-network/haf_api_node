@@ -139,6 +139,6 @@
     reverse_proxy http://varnish
   }
 
-  # Route everything else (mostly new-style REST calls)
+  # Route everything else (currently just swagger documentation)
   reverse_proxy http://swagger:8080
 }
