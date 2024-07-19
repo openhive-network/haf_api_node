@@ -8,8 +8,7 @@ services:
         [{url: "https://${PUBLIC_HOSTNAME}/hafbe/", name: "HAF Block Explorer"},
          {url: "https://${PUBLIC_HOSTNAME}/hafbe_bal/", name: "Balance Tracker"},
          {url: "https://${PUBLIC_HOSTNAME}/hafbe_rep/", name: "Reputation Tracker"},
-         {url: "https://${PUBLIC_HOSTNAME}/hafah/", name: "HAfAH"},
-         {url: "https://${PUBLIC_HOSTNAME}/hafah-rest/", name: "HAfAH-REST"}]
+         {url: "https://${PUBLIC_HOSTNAME}/hafah/", name: "HAfAH"}]
     networks:
       haf-network:
     #healthcheck:
@@ -20,8 +19,6 @@ services:
       reputation-tracker-postgrest:
         condition: service_started
       hafah-postgrest:
-        condition: service_started
-      hafah-rest-postgrest:
         condition: service_started
       block-explorer-postgrest:
         condition: service_started

@@ -1,7 +1,6 @@
 include:
   - exposed/haproxy.exposed.yaml
   - exposed/hafah.exposed.yaml
-  - exposed/hafah-rest.exposed.yaml
   - exposed/haf_block_explorer.exposed.yaml
   - exposed/${JSONRPC_API_SERVER_NAME:-jussi}.exposed.yaml
   - exposed/hivemind.exposed.yaml
