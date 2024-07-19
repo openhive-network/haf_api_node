@@ -35,7 +35,6 @@ services:
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-uninstall-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-install-1.${NETWORK_NAME}                       trust\n
         host    haf_block_log    hafah_user       ${COMPOSE_PROJECT_NAME}-hafah-postgrest-1.${NETWORK_NAME}                     trust\n
-        host    haf_block_log    hafah_user       ${COMPOSE_PROJECT_NAME}-hafah-rest-postgrest-1.${NETWORK_NAME}                trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-benchmarks-1.${NETWORK_NAME}                    trust\n
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-1.${NETWORK_NAME}              trust\n
