@@ -10,7 +10,6 @@ services:
     command:
       - install_app
       - --is_forking=false
-      - --is_attached=true
     depends_on:
       haf:
         condition: service_healthy
