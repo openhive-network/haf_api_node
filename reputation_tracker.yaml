@@ -12,6 +12,7 @@ services:
     command:
       - install_app
       - --schema=${REPTRACKER_SCHEMA:-hafbe_rep}
+      - --swagger-url=${PUBLIC_HOSTNAME}
     depends_on:
       semaphore:
         condition: service_started

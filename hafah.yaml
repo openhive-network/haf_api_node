@@ -10,6 +10,7 @@ services:
       POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
     command:
       - install_app
+      - --swagger-url=${PUBLIC_HOSTNAME}
     networks:
       haf-network:
     depends_on:
