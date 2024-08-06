@@ -136,7 +136,21 @@
   }
 
   handle @rest_apis {
-    reverse_proxy http://varnish
+    # Add CORS headers
+    header {
+      Access-Control-Allow-Origin "*"
+      Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+      Access-Control-Allow-Headers "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range"
+      Access-Control-Max-Age "3600"
+    }
+    reverse_proxy http://varnish {
+      # remove any CORS headers sent by the rest api servers so we don't have duplicates
+      # (right now, postgrest doesn't add any of these headers, this is just defensive)
+      header_down -Access-Control-Allow-Origin
+      header_down -Access-Control-Allow-Methods
+      header_down -Access-Control-Allow-Headers
+      header_down -Access-Control-Max-Age
+    }
   }
 
   # Route everything else (currently just swagger documentation)
