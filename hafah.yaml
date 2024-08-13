@@ -57,18 +57,18 @@ services:
       haf:
         condition: service_healthy
   hafah-postgrest-rewriter:
-    image: nginx
+    image: openresty/openresty:alpine
     profiles:
       - apps
       - hafah
     volumes:
       - type: bind
         source: hafah_rest/hafah_rest_nginx.conf
-        target: /etc/nginx/nginx.conf
+        target: /usr/local/openresty/nginx/conf/nginx.conf
         read_only: true
       - type: bind
         source: hafah_rest/rewrite_rules.conf
-        target: /etc/nginx/rewrite_rules.conf
+        target: /usr/local/openresty/nginx/conf/rewrite_rules.conf
         read_only: true
     depends_on:
       hafah-postgrest:
