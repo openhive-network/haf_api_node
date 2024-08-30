@@ -5,10 +5,10 @@ services:
       - hafbe
     environment:
       URLS: >-
-        [{url: "https://${PUBLIC_HOSTNAME}/hafbe/", name: "HAF Block Explorer"},
-         {url: "https://${PUBLIC_HOSTNAME}/hafbe_bal/", name: "Balance Tracker"},
-         {url: "https://${PUBLIC_HOSTNAME}/hafbe_rep/", name: "Reputation Tracker"},
-         {url: "https://${PUBLIC_HOSTNAME}/hafah/", name: "HAfAH"}]
+        [{url: "https://${PUBLIC_HOSTNAME}/hafbe-api/", name: "HAF Block Explorer"},
+         {url: "https://${PUBLIC_HOSTNAME}/balance-api/", name: "Balance Tracker"},
+         {url: "https://${PUBLIC_HOSTNAME}/reputation-api/", name: "Reputation Tracker"},
+         {url: "https://${PUBLIC_HOSTNAME}/hafah-api/", name: "HAfAH"}]
     networks:
       haf-network:
     #healthcheck:

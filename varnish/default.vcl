@@ -12,11 +12,23 @@ backend hafah {
 backend reputation_tracker {
     .host = "haproxy";
     .port = "7009";
+    .probe = {
+        .timeout = 1s;
+        .interval = 10s;
+        .window = 3;
+        .threshold = 2;
+    }
 }
 
 backend hivemind_rtracker {
     .host = "haproxy";
     .port = "7010";
+    .probe = {
+        .timeout = 1s;  # Reduced timeout
+        .interval = 10s;
+        .window = 3;
+        .threshold = 2;
+    }
 }
 
 backend balance_tracker {
@@ -54,44 +66,42 @@ sub recv_cachable_post {
 }
 
 sub vcl_recv {
-    if (req.url == "/hafah/") {
+    if (req.url == "/hafah-api/") {
         set req.url = "/";
         set req.backend_hint = hafah;
-    } elseif (req.url ~ "^/hafah/") {
+    } elseif (req.url ~ "^/hafah-api/") {
         # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
-        set req.url = regsub(req.url, "^/hafah/(.*)$", "/\1");
+        set req.url = regsub(req.url, "^/hafah-api/(.*)$", "/\1");
         set req.backend_hint = hafah;
 
         if (req.method == "POST") {
             call recv_cachable_post;
         }
-    } elseif (req.url ~ "^/hafbe_bal/") {
-        # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
-        set req.url = regsub(req.url, "^/hafbe_bal/(.*)$", "/\1");
+    } elseif (req.url ~ "^/balance-api/") {
+        # rewrite the URL to where PostgREST expects it
+        set req.url = regsub(req.url, "^/balance-api/(.*)$", "/\1");
         set req.backend_hint = balance_tracker;
 
         if (req.method == "POST") {
             call recv_cachable_post;
         }
-    } elseif (req.url ~ "^/hafbe_rep/") {
-        # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
-        set req.url = regsub(req.url, "^/hafbe_rep/(.*)$", "/\1");
-        set req.backend_hint = reputation_tracker;
+    } elseif (req.url ~ "^/reputation-api/") {
+        # rewrite the URL to where PostgREST expects it
+        set req.url = regsub(req.url, "^/reputation-api/(.*)$", "/\1");
+
+        # Prioritize hivemind_rtracker but fallback to reputation_tracker if it's down
+        if (std.healthy(hivemind_rtracker)) {
+            set req.backend_hint = hivemind_rtracker;
+        } elseif (std.healthy(reputation_tracker)) {
+            set req.backend_hint = reputation_tracker;
+        }
 
         if (req.method == "POST") {
             call recv_cachable_post;
         }
-    } elseif (req.url ~ "^/reptracker_app/") {
-        # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
-        set req.url = regsub(req.url, "^/reptracker_app/(.*)$", "/\1");
-        set req.backend_hint = hivemind_rtracker;
-
-        if (req.method == "POST") {
-            call recv_cachable_post;
-        }
-    } elseif (req.url ~ "^/hafbe/") {
-        # rewrite the URL to where PostgREST expects it, and route the call to the hafah backend
-        set req.url = regsub(req.url, "^/hafbe/(.*)$", "/\1");
+    } elseif (req.url ~ "^/hafbe-api/") {
+        # rewrite the URL to where PostgREST expects it
+        set req.url = regsub(req.url, "^/hafbe-api/(.*)$", "/\1");
         set req.backend_hint = haf_block_explorer;
 
         if (req.method == "POST") {
@@ -111,7 +121,7 @@ sub vcl_backend_fetch {
 }
 
 sub vcl_backend_response {
-    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer) {
+    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker) {
         # PostgREST generates invalid content-range headers, and varnish will refuse to cache/proxy calls because of it.
         # Until they fix it, just remove the header.  (see https://github.com/PostgREST/postgrest/issues/1089)
         unset beresp.http.Content-Range;
@@ -130,18 +140,18 @@ sub vcl_deliver {
 sub vcl_hash {
     # the hashing happens after the vcl_recv function, so it only sees the rewritten form of
     # the req.url.  So by default, it would cache, e.g., requests for /hafah/get_status
-    # and return them for /hafbe_bal/get_status.
+    # and return them for /balance-api/get_status.
     # Add the name of the backend to the hash to prevent this
     if (req.backend_hint == hafah) {
-        hash_data("hafah");
+        hash_data("hafah-api");
     } else if (req.backend_hint == balance_tracker) {
-        hash_data("hafbe_bal");
+        hash_data("balance-api");
     } else if (req.backend_hint == reputation_tracker) {
-        hash_data("hafbe_rep");
+        hash_data("reputation-api");
     } else if (req.backend_hint == hivemind_rtracker) {
-        hash_data("reptracker_app");
+        hash_data("reputation-api");
     } else if (req.backend_hint == haf_block_explorer) {
-        hash_data("hafbe");
+        hash_data("hafbe-api");
     }
 
     # To cache POST and PUT requests

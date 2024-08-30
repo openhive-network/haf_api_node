@@ -132,7 +132,7 @@
   }
 
   @rest_apis {
-    path /hafah/* /hafbe_bal/* /hafbe_rep/* /hafbe/* /reptracker_app/*
+    path /hafah-api/* /balance-api/* /reputation-api/* /hafbe-api/* 
   }
 
   handle @rest_apis {
