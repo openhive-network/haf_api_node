@@ -19,7 +19,7 @@ variables:
   # Versions of HAF, Hivemind and HAfAH must be the same as in .env.example
   HAF_VERSION: "74321ec8"
   HIVEMIND_INSTANCE_VERSION: "741bd236"
-  HAFAH_VERSION: "a55d0c0b"
+  HAFAH_VERSION: "e977d9e8"
   BLOCK_LOG_SOURCE_DIR: "/blockchain/block_log_5m"
   REPLAY_DIRECTORY_PREFIX: "/cache/replay_data_haf_api_node"
   REPLAY_DIRECTORY: "${REPLAY_DIRECTORY_PREFIX}_${CI_COMMIT_SHORT_SHA}_${HAF_VERSION}_${HIVEMIND_INSTANCE_VERSION}_${HAFAH_VERSION}"
