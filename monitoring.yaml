@@ -1,6 +1,6 @@
 services:
   prometheus:
-    image: prom/prometheus:${PROMETHEUS_VERSION}
+    image: prom/prometheus:${PROMETHEUS_VERSION:-v2.49.1}
     profiles:
       - monitoring
     volumes:
@@ -22,7 +22,7 @@ services:
       org.label-schema.group: "monitoring"
 
   nodeexporter:
-    image: prom/node-exporter:${NODE_EXPORTER_VERSION}
+    image: prom/node-exporter:${NODE_EXPORTER_VERSION:-v1.7.0}
     profiles:
       - monitoring
     volumes:
@@ -43,7 +43,7 @@ services:
       org.label-schema.group: "monitoring"
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:${CADVISOR_VERSION}
+    image: gcr.io/cadvisor/cadvisor:${CADVISOR_VERSION:-v0.47.2}
     profiles:
       - monitoring
     privileged: true
@@ -64,7 +64,7 @@ services:
       org.label-schema.group: "monitoring"
 
   grafana:
-    image: grafana/grafana:${GRAFANA_VERSION}
+    image: grafana/grafana:${GRAFANA_VERSION:-10.3.3}
     profiles:
       - monitoring
     depends_on:
@@ -89,7 +89,7 @@ services:
       org.label-schema.group: "monitoring"
 
   loki:
-    image: grafana/loki:${LOKI_VERSION}
+    image: grafana/loki:${LOKI_VERSION:-2.9.4}
     profiles:
       - monitoring
     volumes:
@@ -105,7 +105,7 @@ services:
       org.label-schema.group: "monitoring"
 
   promtail:
-    image: grafana/promtail:${PROMTAIL_VERSION}
+    image: grafana/promtail:${PROMTAIL_VERSION:-2.9.4}
     profiles:
       - monitoring
     depends_on:
@@ -121,7 +121,7 @@ services:
       org.label-schema.group: "monitoring"
 
   hived-pme:
-    image: registry.gitlab.syncad.com/hive/hived-pme:${HIVED_PME_VERSION}
+    image: registry.gitlab.syncad.com/hive/hived-pme:${HIVED_PME_VERSION:-49a7312d}
     profiles:
       - monitoring
     restart: unless-stopped
@@ -154,12 +154,12 @@ services:
     networks:
       - haf-network
     environment:
-      - DATA_SOURCE_NAME=${DATA_SOURCE}
+      - DATA_SOURCE_NAME=${DATA_SOURCE:-postgresql://postgres@haf:5432/postgres?sslmode=disable}
     labels:
       org.label-schema.group: "monitoring"
 
   blackboxexporter:
-    image: prom/blackbox-exporter:${BLACKBOX_VERSION}
+    image: prom/blackbox-exporter:${BLACKBOX_VERSION:-v0.24.0}
     profiles:
       - monitoring
     restart: unless-stopped

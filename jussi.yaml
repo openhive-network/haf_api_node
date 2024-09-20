@@ -52,7 +52,7 @@ services:
   #       target: /etc/nginx/nginx.conf
   #       read_only: true
   #     - type: bind
-  #       source: ${HAF_LOG_DIRECTORY}/jussi
+  #       source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/jussi
   #       target: /var/log/jussi
   #   depends_on:
   #     jussi-real:

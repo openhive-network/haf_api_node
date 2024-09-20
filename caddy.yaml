@@ -26,11 +26,11 @@ services:
         target: /etc/caddy/admin_html
         read_only: true
       - type: bind
-        source: ${HAF_DATA_DIRECTORY}/logs/pgbadger
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/logs/pgbadger
         target: /etc/caddy/pgbadger
         read_only: true
       - type: bind
-        source: ${HAF_DATA_DIRECTORY}/logs/caddy
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/logs/caddy
         target: /var/log/caddy
         read_only: false
       - type: bind

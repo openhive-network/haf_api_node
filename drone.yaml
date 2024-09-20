@@ -28,7 +28,7 @@ services:
   #       target: /etc/nginx/nginx.conf
   #       read_only: true
   #     - type: bind
-  #       source: ${HAF_LOG_DIRECTORY}/drone
+  #       source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/drone
   #       target: /var/log/drone
   #   depends_on:
   #     drone-real:

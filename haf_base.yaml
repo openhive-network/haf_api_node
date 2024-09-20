@@ -11,7 +11,7 @@ services:
     init: true
     entrypoint:
       - /home/haf_admin/docker_entrypoint.sh
-      - ${ARGUMENTS}
+      - ${ARGUMENTS:-}
     # after requesting a shutdown with SIGTERM, allow the container two minutes to exit
     # before killing it.  The default of ten seconds isn't enough for postgresql to
     # cleanly shut down, and would often make PostgreSQL perform crash recovery at the
@@ -82,6 +82,8 @@ services:
       # 5 minutes is probably long enough that anyone using NVMes will be able to recover their database at
       # startup.  If you're on slower drives or older hardware, you may need to increase this.
       PGCTLTIMEOUT: 300
+      # HACK, do not commit
+      OVERRIDE_LD_PRELOAD: ""
     # when mounting volumes, declare the directories you want to bind-mount here,
     # using either the short or long syntax.  Don't declare them as top-level named
     # volumes and mount them by name.  Declaring them inline here always results
@@ -89,16 +91,16 @@ services:
     # seems to vary from system to system (even when `o: rbind` is specified).
     volumes:
       - type: bind
-        source: ${HAF_DATA_DIRECTORY}/
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/
         target: /home/hived/datadir
       - type: bind
-        source: ${HAF_LOG_DIRECTORY}/postgresql
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/postgresql
         target: /home/hived/postgresql_logs/
       - type: bind
-        source: ${HAF_SHM_DIRECTORY}/
+        source: ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/
         target: /home/hived/shm_dir
       - type: bind
-        source: ${HAF_WAL_DIRECTORY:-${HAF_SHM_DIRECTORY}/haf_wal}
+        source: ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/haf_wal}
         target: /home/hived/wal_dir
     shm_size: 4gb
     healthcheck:
@@ -114,7 +116,7 @@ services:
     init: true
     volumes:
       - type: bind
-        source: ${HAF_LOG_DIRECTORY}/postgresql
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/postgresql
         target: /var/log/postgresql
       - type: bind
         source: ./logrotate/logrotate.d
@@ -128,10 +130,10 @@ services:
     command: infinity
     volumes:
       - type: bind
-        source: ${HAF_DATA_DIRECTORY}/logs/pgbadger
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/logs/pgbadger
         target: /pgbadger_output
       - type: bind
-        source: ${HAF_LOG_DIRECTORY}/postgresql
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/postgresql
         target: /postgresql_logs
         read_only: true
     labels:

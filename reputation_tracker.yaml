@@ -33,6 +33,7 @@ services:
   reputation-tracker-block-processing:
     image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
+      - apps
       - reputation-tracker-standalone
     environment:
       POSTGRES_HOST: haf
