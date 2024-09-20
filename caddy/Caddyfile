@@ -9,6 +9,10 @@
   # put your real TLS config in a file in the snippets directory
   import tls-self-signed-snippets/*.snippet
 
+  # Import a snippet that will restrict connections to the admin endpoint
+  # to the localhost
+  import local-admin-only-snippets/*.snippet
+
   import snippets/*.snippet
 
   # Block API abusers outright

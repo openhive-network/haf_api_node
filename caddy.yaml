@@ -37,6 +37,10 @@ services:
         source: ${TLS_SELF_SIGNED_SNIPPET}
         target: /etc/caddy/tls-self-signed-snippets/self-signed.snippet
         read_only: true
+      - type: bind
+        source: ${LOCAL_ADMIN_ONLY_SNIPPET}
+        target: /etc/caddy/local-admin-only-snippets/local-admin-only.snippet
+        read_only: true
       - type: volume
         source: caddy_data
         target: /data
