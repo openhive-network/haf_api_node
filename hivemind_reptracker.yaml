@@ -3,6 +3,7 @@ services:
     image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - hivemind
+      - apps
     environment:
       POSTGRES_HOST: haf
     networks:
@@ -31,12 +32,14 @@ services:
     image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - hivemind
+      - apps
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_DB_URI: postgresql://reptracker_user@haf/haf_block_log
       PGRST_DB_SCHEMA: reptracker_endpoints
       PGRST_DB_ANON_ROLE: reptracker_user
       PGRST_DB_POOL: 20
+      PGRST_DB_ROOT_SPEC: root
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_DB_EXTRA_SEARCH_PATH: reptracker_app
       # PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/reptracker_user/
@@ -57,13 +60,14 @@ services:
     image: nginx
     profiles:
       - hivemind
+      - apps
     volumes:
       - type: bind
-        source: hivemind_rtracker/hivemind_rtracker_nginx.conf
+        source: reputation_tracker/hivemind_rtracker_nginx.conf
         target: /etc/nginx/nginx.conf
         read_only: true
       - type: bind
-        source: hivemind_rtracker/rewrite_rules.conf
+        source: reputation_tracker/rewrite_rules.conf
         target: /etc/nginx/rewrite_rules.conf
         read_only: true
     depends_on:

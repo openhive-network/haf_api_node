@@ -3,6 +3,7 @@ services:
     image: swaggerapi/swagger-ui
     profiles:
       - hafbe
+      - apps
     environment:
       URLS: >-
         [{url: "https://${PUBLIC_HOSTNAME}/hafbe-api/", name: "HAF Block Explorer"},
