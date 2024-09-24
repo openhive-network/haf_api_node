@@ -3,7 +3,7 @@
 }
 
 # Simple caddy config, handles SSL and forwards everything to varnish
-{$PUBLIC_HOSTNAME} {
+{$CADDY_SITES} {
   # Import a snippet that will generate a self-signed certificate by default.
   # To generate a real certificate, bind-mount an empty file here and then
   # put your real TLS config in a file in the snippets directory
