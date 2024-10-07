@@ -57,10 +57,6 @@ services:
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-server-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-uninstall-1.${NETWORK_NAME}                  trust\n
 
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-rtracker-install-1.${NETWORK_NAME}          trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-rtracker-uninstall-1.${NETWORK_NAME}        trust\n
-        host    haf_block_log    reptracker_user  ${COMPOSE_PROJECT_NAME}-hivemind-rtracker-postgrest-1.${NETWORK_NAME}        trust\n
-
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
         host    postgres         haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
         host    haf_block_log    pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                              trust\n

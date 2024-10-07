@@ -4,6 +4,7 @@ services:
     profiles:
       - apps
       - hafbe
+      - hivemind
       - reputation-tracker-setup
     environment:
       POSTGRES_HOST: haf
@@ -11,11 +12,10 @@ services:
       haf-network:
     command:
       - install_app
-      - --schema=${REPTRACKER_SCHEMA:-hafbe_rep}
       - --swagger-url=${PUBLIC_HOSTNAME}
     depends_on:
-      semaphore:
-        condition: service_started
+      haf:
+        condition: service_healthy
   reputation-tracker-uninstall:
     image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -26,7 +26,6 @@ services:
       haf-network:
     command:
       - uninstall_app
-      - --schema=${REPTRACKER_SCHEMA:-hafbe_rep}
     depends_on:
       haf:
         condition: service_healthy
@@ -34,6 +33,8 @@ services:
     image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
+      - hafbe
+      - hivemind
       - reputation-tracker-standalone
     environment:
       POSTGRES_HOST: haf
@@ -41,7 +42,6 @@ services:
       haf-network:
     command:
       - process_blocks
-      - --schema=${REPTRACKER_SCHEMA:-hafbe_rep}
     healthcheck:
       test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
       interval: 60s
@@ -57,6 +57,7 @@ services:
     image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
+      - hivemind
       - reputation-tracker-standalone
       - hafbe
     environment:
@@ -67,7 +68,7 @@ services:
       PGRST_DB_POOL: 20
       PGRST_DB_ROOT_SPEC: root
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
-      PGRST_DB_EXTRA_SEARCH_PATH: ${REPTRACKER_SCHEMA:-hafbe_rep}
+      PGRST_DB_EXTRA_SEARCH_PATH: reptracker_app
       # PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/reptracker_user/
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
@@ -88,6 +89,7 @@ services:
       - apps
       - reputation-tracker-standalone
       - hafbe
+      - hivemind
     volumes:
       - type: bind
         source: reputation_tracker/reputation_tracker_nginx.conf
