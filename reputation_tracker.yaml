@@ -38,6 +38,7 @@ services:
       - reputation-tracker-standalone
     environment:
       POSTGRES_HOST: haf
+      POSTGRES_USER: reptracker_owner
     networks:
       haf-network:
     command:

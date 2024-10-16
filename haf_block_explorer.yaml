@@ -54,10 +54,17 @@ services:
       - hafbe
     environment:
       POSTGRES_HOST: haf
+      POSTGRES_USER: hafbe_owner
     command:
       - process_blocks
     networks:
       haf-network:
+    healthcheck:
+      test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 48h
     depends_on:
       block-explorer-install:
         condition: service_completed_successfully

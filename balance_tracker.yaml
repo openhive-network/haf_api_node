@@ -36,6 +36,7 @@ services:
       - balance-tracker-standalone
     environment:
       POSTGRES_HOST: haf
+      POSTGRES_USER: btracker_owner
     networks:
       haf-network:
     command:
