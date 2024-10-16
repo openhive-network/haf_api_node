@@ -60,7 +60,7 @@ services:
     networks:
       haf-network:
     healthcheck:
-      test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
+      test: ["CMD-SHELL","/app/block-processing-healthcheck.sh hafbe_app"]
       interval: 60s
       timeout: 10s
       retries: 3
