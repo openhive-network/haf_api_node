@@ -1,10 +1,10 @@
 This "exposed" configuration includes directives that allow you to directly access 
 the services from other machines -- without this config, the only exposed ports
 go to the main webserver, and the only way to access, e.g., hafah's postgrest
-server is by sending it through caddy -> jussi -> haproxy -> hafah-postgrest
+server is by sending it through caddy -> jussi/drone -> haproxy -> hafah-postgrest
 
 Exposing ports like this is useful if you want to split the stack across multiple 
-machines (e.g., caddy + jussi + redis + varnish on one machine, everything else
+machines (e.g., caddy + drone + varnish on one machine, everything else
 on the others).  Or, if you have two redundant servers, and you want to be able
 to add backup entries in haproxy that send traffic to the other server.
 

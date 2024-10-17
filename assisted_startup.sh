@@ -84,7 +84,7 @@ if [ ! -f .env ]; then
     echo "core: the minimal HAF system of a database and hived"
     echo "admin: useful tools for administrating HAF: pgadmin, pghero"
     echo "apps: core HAF apps: hivemind, hafah, hafbe (balance-tracker is a subapp)"
-    echo "servers: services for routing/caching API calls: haproxy, jussi (JSON caching), varnish (REST caching)"
+    echo "servers: services for routing/caching API calls: haproxy, jussi/drone (JSON caching), varnish (REST caching)"
     read -p "Run admin? (Y or N): " choice
     if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
         echo "Adding admin to profiles..."

@@ -9,7 +9,7 @@ include:
   - reputation_tracker.yaml
   - haf_block_explorer.yaml
   - varnish.yaml
-  - ${JSONRPC_API_SERVER_NAME:-jussi}.yaml
+  - ${JSONRPC_API_SERVER_NAME:-drone}.yaml
   - haproxy.yaml
   - caddy.yaml
   - monitoring.yaml
