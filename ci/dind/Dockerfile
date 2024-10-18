@@ -25,6 +25,9 @@ COPY caddy/snippets caddy/snippets
 COPY caddy/admin_html caddy/admin_html
 COPY caddy/local-admin-only.snippet caddy/local-admin-only.snippet
 COPY caddy/self-signed.snippet caddy/self-signed.snippet
+COPY drone/config.json drone/config.json
+COPY drone/config.yaml drone/config.yaml
+COPY drone/nginx.conf drone/nginx.conf
 COPY haf_block_explorer/haf_block_explorer_nginx.conf haf_block_explorer/haf_block_explorer_nginx.conf
 COPY haf_block_explorer/rewrite_rules.conf haf_block_explorer/rewrite_rules.conf
 COPY hafah_rest/hafah_rest_nginx.conf hafah_rest/hafah_rest_nginx.conf
