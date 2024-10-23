@@ -11,7 +11,7 @@ variables:
     HIVEMIND_INSTANCE_IMAGE: "${HIVE_API_NODE_REGISTRY}/hivemind/instance"
     REPUTATION_TRACKER_REGISTRY: "${HIVE_API_NODE_REGISTRY}/reputation_tracker"
     LAST_BLOCK_NUMBER: "5000000"
-    ARGUMENTS: "--plugin database_api --replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
+    ARGUMENTS: "--replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
     USE_ALTERNATE_HAPROXY_CONFIG: "true"
     PUBLIC_HOSTNAME: "dind"
     DOCKER_DRIVER: "overlay2"
