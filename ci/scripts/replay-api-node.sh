@@ -75,7 +75,7 @@ docker compose stop
 
 # Remove split block log and configuring HAF to use the monolithic one
 rm -f "${REPLAY_DIRECTORY:?}/blockchain/block_log_part."*
-sed -i s/block-log-split = 9999/block-log-split = -1/g "${REPLAY_DIRECTORY:?}/config.ini"
+sed -i 's/block-log-split = 9999/block-log-split = -1/g' "${REPLAY_DIRECTORY:?}/config.ini"
 
 cd "${CI_PROJECT_DIR:?}"
 status=$(docker inspect haf-world-haf-1 --format="{{.State.ExitCode}}")
