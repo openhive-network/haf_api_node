@@ -43,6 +43,7 @@ docker exec haf-world-caddy-1 sh -c "cat /config/caddy/autosave.json" | jq | tee
 echo -e "\e[0Ksection_end:$(date +%s):caddy\r\e[0K"
 
 echo -e "\e[0Ksection_start:$(date +%s):hive_link[collapsed=true]\r\e[0KTesting endpoints... Hive (via container link, simulating CI service)..."
+sleep 300
 docker run --rm --link "haf-world-caddy-1:${PUBLIC_HOSTNAME:?}" --network haf curlimages/curl:8.8.0 -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME:?}/"
 echo -e "\e[0Ksection_end:$(date +%s):hive_link\r\e[0K"
 
