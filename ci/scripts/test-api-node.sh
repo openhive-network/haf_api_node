@@ -24,45 +24,27 @@ echo -e "\e[0Ksection_end:$(date +%s):docker\r\e[0K"
 
 echo -e "\e[0Ksection_start:$(date +%s):haproxy[collapsed=true]\r\e[0KWaiting for certain services to start..."
 
-echo "Waiting for HAF to start..."
-count=0
-until [[ $(docker inspect --format "{{.State.Health.Status}}" haf-world-haf-1) == "healthy" ]]
-do
-    echo "Waiting for HAF to start..."
-    count=$((count+10))
-    [[ $count -eq 600 ]] && exit 1
-    sleep 10s
-done
+function wait-for-service(){
+    local service=$1
+    local format=$2
+    local expected_status=$3
+    echo "Waiting for $service to start..."
+    count=0
+    until [[ $(docker inspect --format "$format" "$service") == "$expected_status" ]]
+    do
+        echo "Waiting for $service to start..."
+        count=$((count+10))
+        [[ $count -eq 600 ]] && exit 1
+        sleep 10s
+    done
+    echo "Done! $service has started successfully."
+}
 
-echo "Waiting for HAfAH to start..."
-count=0
-until [[ $(docker inspect --format "{{.State.Status}}" haf-world-hafah-postgrest-1) == "running" ]]
-do
-    echo "Waiting for HAfAH to start..."
-    count=$((count+10))
-    [[ $count -eq 600 ]] && exit 1
-    sleep 10s
-done
+wait-for-service "haf-world-haf-1" "{{.State.Health.Status}}" "healthy"
+wait-for-service "haf-world-hafah-postgrest-1" "{{.State.Status}}" "running"
+wait-for-service "haf-world-hivemind-server-1" "{{.State.Status}}" "running"
+wait-for-service "haf-world-haproxy-1" "{{.State.Health.Status}}" "healthy"
 
-echo "Waiting for Hivemind to start..."
-count=0
-until [[ $(docker inspect --format "{{.State.Status}}" haf-world-hivemind-server-1) == "running" ]]
-do
-    # echo "Waiting for Hivemind to start..."
-    count=$((count+10))
-    [[ $count -eq 600 ]] && exit 1
-    sleep 10s
-done
-
-echo "Waiting for HAProxy to start..."
-count=0
-until [[ $(docker inspect --format "{{.State.Health.Status}}" haf-world-haproxy-1) == "healthy" ]]
-do
-    echo "Waiting for HAproxy to start..."
-    count=$((count+10))
-    [[ $count -eq 600 ]] && exit 1
-    sleep 10s
-done
 echo -e "\e[0Ksection_end:$(date +%s):haproxy\r\e[0K"
 
 echo -e "\e[0Ksection_start:$(date +%s):haproxy_state[collapsed=true]\r\e[0KChecking HAproxy state..."
@@ -75,7 +57,6 @@ docker exec haf-world-caddy-1 sh -c "cat /config/caddy/autosave.json" | jq | tee
 echo -e "\e[0Ksection_end:$(date +%s):caddy\r\e[0K"
 
 echo -e "\e[0Ksection_start:$(date +%s):hive_link[collapsed=true]\r\e[0KTesting endpoints... Hive (via container link, simulating CI service)..."
-# sleep 300
 docker run --rm --link "haf-world-caddy-1:${PUBLIC_HOSTNAME:?}" --network haf curlimages/curl:8.8.0 -vk -X POST --data '{"jsonrpc":"2.0", "method":"condenser_api.get_block", "params":[1], "id":1}' "https://${PUBLIC_HOSTNAME:?}/"
 echo -e "\e[0Ksection_end:$(date +%s):hive_link\r\e[0K"
 
