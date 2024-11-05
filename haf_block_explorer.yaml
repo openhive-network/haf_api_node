@@ -18,6 +18,8 @@ services:
         condition: service_completed_successfully
       hafah-install:
         condition: service_completed_successfully
+      reputation-tracker-install:
+        condition: service_completed_successfully
   block-explorer-uninstall:
     image: ${HAF_BLOCK_EXPLORER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_block_explorer}:${HAF_BLOCK_EXPLORER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
