@@ -17,7 +17,7 @@ services:
     healthcheck:
       test: wget -q --spider 127.0.0.1:8001 
   haproxy-healthchecks:
-    image: ${HAPROXY_HEALTHCHECKS_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy-healthchecks}:${HAPROXY_HEALTHCHECKS_VERSION:-latest}
+    image: ${HAPROXY_HEALTHCHECKS_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy-healthchecks}:${HAPROXY_HEALTHCHECKS_VERSION:-${HIVE_API_NODE_VERSION}}
     environment:
       POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
       POSTGRES_URL_HAFBE: postgresql://hafbe_user@haf/haf_block_log
