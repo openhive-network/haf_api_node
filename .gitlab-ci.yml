@@ -1,0 +1,23 @@
+stages:
+  - publish
+
+build_exchange_flyway_docker_image:
+  stage: publish
+  variables:
+    DOCKER_BUILDKIT: 1
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: "/certs"
+  image: docker:27.3.1
+  services:
+    - docker:27.3.1-dind
+  script:
+    - "docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY"
+    - "docker login -u $BLOG_REGISTRY_USER -p $BLOG_REGISTRY_PASSWORD registry-upload.hive.blog"
+    - "(cd healthchecks && docker build -t $CI_REGISTRY_IMAGE/haproxy-healthchecks:$CI_COMMIT_TAG -t registry-upload.hive.blog/haf_api_node/haproxy-healthchecks:$CI_COMMIT_TAG .)"
+    - "docker push $CI_REGISTRY_IMAGE/haproxy-healthchecks:$CI_COMMIT_TAG"
+    - "docker push registry-upload.hive.blog/haf_api_node/haproxy-healthchecks:$CI_COMMIT_TAG"
+  tags:
+    - public-runner-docker
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^1\..+$/
+      when: always
