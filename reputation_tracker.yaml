@@ -85,21 +85,12 @@ services:
       haf:
         condition: service_healthy
   reputation-tracker-postgrest-rewriter:
-    image: nginx
+    image: ${REPUTATION_TRACKER_REWRITER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_block_explorer/postgrest-rewriter}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - reputation-tracker-standalone
       - hafbe
       - hivemind
-    volumes:
-      - type: bind
-        source: reputation_tracker/reputation_tracker_nginx.conf
-        target: /etc/nginx/nginx.conf
-        read_only: true
-      - type: bind
-        source: reputation_tracker/rewrite_rules.conf
-        target: /etc/nginx/rewrite_rules.conf
-        read_only: true
     depends_on:
       reputation-tracker-postgrest:
         condition: service_healthy

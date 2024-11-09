@@ -58,20 +58,11 @@ services:
       haf:
         condition: service_healthy
   hafah-postgrest-rewriter:
-    image: openresty/openresty:alpine
+    image: ${HAFAH_REWRITER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah/postgrest-rewriter}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafah
       - hafbe
-    volumes:
-      - type: bind
-        source: hafah_rest/hafah_rest_nginx.conf
-        target: /usr/local/openresty/nginx/conf/nginx.conf
-        read_only: true
-      - type: bind
-        source: hafah_rest/rewrite_rules.conf
-        target: /usr/local/openresty/nginx/conf/rewrite_rules.conf
-        read_only: true
     depends_on:
       hafah-postgrest:
         condition: service_healthy

@@ -83,20 +83,11 @@ services:
       haf:
         condition: service_healthy
   balance-tracker-postgrest-rewriter:
-    image: nginx
+    image: ${BALANCE_TRACKER_REWRITER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker/postgrest-rewriter}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - balance-tracker-standalone
       - hafbe
-    volumes:
-      - type: bind
-        source: balance_tracker/balance_tracker_nginx.conf
-        target: /etc/nginx/nginx.conf
-        read_only: true
-      - type: bind
-        source: balance_tracker/rewrite_rules.conf
-        target: /etc/nginx/rewrite_rules.conf
-        read_only: true
     depends_on:
       balance-tracker-postgrest:
         condition: service_healthy

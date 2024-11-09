@@ -73,19 +73,10 @@ services:
       haf:
         condition: service_healthy
   block-explorer-postgrest-rewriter:
-    image: openresty/openresty:alpine
+    image: ${HAF_BLOCK_EXPLORER_REWRITER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_block_explorer/postgrest-rewriter}:${HAF_BLOCK_EXPLORER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafbe
-    volumes:
-      - type: bind
-        source: haf_block_explorer/haf_block_explorer_nginx.conf
-        target: /usr/local/openresty/nginx/conf/nginx.conf
-        read_only: true
-      - type: bind
-        source: haf_block_explorer/rewrite_rules.conf
-        target: /usr/local/openresty/nginx/conf/rewrite_rules.conf
-        read_only: true
     depends_on:
       block-explorer-postgrest:
         condition: service_healthy
