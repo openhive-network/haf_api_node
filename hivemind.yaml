@@ -20,8 +20,8 @@ services:
     depends_on:
       haf:
         condition: service_healthy
-          #      reputation-tracker-install:
-#        condition: service_completed_successfully
+      reputation-tracker-install-schema:
+        condition: service_completed_successfully
 
   hivemind-server:
     image: ${HIVEMIND_INSTANCE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_INSTANCE_VERSION:-${HIVE_API_NODE_VERSION}}
@@ -55,7 +55,7 @@ services:
     depends_on:
       haf:
         condition: service_healthy
-      reputation-tracker-install:
+      reputation-tracker-install-schema:
         condition: service_completed_successfully
 
   hivemind-uninstall:
