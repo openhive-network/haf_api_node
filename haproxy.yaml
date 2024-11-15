@@ -7,44 +7,20 @@ services:
       SYNC_BROADCAST_BACKEND_SERVER: "${SYNC_BROADCAST_BACKEND_SERVER:-api.hive.blog}"
       SYNC_BROADCAST_BACKEND_PORT: "${SYNC_BROADCAST_BACKEND_PORT:-443}"
       SYNC_BROADCAST_BACKEND_SSL: "${SYNC_BROADCAST_BACKEND_SSL:-ssl}"
-      HAPROXY_EMAIL_FROM: "${HAPROXY_EMAIL_FROM:-}"
-      HAPROXY_EMAIL_TO: "${HAPROXY_EMAIL_FROM:-}"
-      HAPROXY_EMAIL_LEVEL: "${HAPROXY_EMAIL_LEVEL:-notice}"
     volumes:
       - type: bind
         source: ./haproxy/haproxy.cfg
         target: /usr/local/etc/haproxy/haproxy.cfg
         read_only: true
       - type: bind
-        source: ${HAPROXY_MAILER_CONFIG:-./haproxy/mailer.cfg}
+        source: ./haproxy/no-mailer.cfg
         target: /usr/local/etc/haproxy/_mailer.cfg
         read_only: true
     networks:
       - haf-network
     healthcheck:
       test: wget -q --spider 127.0.0.1:8001 
-    depends_on:
-      smtp-relay:
-        condition: service_started
-        required: false
-      haf:
-        condition: service_started
-        required: false
-      balance-tracker-postgrest-rewriter:
-        condition: service_started
-        required: false
-      reputation-tracker-postgrest-rewriter:
-        condition: service_started
-        required: false
-      hafah-postgrest-rewriter:
-        condition: service_started
-        required: false
-      hivemind-server:
-        condition: service_started
-        required: false
-      block-explorer-postgrest-rewriter:
-        condition: service_started
-        required: false
+    command: -W -db -f /usr/local/etc/haproxy
   haproxy-healthchecks:
     image: ${HAPROXY_HEALTHCHECKS_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy-healthchecks}:${HAPROXY_HEALTHCHECKS_VERSION:-${HIVE_API_NODE_VERSION}}
     environment:
@@ -55,21 +31,5 @@ services:
     profiles:
       - servers
       - haproxy-healthchecks
-    networks:
-      - haf-network
-  smtp-relay:
-    profiles:
-      - email
-    image: grafana/smtprelay
-    # When using this service, SMTP_HOST/USER/PASS are required, they're defaulted to empty strings
-    # to keep docker compose from warning when not using this service
-    command:
-      - -hostname=${PUBLIC_HOSTNAME}
-      - -listen=0.0.0.0:25
-      - -allowed_nets= 
-      - -remote_host=${SMTP_HOST:-}
-      - -remote_user=${SMTP_USER:-}
-      - -remote_pass=${SMTP_PASS:-}
-      - -remote_auth=${SMTP_AUTH_TYPE:-plain}
     networks:
       - haf-network

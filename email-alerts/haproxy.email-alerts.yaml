@@ -1,0 +1,33 @@
+services:
+  haproxy:
+    environment:
+      HAPROXY_EMAIL_FROM: "${HAPROXY_EMAIL_FROM:-noreply@${PUBLIC_HOSTNAME}}"
+      HAPROXY_EMAIL_TO: "${HAPROXY_EMAIL_TO}"
+      HAPROXY_EMAIL_LEVEL: "${HAPROXY_EMAIL_LEVEL:-notice}"
+    volumes:
+      # override the file bind-mounted by the haproxy.yaml in the upper-level directory
+      - type: bind
+        source: ../haproxy/mailer.cfg
+        target: /usr/local/etc/haproxy/_mailer.cfg
+        read_only: true
+    # if you've enabled email notifications when services go down, haproxy must wait for
+    # the smtp-relay service to be up before launching, otherwise it will fail
+    depends_on:
+      smtp-relay:
+        condition: service_started
+  smtp-relay:
+    profiles:
+      - servers
+    image: grafana/smtprelay
+    # When using this service, SMTP_HOST/USER/PASS are required, they're defaulted to empty strings
+    # to keep docker compose from warning when not using this service
+    command:
+      - -hostname=${PUBLIC_HOSTNAME}
+      - -listen=0.0.0.0:25
+      - -allowed_nets= 
+      - -remote_host=${SMTP_HOST}
+      - -remote_user=${SMTP_USER}
+      - -remote_pass=${SMTP_PASS}
+      - -remote_auth=${SMTP_AUTH_TYPE:-plain}
+    networks:
+      - haf-network
