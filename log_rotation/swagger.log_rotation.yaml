@@ -1,0 +1,4 @@
+services:
+  swagger:
+    logging:
+      driver: local

@@ -1,0 +1,19 @@
+services:
+  reputation-tracker-uninstall:
+    logging:
+      driver: local
+  reputation-tracker-block-processing:
+    logging:
+      driver: local
+  reputation-tracker-postgrest:
+    logging:
+      driver: local
+  reputation-tracker-postgrest-rewriter:
+    logging:
+      driver: local
+  reputation-tracker-install-schema:
+    logging:
+      driver: local
+  reputation-tracker-install-indexes:
+    logging:
+      driver: local

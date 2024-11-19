@@ -2,10 +2,13 @@ include:
   - log_rotation/backend.log_rotation.yaml
   - log_rotation/balance_tracker.log_rotation.yaml
   - log_rotation/caddy.log_rotation.yaml
-  - log_rotation/${JSONRPC_API_SERVER_NAME:-jussi}.log_rotation.yaml
+  - log_rotation/${JSONRPC_API_SERVER_NAME:-drone}.log_rotation.yaml
   - log_rotation/haf_base.log_rotation.yaml
   - log_rotation/haf_block_explorer.log_rotation.yaml
   - log_rotation/hafah.log_rotation.yaml
   - log_rotation/haproxy.log_rotation.yaml
   - log_rotation/hivemind.log_rotation.yaml
   - log_rotation/varnish.log_rotation.yaml
+  - log_rotation/monitoring.log_rotation.yaml
+  - log_rotation/reputation_tracker.log_rotation.yaml
+  - log_rotation/swagger.log_rotation.yaml

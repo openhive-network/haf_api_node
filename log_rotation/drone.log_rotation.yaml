@@ -3,5 +3,5 @@ services:
     logging:
       driver: local
       options:
-        max-size: "1000m"
+        max-size: 1000m
         max-file: 50

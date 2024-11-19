@@ -11,6 +11,6 @@ services:
   balance-tracker-postgrest:
     logging:
       driver: local
-  balance-tracker-swagger:
+  balance-tracker-postgrest-rewriter:
     logging:
       driver: local

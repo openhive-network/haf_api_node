@@ -1,0 +1,28 @@
+services:
+  prometheus:
+    logging:
+      driver: local
+  grafana:
+    logging:
+      driver: local
+  cadvisor:
+    logging:
+      driver: local
+  blackboxexporter:
+    logging:
+      driver: local
+  postgresexporter:
+    logging:
+      driver: local
+  promtail:
+    logging:
+      driver: local
+  hived-pme:
+    logging:
+      driver: local
+  nodeexporter:
+    logging:
+      driver: local
+  loki:
+    logging:
+      driver: local
