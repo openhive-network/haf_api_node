@@ -3,7 +3,7 @@ services:
     logging:
       driver: local
       options:
-        max-size: "100m"
+        max-size: 100m
         max-file: 10
   hafah-benchmarks-old-style:
     logging:
@@ -12,5 +12,8 @@ services:
     logging:
       driver: local
   hafah-uninstall:
+    logging:
+      driver: local
+  hafah-postgrest-rewriter:
     logging:
       driver: local

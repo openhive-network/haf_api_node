@@ -3,13 +3,13 @@ services:
     logging:
       driver: local
       options:
-        max-size: "100m"
+        max-size: 100m
         max-file: 10
   hivemind-server:
     logging:
       driver: local
       options:
-        max-size: "100m"
+        max-size: 100m
         max-file: 10
   hivemind-install:
     logging:
