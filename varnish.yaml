@@ -1,6 +1,6 @@
 services:
   varnish:
-    image: varnish:7.3.0-alpine
+    image: varnish:7.6.1-alpine
     profiles:
       - servers
     volumes:

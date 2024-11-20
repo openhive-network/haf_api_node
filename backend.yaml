@@ -1,6 +1,6 @@
 services:
   pghero:
-    image: ankane/pghero:v3.3.3
+    image: ankane/pghero:v3.6.1
     profiles:
       - admin
     environment:
@@ -14,7 +14,7 @@ services:
         condition: service_healthy
 
   pgadmin:
-    image: dpage/pgadmin4:${PGADMIN_VERSION:-8.12}
+    image: dpage/pgadmin4:${PGADMIN_VERSION:-8.13}
     profiles:
       - admin
     environment:
