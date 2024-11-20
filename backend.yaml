@@ -6,6 +6,12 @@ services:
     environment:
       DATABASE_URL: postgres://pghero@haf:5432/haf_block_log
       RAILS_RELATIVE_URL_ROOT: /admin/pghero
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8080 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - haf-network
     init: true
@@ -20,6 +26,12 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: "admin@haf.world"
       PGADMIN_DEFAULT_PASSWORD: "admin"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1/misc/ping || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
     networks:
       - haf-network
     init: true

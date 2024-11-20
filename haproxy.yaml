@@ -28,6 +28,12 @@ services:
       POSTGRES_URL_HAFBE: postgresql://hafbe_user@haf/haf_block_log
       POSTGRES_URL_BTRACKER: postgresql://btracker_user@haf/haf_block_log
       POSTGRES_URL_REPTRACKER: postgresql://reptracker_user@haf/haf_block_log
+    healthcheck:
+      test: ["CMD-SHELL", "/healthcheck_healthcheck.sh || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
     profiles:
       - servers
       - haproxy-healthchecks
