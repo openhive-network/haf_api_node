@@ -10,6 +10,7 @@ COPY checks/hafah.sh /checks/hafah.sh
 COPY checks/hafbe.sh /checks/hafbe.sh
 COPY checks/format_seconds.sh /checks/format_seconds.sh
 COPY checks/check_haf_lib.sh /checks/check_haf_lib.sh
+COPY healthcheck_healthcheck.sh /
 COPY docker_entrypoint.sh /
 
 ENTRYPOINT ["/docker_entrypoint.sh"]

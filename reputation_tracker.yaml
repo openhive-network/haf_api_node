@@ -112,6 +112,12 @@ services:
       - reputation-tracker-standalone
       - hafbe
       - hivemind
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
     depends_on:
       reputation-tracker-postgrest:
         condition: service_healthy
