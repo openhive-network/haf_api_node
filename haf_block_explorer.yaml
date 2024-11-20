@@ -1,5 +1,5 @@
 services:
-  block-explorer-install:
+  block-explorer-install-schema:
     image: ${HAF_BLOCK_EXPLORER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_block_explorer}:${HAF_BLOCK_EXPLORER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
@@ -9,6 +9,7 @@ services:
     command:
       - install_app
       - --swagger-url=${PUBLIC_HOSTNAME}
+      - --schema-only
     networks:
       haf-network:
     depends_on:
@@ -19,6 +20,30 @@ services:
       hafah-install:
         condition: service_completed_successfully
       reputation-tracker-install-schema:
+        condition: service_completed_successfully
+  block-explorer-install-indexes:
+    image: ${HAF_BLOCK_EXPLORER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_block_explorer}:${HAF_BLOCK_EXPLORER_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - apps
+      - hafbe
+    environment:
+      POSTGRES_HOST: haf
+    command:
+      - install_app
+      - --swagger-url=${PUBLIC_HOSTNAME}
+      - --indexes-only
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+      block-explorer-install-schema:
+        condition: service_completed_successfully
+      balance-tracker-install:
+        condition: service_completed_successfully
+      hafah-install:
+        condition: service_completed_successfully
+      reputation-tracker-install-indexes:
         condition: service_completed_successfully
   block-explorer-uninstall:
     image: ${HAF_BLOCK_EXPLORER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_block_explorer}:${HAF_BLOCK_EXPLORER_VERSION:-${HIVE_API_NODE_VERSION}}
@@ -68,7 +93,7 @@ services:
       retries: 3
       start_period: 48h
     depends_on:
-      block-explorer-install:
+      block-explorer-install-schema:
         condition: service_completed_successfully
       haf:
         condition: service_healthy
@@ -82,7 +107,6 @@ services:
         condition: service_healthy
     networks:
       - haf-network
-
   block-explorer-postgrest:
     image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
@@ -107,7 +131,7 @@ services:
       retries: 10
       start_period: 1m
     depends_on:
-      block-explorer-install:
+      block-explorer-install-schema:
         condition: service_completed_successfully
       haf:
         condition: service_healthy

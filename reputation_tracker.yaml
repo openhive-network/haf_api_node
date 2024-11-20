@@ -106,7 +106,7 @@ services:
       haf:
         condition: service_healthy
   reputation-tracker-postgrest-rewriter:
-    image: ${REPUTATION_TRACKER_REWRITER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_block_explorer/postgrest-rewriter}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${REPUTATION_TRACKER_REWRITER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker/postgrest-rewriter}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - reputation-tracker-standalone

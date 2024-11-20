@@ -1,7 +1,7 @@
 stages:
   - publish
 
-build_exchange_flyway_docker_image:
+build_haproxy_healthchecks_docker_image:
   stage: publish
   variables:
     DOCKER_BUILDKIT: 1

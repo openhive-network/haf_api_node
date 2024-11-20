@@ -5,9 +5,6 @@ services:
       options:
         max-size: 100m
         max-file: 10
-  block-explorer-install:
-    logging:
-      driver: local
   block-explorer-postgrest:
     logging:
       driver: local
@@ -21,5 +18,11 @@ services:
     logging:
       driver: local
   block-explorer-postgrest-rewriter:
+    logging:
+      driver: local
+  block-explorer-install-schema:
+    logging:
+      driver: local
+  block-explorer-install-indexes:
     logging:
       driver: local
