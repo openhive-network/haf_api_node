@@ -1,6 +1,6 @@
 services:
   drone:
-    image: ${DRONE_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/drone}:${DRONE_VERSION:-latest}
+    image: ${DRONE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/drone}:${DRONE_VERSION:-latest}
     profiles:
       - servers
     environment:

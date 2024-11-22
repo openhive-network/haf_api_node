@@ -1,6 +1,6 @@
 services:
   balance-tracker-install:
-    image: ${BALANCE_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${BALANCE_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafbe
@@ -17,7 +17,7 @@ services:
       haf:
         condition: service_healthy
   balance-tracker-uninstall:
-    image: ${BALANCE_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${BALANCE_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - balance-tracker-uninstall
     environment:
@@ -31,7 +31,7 @@ services:
       haf:
         condition: service_healthy
   balance-tracker-block-processing:
-    image: ${BALANCE_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${BALANCE_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - balance-tracker-standalone
     environment:
@@ -54,7 +54,7 @@ services:
       haf:
         condition: service_healthy
   balance-tracker-postgrest:
-    image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
+    image: ${POSTGREST_IMAGE:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
       - balance-tracker-standalone
@@ -83,7 +83,7 @@ services:
       haf:
         condition: service_healthy
   balance-tracker-postgrest-rewriter:
-    image: ${BALANCE_TRACKER_REWRITER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker/postgrest-rewriter}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${BALANCE_TRACKER_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker/postgrest-rewriter}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - balance-tracker-standalone

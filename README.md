@@ -271,7 +271,7 @@ The Hivemind data is now gone.
 If you're uninstalling Hivemind permanently, then remember to remove the `hivemind` profile from your `.env` file's `COMPOSE_PROFILES` line so it doesn't start automatically next time you do a `docker compose up -d`.
 
 If you're upgrading to a new version of hivemind:
-- if you're upgrading to a pre-release version, you'll need to set `HIVEMIND_INSTANCE_VERSION` in your `.env` file to the correct tag for the version you want to run.  If you're just upgrading to a new release version (the ones tagged `haf_api_node`), you can leave this alone.
+- if you're upgrading to a pre-release version, you'll need to set `HIVEMIND_VERSION` in your `.env` file to the correct tag for the version you want to run.  If you're just upgrading to a new release version (the ones tagged `haf_api_node`), you can leave this alone.
 - run `docker compose pull` to grab the new version
 - run `docker compose up -d` to bring up all services.  This should run hivemind's install, then launch the block processing container.
 - you can monitor Hivemind's sync process by watching the logs from `docker compose logs -f hivemind-block-processing`.  In a few short days, your Hivemind app should be fully synced and ready to handle API requests.

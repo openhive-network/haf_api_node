@@ -1,6 +1,6 @@
 services:
   hafah-install:
-    image: ${HAFAH_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HAFAH_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafah
@@ -17,7 +17,7 @@ services:
       haf:
         condition: service_healthy
   hafah-uninstall:
-    image: ${HAFAH_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HAFAH_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - hafah-uninstall
     environment:
@@ -30,7 +30,7 @@ services:
       haf:
         condition: service_healthy
   hafah-postgrest:
-    image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
+    image: ${POSTGREST_IMAGE:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
       - hafah
@@ -58,7 +58,7 @@ services:
       haf:
         condition: service_healthy
   hafah-postgrest-rewriter:
-    image: ${HAFAH_REWRITER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah/postgrest-rewriter}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HAFAH_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafah/postgrest-rewriter}:${HAFAH_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafah

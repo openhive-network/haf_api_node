@@ -1,6 +1,6 @@
 services:
   haproxy:
-    image: ${HAPROXY_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy}:${HAPROXY_VERSION:-latest}
+    image: ${HAPROXY_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy}:${HAPROXY_VERSION:-latest}
     profiles:
       - servers
     environment:
@@ -22,7 +22,7 @@ services:
       test: wget -q --spider 127.0.0.1:8001 
     command: -W -db -f /usr/local/etc/haproxy
   haproxy-healthchecks:
-    image: ${HAPROXY_HEALTHCHECKS_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy-healthchecks}:${HAPROXY_HEALTHCHECKS_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HAPROXY_HEALTHCHECKS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy-healthchecks}:${HAPROXY_HEALTHCHECKS_VERSION:-${HIVE_API_NODE_VERSION}}
     environment:
       POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
       POSTGRES_URL_HAFBE: postgresql://hafbe_user@haf/haf_block_log

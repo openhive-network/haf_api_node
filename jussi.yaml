@@ -13,7 +13,7 @@ services:
     networks:
       - haf-network
   jussi:
-    image: ${JUSSI_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/jussi}:${JUSSI_VERSION:-latest}
+    image: ${JUSSI_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/jussi}:${JUSSI_VERSION:-latest}
     profiles:
       - servers
     environment:

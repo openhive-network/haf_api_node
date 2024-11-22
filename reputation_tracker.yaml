@@ -1,6 +1,6 @@
 services:
   reputation-tracker-install-schema:
-    image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${REPUTATION_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafbe
@@ -18,7 +18,7 @@ services:
       haf:
         condition: service_healthy
   reputation-tracker-install-indexes:
-    image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${REPUTATION_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafbe
@@ -38,7 +38,7 @@ services:
       reputation-tracker-install-schema:
         condition: service_completed_successfully
   reputation-tracker-uninstall:
-    image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${REPUTATION_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - reputation-tracker-uninstall
     environment:
@@ -51,7 +51,7 @@ services:
       haf:
         condition: service_healthy
   reputation-tracker-block-processing:
-    image: ${REPUTATION_TRACKER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${REPUTATION_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafbe
@@ -76,7 +76,7 @@ services:
       haf:
         condition: service_healthy
   reputation-tracker-postgrest:
-    image: ${POSTGREST_REGISTRY:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
+    image: ${POSTGREST_IMAGE:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
       - hivemind
@@ -106,7 +106,7 @@ services:
       haf:
         condition: service_healthy
   reputation-tracker-postgrest-rewriter:
-    image: ${REPUTATION_TRACKER_REWRITER_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker/postgrest-rewriter}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${REPUTATION_TRACKER_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker/postgrest-rewriter}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - reputation-tracker-standalone

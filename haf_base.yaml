@@ -3,7 +3,7 @@ services:
     profiles:
       - core
       - block-explorer-uninstall
-    image: ${HAF_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf}:${HAF_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HAF_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf}:${HAF_VERSION:-${HIVE_API_NODE_VERSION}}
     networks:
       - haf-network
     tty: true
@@ -109,7 +109,7 @@ services:
       retries: 10
       start_period: 72h
   logrotate:
-    image: ${LOGROTATE_REGISTRY:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/logrotate}:${LOGROTATE_VERSION:-latest}
+    image: ${LOGROTATE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/logrotate}:${LOGROTATE_VERSION:-latest}
     profiles:
       - logrotate
     init: true
