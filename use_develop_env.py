@@ -64,5 +64,6 @@ if __name__ == "__main__":
     import sys
     if len(sys.argv) != 2:
         print("Usage: python use_develop_env.py <directory>")
+        print("This script updates the .env file in the haf_api_node repository with the short git hashes of other repositories in the specified directory.")
     else:
         main(sys.argv[1])

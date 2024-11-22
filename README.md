@@ -275,3 +275,68 @@ If you're upgrading to a new version of hivemind:
 - run `docker compose pull` to grab the new version
 - run `docker compose up -d` to bring up all services.  This should run hivemind's install, then launch the block processing container.
 - you can monitor Hivemind's sync process by watching the logs from `docker compose logs -f hivemind-block-processing`.  In a few short days, your Hivemind app should be fully synced and ready to handle API requests.
+
+# Scripts in the haf_api_node Directory
+
+## use_develop_env.py
+This script updates the `.env` file in the `haf_api_node` repository with the short git hashes of other repositories in the specified directory. It scans the given directory for git repositories, retrieves their remote URLs and short git hashes, and updates the `.env` file accordingly.
+
+Usage:
+```
+python3 use_develop_env.py <path_to_directory>
+```
+
+## make_ramdisk.sh
+This script creates a ramdisk and mounts it to the `/mnt/haf_shared_mem` directory. It sets the size of the ramdisk to 26GB and changes the permissions to allow read/write access for all users.
+
+Usage:
+```
+sudo ./make_ramdisk.sh
+```
+
+## clone_zfs_datasets.sh
+This script clones an existing ZFS dataset to create a new dataset. It is useful for creating backups or duplicating datasets for testing purposes. The script takes the source dataset and the target dataset as arguments and performs the cloning operation.
+
+Usage:
+```
+sudo ./clone_zfs_datasets.sh <source_dataset> <target_dataset>
+```
+Example:
+```markdown
+sudo ./clone_zfs_datasets.sh haf-pool/haf-datadir haf-pool/haf-datadir-test-upgrade
+```
+
+## snapshot_zfs_datasets.sh
+This script creates a ZFS snapshot of the HAF datasets. It unmounts the datasets, takes a snapshot, and then remounts them. It also provides options for handling log files during the snapshot process.
+
+Usage:
+```
+sudo ./snapshot_zfs_datasets.sh [--env-file=filename] [--public-snapshot] [--temp-dir=dir] [--swap-logs-with-dataset=dataset] snapshot-name
+```
+Options:
+- `--env-file=filename`: Specify the environment file to use.
+- `--public-snapshot`: Move log files to /tmp before taking the snapshot, then restore them afterwards.
+- `--temp-dir=dir`: Use a different temp directory (use if /tmp isn't big enough).
+- `--swap-logs-with-dataset=dataset`: Swap the logs dataset with an empty dataset before taking the snapshot, then swap back afterwards.
+
+Example:
+```
+sudo ./snapshot_zfs_datasets.sh 20231023T1831Z-haf-only
+```
+
+## rollback_zfs_datasets.sh
+This script rolls back ZFS datasets to a specified snapshot. It unmounts the datasets, rolls them back to the named snapshot, and then remounts them. This process will result in the loss of all data on those datasets since the snapshot.
+
+Usage:
+```
+sudo ./rollback_zfs_datasets.sh [--env-file=filename] [--zpool=zpool_name] [--top-level-dataset=dataset_name] snapshot-name
+```
+Options:
+- `--env-file=filename`: Specify the environment file to use.
+- `--zpool=zpool_name`: Specify the ZFS pool name.
+- `--top-level-dataset=dataset_name`: Specify the top-level dataset name.
+
+Example:
+```
+sudo ./rollback_zfs_datasets.sh --env-file=.env --zpool=haf-pool --top-level-dataset=haf-datadir snapshot_name
+```
