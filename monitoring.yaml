@@ -142,10 +142,12 @@ services:
       org.label-schema.group: "monitoring"
 
   postgresexporter:
-    image: quay.io/prometheuscommunity/postgres-exporter
+    image: quay.io/prometheuscommunity/postgres-exporter:${POSTGRESEXPORTER_VERSION:-v0.16.0}
     profiles:
       - monitoring
     restart: unless-stopped
+    command:
+      - --no-collector.stat_bgwriter
     expose:
       - 9187
     depends_on:
