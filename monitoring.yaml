@@ -82,7 +82,7 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3003:3000"
     networks:
       - haf-network
     labels:
@@ -146,6 +146,8 @@ services:
     profiles:
       - monitoring
     restart: unless-stopped
+    command:
+      - --no-collector.stat_bgwriter
     expose:
       - 9187
     depends_on:
