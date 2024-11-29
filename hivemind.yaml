@@ -39,6 +39,29 @@ services:
       haf:
         condition: service_healthy
 
+
+  hivemind-postgrest-server:
+    image: ${HIVEMIND_INSTANCE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_INSTANCE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - apps
+      - hivemind
+    networks:
+      haf-network:
+    environment:
+      PGRST_DB_PLAN_ENABLED: true
+      #PGRST_DB_ROOT_SPEC: home
+      PGRST_OPENAPI_MODE: "disabled"
+      PGRST_DB_POOL: 20
+    command:
+      - "postgrest-server"
+      - "--postgres-url=postgresql://hivemind@haf/haf_block_log?application_name=hive-mind-postgrest" #warning hivemind improperly matches all connections starting from `hivemind` and crashes if they are made externally (not from python)
+      - "--webserver-port=8080"
+    depends_on:
+      hivemind-block-processing:
+        condition: service_healthy
+      haf:
+        condition: service_healthy
+
   # note: the hivemind-install steps, which create/update the hivemind database schema, are also run automatically at the beginning
   # of the hivemind-block-processing image's startup.  There is normally no reason to run this step separately.  If you do,
   # be sure that the hivemind block-processor is not running at the same time as this install script, as doing so may corrupt your
@@ -57,6 +80,23 @@ services:
         condition: service_healthy
       reputation-tracker-install:
         condition: service_completed_successfully
+
+  hivemind-postgrest-rewriter:
+    image: ${HIVEMIND_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind/postgrest-rewriter}:${HIVEMIND_INSTANCE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - apps
+      - hivemind
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
+    depends_on:
+      hivemind-postgrest-server:
+        condition: service_started # TODO ADD HC TO POSTGREST-SERVER
+    networks:
+      - haf-network
 
   hivemind-uninstall:
     image: ${HIVEMIND_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_VERSION:-${HIVE_API_NODE_VERSION}}
