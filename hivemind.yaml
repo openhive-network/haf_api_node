@@ -23,39 +23,31 @@ services:
       reputation-tracker-install:
         condition: service_completed_successfully
 
-  hivemind-server:
-    image: ${HIVEMIND_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_VERSION:-${HIVE_API_NODE_VERSION}}
-    profiles:
-      - apps
-      - hivemind
-    networks:
-      haf-network:
-    command:
-      - "--database-url=postgresql://hivemind@haf/haf_block_log"
-      - "server"
-    depends_on:
-      hivemind-block-processing:
-        condition: service_healthy
-      haf:
-        condition: service_healthy
-
-
   hivemind-postgrest-server:
-    image: ${HIVEMIND_INSTANCE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_INSTANCE_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${POSTGREST_IMAGE:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
     profiles:
       - apps
       - hivemind
     networks:
       haf-network:
     environment:
-      PGRST_DB_PLAN_ENABLED: true
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_SERVER_PORT: 8080
+      PGRST_DB_URI: "postgresql://hivemind@haf/haf_block_log?application_name=hive-mind-postgrest" #warning hivemind improperly matches all connections starting from `hivemind` and crashes if they are made externally (not from python)
+      PGRST_DB_SCHEMA: hivemind_endpoints
       #PGRST_DB_ROOT_SPEC: home
-      PGRST_OPENAPI_MODE: "disabled"
+      PGRST_DB_ANON_ROLE: hivemind
       PGRST_DB_POOL: 20
-    command:
-      - "postgrest-server"
-      - "--postgres-url=postgresql://hivemind@haf/haf_block_log?application_name=hive-mind-postgrest" #warning hivemind improperly matches all connections starting from `hivemind` and crashes if they are made externally (not from python)
-      - "--webserver-port=8080"
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+      PGRST_OPENAPI_MODE: "disabled" # unclear why this is set, I guess because we currently only support json-rpc?
+      # when debugging, you can enable this
+      PGRST_DB_PLAN_ENABLED: true
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
     depends_on:
       hivemind-block-processing:
         condition: service_healthy
@@ -82,7 +74,7 @@ services:
         condition: service_completed_successfully
 
   hivemind-postgrest-rewriter:
-    image: ${HIVEMIND_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind/postgrest-rewriter}:${HIVEMIND_INSTANCE_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HIVEMIND_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind/postgrest-rewriter}:${HIVEMIND_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hivemind
@@ -94,7 +86,7 @@ services:
       start_period: 1m
     depends_on:
       hivemind-postgrest-server:
-        condition: service_started # TODO ADD HC TO POSTGREST-SERVER
+        condition: service_healthy
     networks:
       - haf-network
 
