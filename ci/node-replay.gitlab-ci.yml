@@ -4,6 +4,7 @@ variables:
 .api-node-job:
   extends: .job-defaults
   variables:
+    HIVE_API_NODE_VERSION: "1.27.6rc9"
     HAF_VERSION: "1.27.6rc9"
     HIVEMIND_VERSION: "1.27.6rc9"
     HAFAH_VERSION: "1.27.6rc9"
