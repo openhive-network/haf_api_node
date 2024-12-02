@@ -5,7 +5,7 @@ variables:
   extends: .job-defaults
   variables:
     HAF_VERSION: "1.27.6rc9"
-    HIVEMIND_INSTANCE_VERSION: "1.27.6rc9"
+    HIVEMIND_VERSION: "1.27.6rc9"
     HAFAH_VERSION: "1.27.6rc9"
     REPUTATION_TRACKER_VERSION: "1.27.6rc9"
     HIVE_API_NODE_REGISTRY: "registry.gitlab.syncad.com/hive"
