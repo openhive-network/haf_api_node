@@ -26,10 +26,6 @@ COPY caddy/self-signed.snippet caddy/self-signed.snippet
 COPY drone/config.json drone/config.json
 COPY drone/config.yaml drone/config.yaml
 COPY drone/nginx.conf drone/nginx.conf
-COPY haf_block_explorer/haf_block_explorer_nginx.conf haf_block_explorer/haf_block_explorer_nginx.conf
-COPY haf_block_explorer/rewrite_rules.conf haf_block_explorer/rewrite_rules.conf
-COPY hafah_rest/hafah_rest_nginx.conf hafah_rest/hafah_rest_nginx.conf
-COPY hafah_rest/rewrite_rules.conf hafah_rest/rewrite_rules.conf
 COPY haproxy/haproxy-alternate.cfg haproxy/haproxy-alternate.cfg
 COPY haproxy/haproxy.cfg haproxy/haproxy.cfg
 COPY haproxy/no-mailer.cfg haproxy/no-mailer.cfg
