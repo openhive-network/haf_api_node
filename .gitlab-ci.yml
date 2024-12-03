@@ -66,16 +66,16 @@ docker-build:
   script:
     - |
       echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking Docker images..."
-      function image-exists() {
-        local image=$1
-        docker manifest inspect "$image" > /dev/null
-        return $?
-      }
-      if image-exists "${CI_REGISTRY_IMAGE}/compose:${TAG}" && image-exists "${CI_REGISTRY_IMAGE}/dind:${TAG}"
-      then
-          echo "Images ${CI_REGISTRY_IMAGE}/compose:${TAG} and ${CI_REGISTRY_IMAGE}/dind:${TAG} already exist. Skipping build..."
-          exit 0
-      fi
+      # function image-exists() {
+      #   local image=$1
+      #   docker manifest inspect "$image" > /dev/null
+      #   return $?
+      # }
+      # if image-exists "${CI_REGISTRY_IMAGE}/compose:${TAG}" && image-exists "${CI_REGISTRY_IMAGE}/dind:${TAG}"
+      # then
+      #     echo "Images ${CI_REGISTRY_IMAGE}/compose:${TAG} and ${CI_REGISTRY_IMAGE}/dind:${TAG} already exist. Skipping build..."
+      #     exit 0
+      # fi
       docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "ci"
       echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
   tags:
