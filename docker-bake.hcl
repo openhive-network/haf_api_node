@@ -29,7 +29,7 @@ group "ci" {
 target "compose" {
   dockerfile = "ci/compose/Dockerfile"
   tags = [
-    "${registry-name("compose", "")}:${TAG}".
+    "${registry-name("compose", "")}:${TAG}",
     notempty(CI_COMMIT_TAG) ? "${registry-name("compose", "")}:${CI_COMMIT_TAG}": ""
   ]
   cache-to = [
