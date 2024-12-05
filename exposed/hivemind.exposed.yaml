@@ -1,4 +1,12 @@
 services:
+  # When we want to benchmark the old hivemind server against the new, you can use this
+  # to expose it on a different port from the postgrest version.  For everyone else,
+  # it's not needed at all.  This should be removed once we remove the config for the 
+  # python version of the server.
+  #
+  # hivemind-server:
+  #   ports:
+  #     - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_PORT_PREFIX:-3}7002:8080"
   hivemind-postgrest-rewriter:
     ports:
       - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_PORT_PREFIX:-1}7002:80"
