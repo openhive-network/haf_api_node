@@ -23,6 +23,3 @@ services:
   block-explorer-install-schema:
     logging:
       driver: local
-  block-explorer-install-indexes:
-    logging:
-      driver: local

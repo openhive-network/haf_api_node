@@ -13,30 +13,9 @@ services:
     command:
       - install_app
       - --swagger-url=${PUBLIC_HOSTNAME}
-      - --schema-only
     depends_on:
       haf:
         condition: service_healthy
-  reputation-tracker-install-indexes:
-    image: ${REPUTATION_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
-    profiles:
-      - apps
-      - hafbe
-      - hivemind
-      - reputation-tracker-setup
-    environment:
-      POSTGRES_HOST: haf
-    networks:
-      haf-network:
-    command:
-      - install_app
-      - --swagger-url=${PUBLIC_HOSTNAME}
-      - --indexes-only
-    depends_on:
-      haf:
-        condition: service_healthy
-      reputation-tracker-install-schema:
-        condition: service_completed_successfully
   reputation-tracker-uninstall:
     image: ${REPUTATION_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -71,7 +50,7 @@ services:
       retries: 3
       start_period: 48h
     depends_on:
-      reputation-tracker-install-indexes:
+      reputation-tracker-install-schema:
         condition: service_completed_successfully
       haf:
         condition: service_healthy

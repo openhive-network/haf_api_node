@@ -28,7 +28,7 @@ services:
         host    haf_block_log    btracker_user    ${COMPOSE_PROJECT_NAME}-balance-tracker-postgrest-1.${NETWORK_NAME}           trust\n
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-reputation-tracker-install-schema-1.${NETWORK_NAME}   trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-reputation-tracker-install-indexes-1.${NETWORK_NAME}  trust\n
+
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-reputation-tracker-uninstall-1.${NETWORK_NAME}        trust\n
         host    haf_block_log    reptracker_owner ${COMPOSE_PROJECT_NAME}-reputation-tracker-block-processing-1.${NETWORK_NAME} trust\n
         host    haf_block_log    reptracker_user  ${COMPOSE_PROJECT_NAME}-reputation-tracker-postgrest-1.${NETWORK_NAME}        trust\n
@@ -40,8 +40,6 @@ services:
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-schema-1.${NETWORK_NAME}       trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-install-schema-1.${NETWORK_NAME}       trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-indexes-1.${NETWORK_NAME}      trust\n
-        host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-install-indexes-1.${NETWORK_NAME}      trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-balance-tracker-1.${NETWORK_NAME}           trust\n
