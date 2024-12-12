@@ -1,32 +1,37 @@
+# Note, most of the services in this file are only used in the uncommon case where
+# the node is running Balance Tracker standalone.  Balance Tracker is typically
+# run as part of HAF Block Explorer, and the services related to that usage are
+# in haf_block_explorer.yaml.
+# The exception is the postgrest server & rewriter.  Those are shared between the two
 services:
   balance-tracker-install:
     image: ${BALANCE_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
-      - apps
-      - hafbe
-      - balance-tracker-setup
+      - balance-tracker-standalone
     environment:
       POSTGRES_HOST: haf
     networks:
       haf-network:
     command:
       - install_app
-      - --schema=${BTRACKER_SCHEMA:-hafbe_bal}
+      - --schema=btracker_app
       - --swagger-url=${PUBLIC_HOSTNAME}
     depends_on:
       haf:
         condition: service_healthy
+  # to uninstall Balance Tracker (standalone), shut down the stack and run a command like:
+  #   docker compose --profile core --profile balance-tracker-standalone-uninstall up -d
   balance-tracker-uninstall:
     image: ${BALANCE_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
-      - balance-tracker-uninstall
+      - balance-tracker-standalone-uninstall
     environment:
       POSTGRES_HOST: haf
     networks:
       haf-network:
     command:
       - uninstall_app
-      - --schema=${BTRACKER_SCHEMA:-hafbe_bal}
+      - --schema=btracker_app
     depends_on:
       haf:
         condition: service_healthy
@@ -41,7 +46,7 @@ services:
       haf-network:
     command:
       - process_blocks
-      - --schema=${BTRACKER_SCHEMA:-hafbe_bal}
+      - --schema=btracker_app
     healthcheck:
       test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
       interval: 60s
@@ -80,6 +85,10 @@ services:
     depends_on:
       balance-tracker-install:
         condition: service_completed_successfully
+        required: false # allow this service to be missing (when only running hafbe)
+      block-explorer-install-balance-tracker:
+        condition: service_completed_successfully
+        required: false # allow this service to be missing (when only running standalone)
       haf:
         condition: service_healthy
   balance-tracker-postgrest-rewriter:

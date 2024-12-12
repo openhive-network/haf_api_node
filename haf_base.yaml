@@ -43,6 +43,7 @@ services:
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-balance-tracker-1.${NETWORK_NAME}           trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-balance-tracker-1.${NETWORK_NAME}             trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-reputation-tracker-1.${NETWORK_NAME}        trust\n
 
 

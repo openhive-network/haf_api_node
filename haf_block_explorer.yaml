@@ -14,12 +14,14 @@ services:
     depends_on:
       haf:
         condition: service_healthy
-      balance-tracker-install:
+      block-explorer-install-balance-tracker:
         condition: service_completed_successfully
       hafah-install:
         condition: service_completed_successfully
       reputation-tracker-install:
         condition: service_completed_successfully
+  # to uninstall HAF Block Explorer, shut down the stack and run a command like:
+  #   docker compose --profile core --profile block-explorer-uninstall up -d
   block-explorer-uninstall:
     image: ${HAF_BLOCK_EXPLORER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_block_explorer}:${HAF_BLOCK_EXPLORER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -33,6 +35,22 @@ services:
     depends_on:
       haf:
         condition: service_healthy
+  block-explorer-install-balance-tracker:
+    image: ${BALANCE_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - apps
+      - hafbe
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    command:
+      - install_app
+      - --schema=hafbe_bal
+      - --swagger-url=${PUBLIC_HOSTNAME}
+    depends_on:
+      haf:
+        condition: service_healthy
   block-explorer-uninstall-balance-tracker:
     image: ${BALANCE_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -43,6 +61,7 @@ services:
       haf-network:
     command:
       - uninstall_app
+      - --schema=hafbe_bal
     depends_on:
       block-explorer-uninstall:
         condition: service_completed_successfully
@@ -100,7 +119,7 @@ services:
       PGRST_DB_POOL: 20
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_DB_ROOT_SPEC: root
-      PGRST_DB_EXTRA_SEARCH_PATH: ${BTRACKER_SCHEMA:-hafbe_bal}, ${REPTRACKER_SCHEMA:-reptracker_app}
+      PGRST_DB_EXTRA_SEARCH_PATH: hafbe_bal, reptracker_app
       # PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/hafbe_api/
     networks:
       haf-network:
