@@ -27,7 +27,7 @@ services:
         host    haf_block_log    btracker_owner   ${COMPOSE_PROJECT_NAME}-balance-tracker-block-processing-1.${NETWORK_NAME}    trust\n
         host    haf_block_log    btracker_user    ${COMPOSE_PROJECT_NAME}-balance-tracker-postgrest-1.${NETWORK_NAME}           trust\n
 
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-reputation-tracker-install-schema-1.${NETWORK_NAME}   trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-reputation-tracker-install-1.${NETWORK_NAME}   trust\n
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-reputation-tracker-uninstall-1.${NETWORK_NAME}        trust\n
         host    haf_block_log    reptracker_owner ${COMPOSE_PROJECT_NAME}-reputation-tracker-block-processing-1.${NETWORK_NAME} trust\n

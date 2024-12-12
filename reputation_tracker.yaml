@@ -1,11 +1,11 @@
 services:
-  reputation-tracker-install-schema:
+  reputation-tracker-install:
     image: ${REPUTATION_TRACKER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
       - hafbe
       - hivemind
-      - reputation-tracker-setup
+      - reputation-tracker
     environment:
       POSTGRES_HOST: haf
     networks:
@@ -35,7 +35,7 @@ services:
       - apps
       - hafbe
       - hivemind
-      - reputation-tracker-standalone
+      - reputation-tracker
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: reptracker_owner
@@ -50,7 +50,7 @@ services:
       retries: 3
       start_period: 48h
     depends_on:
-      reputation-tracker-install-schema:
+      reputation-tracker-install:
         condition: service_completed_successfully
       haf:
         condition: service_healthy
@@ -59,7 +59,7 @@ services:
     profiles:
       - apps
       - hivemind
-      - reputation-tracker-standalone
+      - reputation-tracker
       - hafbe
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
@@ -80,7 +80,7 @@ services:
     networks:
       haf-network:
     depends_on:
-      reputation-tracker-install-schema:
+      reputation-tracker-install:
         condition: service_completed_successfully
       haf:
         condition: service_healthy
@@ -88,7 +88,7 @@ services:
     image: ${REPUTATION_TRACKER_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker/postgrest-rewriter}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
-      - reputation-tracker-standalone
+      - reputation-tracker
       - hafbe
       - hivemind
     healthcheck:

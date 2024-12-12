@@ -1,8 +1,0 @@
-git@gitlab.syncad.com:hive/balance_tracker, 93238167, 2024-11-27 13:39:48 -0500, change raise from warning to info level
-git@gitlab.syncad.com:/hive/haf.git, 23c9c614, 2024-11-25 18:24:43 +0000, Index operator class specific to hafd.operation definition also shall be located in hafd schema.
-git@gitlab.syncad.com:hive/HAfAH, 624d76c1, 2024-11-21 01:03:55 +0000, set GET_DEPTH to 1
-git@gitlab.syncad.com:hive/haf_api_node.git, c40a18d2, 2024-11-27 14:47:18 +0100, Add fix(issue#22) and version variable for postgresexporter
-git@gitlab.syncad.com:hive/haf_block_explorer, d6399952, 2024-11-27 13:44:24 -0500, change raise from warning to info level
-git@gitlab.syncad.com:/hive/hive.git, 5fe83988, 2024-11-26 09:01:59 +0100, Add test for options `exit-at-block` and `stop-at-block`
-git@gitlab.syncad.com:hive/hivemind, ca020dc0, 2024-11-27 20:30:16 -0500, Fix error in get_trending_ranked_posts_for_communities
-git@gitlab.syncad.com:/hive/reputation_tracker.git, 78a60d25, 2024-11-27 13:44:04 -0500, change raise from warning to info level

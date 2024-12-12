@@ -20,7 +20,7 @@ services:
     depends_on:
       haf:
         condition: service_healthy
-      reputation-tracker-install-schema:
+      reputation-tracker-install:
         condition: service_completed_successfully
 
   hivemind-server:
@@ -55,7 +55,7 @@ services:
     depends_on:
       haf:
         condition: service_healthy
-      reputation-tracker-install-schema:
+      reputation-tracker-install:
         condition: service_completed_successfully
 
   hivemind-uninstall:

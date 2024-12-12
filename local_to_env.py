@@ -7,22 +7,22 @@ def get_git_revision(repo_path):
             ["git", "-C", repo_path, "config", "--get", "remote.origin.url"],
             stderr=subprocess.STDOUT
         ).strip().decode('utf-8')
-        
+
         git_hash = subprocess.check_output(
             ["git", "-C", repo_path, "rev-parse", "HEAD"],
             stderr=subprocess.STDOUT
         ).strip().decode('utf-8')[:8]  # Use only the first 8 characters of the hash
-        
+
         commit_date = subprocess.check_output(
             ["git", "-C", repo_path, "show", "-s", "--format=%ci", git_hash],
             stderr=subprocess.STDOUT
         ).strip().decode('utf-8')
-        
+
         commit_description = subprocess.check_output(
             ["git", "-C", repo_path, "show", "-s", "--format=%s", git_hash],
             stderr=subprocess.STDOUT
         ).strip().decode('utf-8')
-        
+
         return repo_url, git_hash, commit_date, commit_description
     except subprocess.CalledProcessError:
         return None, None, None, None
@@ -31,7 +31,7 @@ def update_env_file(env_file_path, repo_name, git_hash, commit_date, commit_desc
     updated = False
     with open(env_file_path, "r") as file:
         lines = file.readlines()
-    
+
     with open(env_file_path, "w") as file:
         for line in lines:
             if line.startswith(f"{repo_name.upper()}_VERSION="):
@@ -40,7 +40,7 @@ def update_env_file(env_file_path, repo_name, git_hash, commit_date, commit_desc
                 print(f"Updated {repo_name.upper()}_VERSION to {git_hash} in .env file")
             else:
                 file.write(line)
-    
+
     if not updated:
         with open(env_file_path, "a") as file:
             file.write(f"{repo_name.upper()}_VERSION={git_hash}  # {commit_date} - {commit_description}\n")
@@ -73,7 +73,7 @@ def main(directory):
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 2:
-        print("Usage: python use_develop_env.py <directory>")
+        print("Usage: python local_to_env.py <directory>")
         print("This script updates the .env file in the haf_api_node repository with the short git hashes of other repositories in the specified directory.")
     else:
         main(sys.argv[1])
