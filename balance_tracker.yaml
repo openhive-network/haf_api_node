@@ -4,7 +4,7 @@ services:
     profiles:
       - apps
       - hafbe
-      - balance-tracker-setup
+      - balance-tracker-standalone
     environment:
       POSTGRES_HOST: haf
     networks:

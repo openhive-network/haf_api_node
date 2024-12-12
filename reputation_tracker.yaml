@@ -5,7 +5,7 @@ services:
       - apps
       - hafbe
       - hivemind
-      - reputation-tracker-setup
+      - reputation-tracker-standalone
     environment:
       POSTGRES_HOST: haf
     networks:
