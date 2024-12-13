@@ -9,6 +9,10 @@ services:
       SYNC_BROADCAST_BACKEND_SSL: "${SYNC_BROADCAST_BACKEND_SSL:-ssl}"
     volumes:
       - type: bind
+        source: ./haproxy/mirror.conf
+        target: /usr/local/etc/haproxy-mirror/mirror.conf
+        read_only: true
+      - type: bind
         source: ./haproxy/haproxy.cfg
         target: /usr/local/etc/haproxy/haproxy.cfg
         read_only: true
