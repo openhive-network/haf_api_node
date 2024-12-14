@@ -1,4 +1,20 @@
 services:
+  hivemind-install:
+    image: ${HIVEMIND_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - apps
+      - hivemind
+    networks:
+      haf-network:
+    command:
+      - "setup"
+      - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
+    depends_on:
+      haf:
+        condition: service_healthy
+      reputation-tracker-install:
+        condition: service_completed_successfully
+
   hivemind-block-processing:
     image: ${HIVEMIND_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -10,7 +26,6 @@ services:
       - "sync"
       - "--database-url=postgresql://hivemind@haf/haf_block_log"
       - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
-      - "--install-app"
     healthcheck:
       test: ["CMD-SHELL","/home/hivemind/block-processing-healthcheck.sh || exit 1"]
       interval: 10s
@@ -22,12 +37,13 @@ services:
         condition: service_healthy
       reputation-tracker-install:
         condition: service_completed_successfully
+      hivemind-install:
+        condition: service_completed_successfully
 
   hivemind-server:
     image: ${HIVEMIND_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
-      - apps
-      - hivemind
+      - legacy-hivemind-server
     networks:
       haf-network:
     command:
@@ -65,29 +81,10 @@ services:
       retries: 10
       start_period: 1m
     depends_on:
-      hivemind-block-processing:
-        condition: service_healthy
-      haf:
-        condition: service_healthy
-
-  # note: the hivemind-install steps, which create/update the hivemind database schema, are also run automatically at the beginning
-  # of the hivemind-block-processing image's startup.  There is normally no reason to run this step separately.  If you do,
-  # be sure that the hivemind block-processor is not running at the same time as this install script, as doing so may corrupt your
-  # database
-  hivemind-install:
-    image: ${HIVEMIND_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_VERSION:-${HIVE_API_NODE_VERSION}}
-    profiles:
-      - hivemind-install
-    networks:
-      haf-network:
-    command:
-      - "setup"
-      - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
-    depends_on:
-      haf:
-        condition: service_healthy
-      reputation-tracker-install:
+      hivemind-install:
         condition: service_completed_successfully
+      haf:
+        condition: service_healthy
 
   hivemind-postgrest-rewriter:
     image: ${HIVEMIND_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind/postgrest-rewriter}:${HIVEMIND_VERSION:-${HIVE_API_NODE_VERSION}}
