@@ -133,3 +133,6 @@ mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/caddy"
 chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs"
 # 105:109 is postgres:postgres inside the container
 chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql" "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
+
+# Create a snapshot called 'empty'
+./snapshot_zfs_datasets.sh empty
