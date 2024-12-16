@@ -6,7 +6,7 @@ print_help() {
   echo "Usage: $0 --env-file=filename"
 }
 
-OPTIONS=$(getopt -o he: --long env-file:,help,zpool:,top-level-dataset: -n "$0" -- "$@")
+OPTIONS=$(getopt -o he:s --long env-file:,help,zpool:,top-level-dataset:,skip-empty-snapshot -n "$0" -- "$@")
 
 if [ $? -ne 0 ]; then
     print_help
@@ -17,6 +17,7 @@ ZPOOL=""
 TOP_LEVEL_DATASET=""
 ZPOOL_MOUNT_POINT=""
 TOP_LEVEL_DATASET_MOUNTPOINT=""
+SKIP_EMPTY_SNAPSHOT=false
 
 eval set -- "$OPTIONS"
 
@@ -33,6 +34,10 @@ while true; do
     --top-level-dataset)
       TOP_LEVEL_DATASET="$2"
       shift 2
+      ;;
+    --skip-empty-snapshot|-s)
+      SKIP_EMPTY_SNAPSHOT=true
+      shift
       ;;
     --help|-h)
       print_help
@@ -134,5 +139,9 @@ chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs"
 # 105:109 is postgres:postgres inside the container
 chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql" "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
 
-# Create a snapshot called 'empty'
-./snapshot_zfs_datasets.sh empty
+if [ "$SKIP_EMPTY_SNAPSHOT" = false ]; then
+  # Create a snapshot called 'empty'
+  ./snapshot_zfs_datasets.sh empty
+else
+  echo "Skipping creation of 'empty' snapshot."
+fi

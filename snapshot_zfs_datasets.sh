@@ -13,9 +13,10 @@ print_help() {
   echo "                            dataset, then swap back afterwards.  That way the large logs files aren't"
   echo "                            of the snapshots.  This is a lot faster, but makes managing datasets more"
   echo "                            complicated, so only use it if you really need to"
+  echo "  --force, -f               continue without prompting, even if warnings are detected"
 }
 
-OPTIONS=$(getopt -o he:pt:l: --long env-file:,help,zpool:,top-level-dataset:,public-snapshot,temp-dir:,swap-logs-with-dataset: -n "$0" -- "$@")
+OPTIONS=$(getopt -o he:pt:l:f --long env-file:,help,zpool:,top-level-dataset:,public-snapshot,temp-dir:,swap-logs-with-dataset:,force -n "$0" -- "$@")
 
 if [ $? -ne 0 ]; then
     print_help
@@ -29,6 +30,7 @@ TOP_LEVEL_DATASET_MOUNTPOINT=""
 PUBLIC_SNAPSHOT=0
 SWAP_LOGS_DATASET=""
 TMPDIR=/tmp
+FORCE=0
 
 eval set -- "$OPTIONS"
 
@@ -56,6 +58,10 @@ while true; do
       ;;
     --swap-logs-with-dataset|-l)
       SWAP_LOGS_DATASET="$2"
+      shift 2
+      ;;
+    --force|-f)
+      FORCE=1
       shift 2
       ;;
     --help|-h)
@@ -141,7 +147,7 @@ if [ "$SNAPSHOT_NAME" != "empty" ]; then
   fi
 
   last_shared_memory_write=$(stat -c %Y "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/shared_memory.bin")
-  last_blockchain_write=$(find "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain" -type f -printf '%T@\n' | sort -n | tail -1)
+  last_blockchain_write=$(find "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain" -type f -printf '%T@\n' | sort -n | tail -1 | cut -d. -f1)
 
   if [ -z "$last_blockchain_write" ]; then
     echo "Warning: No files found in the blockchain directory"
@@ -152,12 +158,16 @@ if [ "$SNAPSHOT_NAME" != "empty" ]; then
 
   if [ $time_diff -gt 300 ] || [ $time_diff -lt -300 ]; then
     echo "Warning: The shared_memory.bin file was not written to within 5 minutes of the last write to a file in the blockchain directory."
-    read -p "Do you want to continue? (y/n): " choice
-    case "$choice" in
-      y|Y ) echo "Continuing...";;
-      n|N ) echo "Aborting."; exit 1;;
-      * ) echo "Invalid input. Aborting."; exit 1;;
-    esac
+    if [ "$FORCE" -eq 1 ]; then
+      echo "Continuing due to --force option."
+    else
+      read -p "Do you want to continue? (y/n): " choice
+      case "$choice" in
+        y|Y ) echo "Continuing...";;
+        n|N ) echo "Aborting."; exit 1;;
+        * ) echo "Invalid input. Aborting."; exit 1;;
+      esac
+    fi
   fi
 fi
 
