@@ -17,3 +17,9 @@ services:
   hivemind-uninstall:
     logging:
       driver: local
+  hivemind-postgrest-server:
+    logging:
+      driver: local
+  hivemind-postgrest-rewriter:
+    logging:
+      driver: local

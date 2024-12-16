@@ -11,6 +11,6 @@ services:
   reputation-tracker-postgrest-rewriter:
     logging:
       driver: local
-  reputation-tracker-install-schema:
+  reputation-tracker-install:
     logging:
       driver: local

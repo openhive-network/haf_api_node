@@ -23,3 +23,6 @@ services:
   block-explorer-install-schema:
     logging:
       driver: local
+  block-explorer-install-balance-tracker:
+    logging:
+      driver: local
