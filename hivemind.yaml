@@ -32,6 +32,14 @@ services:
       timeout: 2s
       retries: 10
       start_period: 72h
+    # after requesting a shutdown with SIGTERM, allow the container 30 seconds to exit
+    # before killing it.
+    # Normally it will exit cleanly in a second or two, but it can take longer if it's
+    # in the middle of massive sync.  When in massive sync, a forced shutdown can leave
+    # the hivemind database in an inconsistent state, requiring an uninstall/reinstall
+    # of hivemind to correct it.
+    stop_grace_period: 30s
+    stop_signal: SIGINT
     depends_on:
       haf:
         condition: service_healthy
