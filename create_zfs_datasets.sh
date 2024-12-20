@@ -127,6 +127,7 @@ chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_db_store"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 cp pgtune.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 cp zfs.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
+cp compression.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 cp logging.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 # 105:109 is postgres:postgres inside the container
 chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
