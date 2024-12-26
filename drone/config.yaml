@@ -120,17 +120,20 @@ ttls:
   appbase.condenser_api.get_account_history: 6
   appbase.condenser_api.get_content: 6
   appbase.condenser_api.get_profile: 6
+  appbase.condenser_api.get_follow_count: 6
   appbase.database_api.find_accounts: 3
   appbase.condenser_api.get_dynamic_global_properties: 1
   hive: NO_CACHE
   bridge: NO_CACHE
   bridge.get_discussion: 6
   bridge.get_account_posts: 12
-  bridge.get_ranked_posts: 6
   bridge.get_profile: 6
-  bridge.get_community: 6
   bridge.get_post: 6
-  bridge.get_trending_topics: 3
+  bridge.unread_notifications: 3
+  bridge.get_ranked_posts: 6
+  bridge.get_community: 12
+  bridge.get_trending_topics: 30
+  bridge.does_user_follow_any_lists: 3
   hafsql: NO_CACHE
 
 # how long to wait for the backend to respond before giving up
