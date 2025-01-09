@@ -1,4 +1,4 @@
 services:
-  block-explorer-postgrest:
+  block-explorer-postgrest-rewriter:
     ports:
-      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_PORT_PREFIX:-1}7005:3000"
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_PORT_PREFIX:-1}7005:80"

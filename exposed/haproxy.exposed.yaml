@@ -3,4 +3,4 @@ services:
     # expose the healthchecks so we can connect to them from an external haproxy
     # shift the ports by 20000 so they don't conflict with haproxy's (if we want to expose those also)
     ports:
-      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_HEALTHCHECK_PORT_PREFIX:-2}7001-${HAF_API_NODE_EXPOSED_HEALTHCHECK_PORT_PREFIX:-2}7005:7001-7005"
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_HEALTHCHECK_PORT_PREFIX:-2}7001-${HAF_API_NODE_EXPOSED_HEALTHCHECK_PORT_PREFIX:-2}7009:7001-7009"
