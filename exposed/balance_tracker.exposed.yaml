@@ -1,4 +1,4 @@
 services:
-  balance-tracker-postgrest:
+  balance-tracker-postgrest-rewriter:
     ports:
-      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_PORT_PREFIX:-1}7004:3000"
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_PORT_PREFIX:-1}7004:80"
