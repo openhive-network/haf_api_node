@@ -9,6 +9,7 @@ services:
     command:
       - "setup"
       - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
+      - "--statement-timeout=${HIVEMIND_STATEMENT_TIMEOUT:-0}"
     depends_on:
       haf:
         condition: service_healthy
