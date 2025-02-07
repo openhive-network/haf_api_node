@@ -146,27 +146,28 @@ if [ "$SNAPSHOT_NAME" != "empty" ]; then
     exit 1
   fi
 
-  last_shared_memory_write=$(stat -c %Y "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/shared_memory.bin")
-  last_blockchain_write=$(find "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain" -type f -printf '%T@\n' | sort -n | tail -1 | cut -d. -f1)
+  # Check if the blockchain directory exists and has at least one file.
+  if [ ! -d "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain" ] || \
+     [ -z "$(find "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain" -type f -print -quit)" ]; then
+    echo "No blockchain directory or blockchain files found; skipping timestamp check."
+  else
+    last_shared_memory_write=$(stat -c %Y "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/shared_memory.bin")
+    last_blockchain_write=$(find "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain" -type f -printf '%T@\n' | sort -n | tail -1 | cut -d. -f1)
 
-  if [ -z "$last_blockchain_write" ]; then
-    echo "Warning: No files found in the blockchain directory"
-    exit 1
-  fi
+    time_diff=$((last_blockchain_write - last_shared_memory_write))
 
-  time_diff=$((last_blockchain_write - last_shared_memory_write))
-
-  if [ $time_diff -gt 300 ] || [ $time_diff -lt -300 ]; then
-    echo "Warning: The shared_memory.bin file was not written to within 5 minutes of the last write to a file in the blockchain directory."
-    if [ "$FORCE" -eq 1 ]; then
-      echo "Continuing due to --force option."
-    else
-      read -p "Do you want to continue? (y/n): " choice
-      case "$choice" in
-        y|Y ) echo "Continuing...";;
-        n|N ) echo "Aborting."; exit 1;;
-        * ) echo "Invalid input. Aborting."; exit 1;;
-      esac
+    if [ $time_diff -gt 300 ] || [ $time_diff -lt -300 ]; then
+      echo "Warning: The shared_memory.bin file was not written to within 5 minutes of the last write to a file in the blockchain directory."
+      if [ "$FORCE" -eq 1 ]; then
+        echo "Continuing due to --force option."
+      else
+        read -p "Do you want to continue? (y/n): " choice
+        case "$choice" in
+          y|Y ) echo "Continuing...";;
+          n|N ) echo "Aborting."; exit 1;;
+          * ) echo "Invalid input. Aborting."; exit 1;;
+        esac
+      fi
     fi
   fi
 fi
