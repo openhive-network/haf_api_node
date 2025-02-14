@@ -121,7 +121,7 @@ services:
       PGRST_DB_ROOT_SPEC: root
       PGRST_DB_EXTRA_SEARCH_PATH: hafbe_bal, reptracker_app
       # PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/hafbe_api/
-      PGRST_LOG_LEVEL: ${BLOCK_EXPLORER_SERVER_LOG_LEVEL}
+      PGRST_LOG_LEVEL: ${BLOCK_EXPLORER_SERVER_LOG_LEVEL:-error}
     networks:
       haf-network:
     healthcheck:
