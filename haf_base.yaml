@@ -9,9 +9,8 @@ services:
     tty: true
     stdin_open: true
     init: true
-    entrypoint:
-      - /home/haf_admin/docker_entrypoint.sh
-      - ${ARGUMENTS:-}
+    command: "$ARGUMENTS"
+
     # after requesting a shutdown with SIGTERM, allow the container two minutes to exit
     # before killing it.  The default of ten seconds isn't enough for postgresql to
     # cleanly shut down, and would often make PostgreSQL perform crash recovery at the
