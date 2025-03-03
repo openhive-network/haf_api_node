@@ -14,13 +14,3 @@ services:
       haf-network:
     #healthcheck:
     #  test: ["CMD-SHELL","curl -f localhost:8080"]
-    # Only HAfAH is started by default
-    depends_on:
-    #   balance-tracker-postgrest:
-    #     condition: service_started
-    #   reputation-tracker-postgrest:
-    #     condition: service_started
-      hafah-postgrest:
-        condition: service_started
-    #   block-explorer-postgrest:
-    #     condition: service_started

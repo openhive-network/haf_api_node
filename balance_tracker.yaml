@@ -74,7 +74,7 @@ services:
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_DB_EXTRA_SEARCH_PATH: ${BTRACKER_SCHEMA:-hafbe_bal}
       # PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/btracker_api/
-      PGRST_LOG_LEVEL: ${BALANCE_TRACKER_SERVER_LOG_LEVEL}
+      PGRST_LOG_LEVEL: ${BALANCE_TRACKER_SERVER_LOG_LEVEL:-error}
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
       interval: 10s
