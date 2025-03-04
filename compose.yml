@@ -14,6 +14,7 @@ include:
   - caddy.yaml
   - monitoring.yaml
   - swagger.yaml
+  - hivesense.yaml
 
 networks:
   haf-network:

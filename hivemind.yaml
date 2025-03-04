@@ -26,6 +26,7 @@ services:
       - "sync"
       - "--database-url=postgresql://hivemind@haf/haf_block_log"
       - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
+      - "--test-max-block=100000"
     healthcheck:
       test: ["CMD-SHELL","/home/hivemind/block-processing-healthcheck.sh || exit 1"]
       interval: 10s

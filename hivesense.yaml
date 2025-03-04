@@ -3,6 +3,7 @@ services:
     image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - apps
+      - hivesense
     environment:
       POSTGRES_HOST: haf
     command:
