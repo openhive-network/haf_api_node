@@ -74,6 +74,10 @@ services:
         host    postgres         postgres         ${COMPOSE_PROJECT_NAME}-postgresexporter-1.${NETWORK_NAME}                    trust\n
         host    haf_block_log    reptracker_user  ${COMPOSE_PROJECT_NAME}-haproxy-healthchecks-1.${NETWORK_NAME}                trust\n
 
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivesense-install-schema-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-install-schema-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-block-processing-1.${NETWORK_NAME}          trust\n
+        host    haf_block_log    hivesense_user   ${COMPOSE_PROJECT_NAME}-hivesense-postgrest-1.${NETWORK_NAME}                 trust\n
         "
       SHM_DIR: /home/hived/shm_dir
       WAL_DIR: /home/hived/wal_dir
