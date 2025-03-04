@@ -1,0 +1,120 @@
+services:
+  hivesense-install-schema:
+    image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - apps
+      - hivesense
+    environment:
+      POSTGRES_HOST: haf
+    command:
+      - install_app
+      - --llm=yxchia/multilingual-e5-base:F16
+      - --vector_size=768
+      - --ollama=http://192.168.6.186:11434
+      - --start_block=80000000
+      - --swagger-url=${PUBLIC_HOSTNAME}/hivesense-swagger
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+      hivemind-install:
+        condition: service_completed_successfully
+  # to uninstall Hivesense, shut down the stack and run a command like:
+  #   docker compose --profile core --profile block-explorer-uninstall up -d
+  hivesense-uninstall:
+    image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - hivesense-uninstall
+    environment:
+      POSTGRES_HOST: haf
+    command:
+      - uninstall_app
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+  hivesense-block-processing:
+    image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_block_explorer}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - apps
+      - hivesense
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: hivesense_owner
+    command:
+      - process_blocks
+    networks:
+      haf-network:
+    healthcheck:
+      test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 48h
+    depends_on:
+      hivesense-install-schema:
+        condition: service_completed_successfully
+      haf:
+        condition: service_healthy
+  hivesense-postgrest-rewriter:
+    image: ${HIVESENSE_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/postgrest-rewriter}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - apps
+      - hivesense
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
+    depends_on:
+      hivesense-postgrest:
+        condition: service_healthy
+    networks:
+      - haf-network
+  hivesense-postgrest:
+    image: ${POSTGREST_IMAGE:-registry.gitlab.syncad.com/hive/haf_api_node/postgrest}:${POSTGREST_VERSION:-latest}
+    profiles:
+      - apps
+      - hivesense
+    environment:
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_DB_URI: postgresql://hivesense_user@haf/haf_block_log?application_name=hivesense_postgrest
+      PGRST_DB_SCHEMA: hivesense_endpoints
+      PGRST_DB_ANON_ROLE: hivesense_user
+      PGRST_DB_POOL: 20
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+      PGRST_DB_ROOT_SPEC: root
+      PGRST_DB_EXTRA_SEARCH_PATH: hivesense_app
+    networks:
+      haf-network:
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
+    depends_on:
+      hivesense-install-schema:
+        condition: service_completed_successfully
+      haf:
+        condition: service_healthy
+  hivesense-swagger:
+    image: swaggerapi/swagger-ui
+    profiles:
+      - apps
+      - hivesense
+    environment:
+      URLS: >-
+        [{url: "https://${PUBLIC_HOSTNAME:-localhost}/hivesense-api/", name: "Hivesense"}]
+    networks:
+      haf-network:
+    ports:
+      - "8081:8080"  # Map host port 8081 to container port 8080, host 8080 is reserved for common HAF apps swagger
+    #healthcheck:
+    #  test: ["CMD-SHELL","curl -f localhost:8080"]
+    depends_on:
+      hivesense-postgrest:
+        condition: service_started
