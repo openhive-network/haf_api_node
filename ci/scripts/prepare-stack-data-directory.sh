@@ -11,5 +11,6 @@ mkdir -p "${HAF_MOUNTPOINT}/shared_memory/haf_wal"
 mkdir -p "${HAF_MOUNTPOINT}/logs/caddy"
 mkdir -p "${HAF_MOUNTPOINT}/logs/pgbadger"
 mkdir -p "${HAF_MOUNTPOINT}/logs/postgresql"
+mkdir -p "${HAF_MOUNTPOINT}/ollama"
 
 chown -R 1000:100 "${HAF_MOUNTPOINT}"
