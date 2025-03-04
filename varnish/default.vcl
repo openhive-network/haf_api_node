@@ -41,6 +41,16 @@ backend haf_block_explorer {
     .port = "7005";
 }
 
+backend hivesense {
+    .host = "haproxy";
+    .port = "7011";
+}
+
+#backend hivesense_swagger {
+#     .host = "hivesense-swagger";
+#     .port = "81";
+#}
+
 # backend haf_block_explorer_swagger { 
 #     .host = "block-explorer-swagger";
 #     .port = "80";
@@ -107,6 +117,14 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url ~ "^/hivesense-api/") {
+        # rewrite the URL to where PostgREST expects it
+        set req.url = regsub(req.url, "^/hivesense-api/(.*)$", "/\1");
+        set req.backend_hint = hivesense;
+
+        if (req.method == "POST") {
+            call recv_cachable_post;
+        }
     } elseif (req.url == "/varnishcheck") {
         return(synth(200, "Ok"));
     } else {
@@ -121,7 +139,7 @@ sub vcl_backend_fetch {
 }
 
 sub vcl_backend_response {
-    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker) {
+    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense) {
         # PostgREST generates invalid content-range headers, and varnish will refuse to cache/proxy calls because of it.
         # Until they fix it, just remove the header.  (see https://github.com/PostgREST/postgrest/issues/1089)
         unset beresp.http.Content-Range;
@@ -152,6 +170,8 @@ sub vcl_hash {
         hash_data("reputation-api");
     } else if (req.backend_hint == haf_block_explorer) {
         hash_data("hafbe-api");
+    } else if (req.backend_hint == hivesense) {
+             hash_data("hivesense-api");
     }
 
     # To cache POST and PUT requests

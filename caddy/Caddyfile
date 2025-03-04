@@ -110,6 +110,11 @@
     file_server
   }
 
+  # Redirect added here for /hivesense-swagger
+  handle_path /hivesense-swagger/* {
+    reverse_proxy http://hivesense-swagger:8080
+  }
+
   # Route all POST calls to the root URL to jussi/drone (assume they're old-style JSON-RPC calls)
   @post_to_root {
     method POST
@@ -136,7 +141,7 @@
   }
 
   @rest_apis {
-    path /hafah-api/* /balance-api/* /reputation-api/* /hafbe-api/* 
+    path /hafah-api/* /balance-api/* /reputation-api/* /hafbe-api/* /hivesense-api/*
   }
 
   handle @rest_apis {
