@@ -52,8 +52,6 @@ services:
     depends_on:
       hivesense-install-schema:
         condition: service_completed_successfully
-      hivemind-block-processing:
-        condition: service_healthy
       haf:
         condition: service_healthy
   hivesense-postgrest-rewriter:
