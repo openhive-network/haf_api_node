@@ -97,3 +97,22 @@ services:
         condition: service_completed_successfully
       haf:
         condition: service_healthy
+  hivesense-swagger:
+    image: swaggerapi/swagger-ui
+    profiles:
+      - apps
+      - hivesense
+    environment:
+      URLS: >-
+        [{url: "http://${PUBLIC_HOSTNAME:-localhost}/hivesense-api/", name: "Hivesense"}]
+      SWAGGER_UI_CONFIG: >-
+        { "validatorUrl": null, "oauth2RedirectUrl": "http://localhost:8081/oauth2-redirect.html" }
+    networks:
+      haf-network:
+    ports:
+      - "8081:8080"  # Map host port 8081 to container port 8080, host 8080 is reserved for common HAF apps swagger
+    #healthcheck:
+    #  test: ["CMD-SHELL","curl -f localhost:8080"]
+    depends_on:
+      hivesense-postgrest:
+        condition: service_started
