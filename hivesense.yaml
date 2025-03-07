@@ -104,9 +104,7 @@ services:
       - hivesense
     environment:
       URLS: >-
-        [{url: "http://${PUBLIC_HOSTNAME:-localhost}/hivesense-api/", name: "Hivesense"}]
-      SWAGGER_UI_CONFIG: >-
-        { "validatorUrl": null, "oauth2RedirectUrl": "http://localhost:8081/oauth2-redirect.html" }
+        [{url: "https://${PUBLIC_HOSTNAME:-localhost}/hivesense-api/", name: "Hivesense"}]
     networks:
       haf-network:
     ports:
