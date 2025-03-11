@@ -7,5 +7,6 @@
   "HAF_ENDPOINT": "http://haproxy:7008",
   "HAFAH_ENDPOINT": "http://haproxy:7003",
   "HIVEMIND_ENDPOINT": "http://haproxy:7002",
+  "HIVESENSE_ENDPOINT": "http://haproxy:7011",
   "MIDDLEWARE_CONNECTION_THREADS": 8
 }

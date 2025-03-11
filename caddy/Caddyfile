@@ -136,7 +136,7 @@
   }
 
   @rest_apis {
-    path /hafah-api/* /balance-api/* /reputation-api/* /hafbe-api/*  /hivesense-api/*
+    path /hafah-api/* /balance-api/* /reputation-api/* /hafbe-api/* /hivesense-api/*
   }
 
   handle @rest_apis {
@@ -158,5 +158,5 @@
   }
 
   # Route everything else (currently just swagger documentation)
-  reverse_proxy http://swagger:8080
+  reverse_proxy http://hivesense-swagger:8080
 }
