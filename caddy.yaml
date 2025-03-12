@@ -5,9 +5,9 @@ services:
       - admin
       - servers
     ports:
-      - 80:80
-      - 443:443
-      - 443:443/udp
+      - 2080:80
+      - 20443:443
+      - 20443:443/udp
     environment:
       PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME}
       CADDY_SITES: ${CADDY_SITES:-${PUBLIC_HOSTNAME}}

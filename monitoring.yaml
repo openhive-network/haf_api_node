@@ -82,7 +82,7 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     restart: unless-stopped
     ports:
-      - "3003:3000"
+      - "23000:3000"
     networks:
       - haf-network
     labels:
