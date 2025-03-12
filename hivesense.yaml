@@ -11,7 +11,7 @@ services:
       - --llm=yxchia/multilingual-e5-base:F16
       - --vector_size=768
       - --ollama=http://192.168.6.186:11434
-      - --start_block=1
+      - --start_block=80000000
       - --swagger-url=${PUBLIC_HOSTNAME}/hivesense-swagger
     networks:
       haf-network:
