@@ -77,10 +77,10 @@ services:
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_SERVER_PORT: 8080
-      PGRST_DB_URI: "postgresql://hivemind@haf/haf_block_log?application_name=hive-mind-postgrest" # warning hivemind improperly matches all connections starting from `hivemind` and crashes if they are made externally (not from python)
+      PGRST_DB_URI: "postgresql://hivemind_user@haf/haf_block_log?application_name=hive-mind-postgrest" # warning hivemind improperly matches all connections starting from `hivemind` and crashes if they are made externally (not from python)
       PGRST_DB_SCHEMA: hivemind_endpoints
       # PGRST_DB_ROOT_SPEC: home
-      PGRST_DB_ANON_ROLE: hivemind
+      PGRST_DB_ANON_ROLE: hivemind_user
       PGRST_DB_POOL: 40
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_OPENAPI_MODE: "disabled" # unclear why this is set, I guess because we currently only support json-rpc?
