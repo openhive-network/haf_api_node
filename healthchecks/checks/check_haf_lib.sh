@@ -1,7 +1,7 @@
 . "$(dirname "$0")/format_seconds.sh"
 
 check_haf_lib() {
-  if [ "$(psql "$POSTGRES_URL" --quiet --no-align --tuples-only --command="SELECT hive.is_instance_ready();")" = f ]; then
+  if [ "$(psql "$POSTGRES_URL" --quiet --no-align --tuples-only --command="SELECT hive.is_instance_ready();")" != t ]; then
     echo "down #HAF not in sync"
     exit 1
   fi
