@@ -226,11 +226,11 @@ if [[ $? == 1 ]]; then
     fi
     echo "Total free space on NVMEs: $(( $TOTAL_SPACE / 1000000000 )) G"
     echo "Found NVME devices: $NVMES"
-    echo "sudo $CALLSTRING"
+    echo "$CALLSTRING"
     read -p "Create a zpool with these drives? (Y or N): " choice
     if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
         echo "Creating zpool..."
-        sudo $CALLSTRING
+        $CALLSTRING
         if [[ $? == 0 ]]; then
             echo "zpool created successfully."
         else
@@ -277,10 +277,10 @@ else
         if [[ $physical_memory -ge 60 && $free_memory -gt 30 && $NO_RAMDISK != 1 ]]; then
             echo "There is more than 64 gigabytes of RAM. Mounting shared_mem..."
             if [ ! -d "/mnt/haf_shared_mem" ]; then
-                sudo mkdir /mnt/haf_shared_mem
+                mkdir /mnt/haf_shared_mem
             fi
-            sudo mount -t tmpfs -o size=25g tmpfs /mnt/haf_shared_mem
-            sudo chown 1000:100 /mnt/haf_shared_mem
+            mount -t tmpfs -o size=25g tmpfs /mnt/haf_shared_mem
+            chown 1000:100 /mnt/haf_shared_mem
             remove_shared_mem=25
         else
             remove_shared_mem=0
@@ -387,10 +387,10 @@ while read -r line; do
                     lowest_priority_file="/swapfile"
                     swap_type="file"
                 fi
-                sudo dd if=/dev/zero of=$lowest_priority_file+ count=32K  bs=1M
-                sudo chmod 600 $lowest_priority_file+
-                sudo mkswap $lowest_priority_file+
-                sudo swapon $lowest_priority_file+
+                dd if=/dev/zero of=$lowest_priority_file+ count=32K  bs=1M
+                chmod 600 $lowest_priority_file+
+                mkswap $lowest_priority_file+
+                swapon $lowest_priority_file+
                 making_swap=0
                 made_swap=1
             else
@@ -428,9 +428,9 @@ else
     # Move the shared_mem file to the blockchain directory
     if [[ $remove_shared_mem != 0 ]]; then
         sed -i "s#^$modified_HAF_SHM#$original_HAF_SHM#g" .env
-        sudo cp /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory
-        sudo chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
-        sudo umount /mnt/haf_shared_mem
+        cp --sparse=always /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory
+        chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
+        umount /mnt/haf_shared_mem
     fi
 
 
@@ -440,7 +440,7 @@ else
     fi
 
     # Create a snapshot of the ZFS pool
-    sudo ./snapshot_zfs_datasets.sh $SNAPSHOT_NAME
+    ./snapshot_zfs_datasets.sh $SNAPSHOT_NAME
 
     # Restart Docker Compose
     docker compose up -d
