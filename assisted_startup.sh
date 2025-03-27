@@ -274,7 +274,7 @@ else
         swap_location=$(swapon --show=NAME --noheadings)
 
 
-        if [[ $physical_memory -gt 60 && $free_memory -gt 30 && $NO_RAMDISK != 1 ]]; then
+        if [[ $physical_memory -ge 60 && $free_memory -gt 30 && $NO_RAMDISK != 1 ]]; then
             echo "There is more than 64 gigabytes of RAM. Mounting shared_mem..."
             if [ ! -d "/mnt/haf_shared_mem" ]; then
                 sudo mkdir /mnt/haf_shared_mem
@@ -403,7 +403,7 @@ while read -r line; do
         echo "Detected *PROFILE: Entered LIVE sync* in the output. Bringing down Docker Compose..."
         entered_livesync=1
         # Write Sync time to "haf.log" for tracking, as this log will get wiped on restart
-        docker logs haf-world-haf-1 | grep PRO > haf.log
+        docker compose logs haf | grep PROFILE > haf.log
         # Write max memory and swap usage to "haf.log" for tracking
         grep "max_mem=" startup.temp >> haf.log
         grep "max_swap=" startup.temp >> haf.log
