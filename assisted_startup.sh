@@ -274,8 +274,8 @@ else
         swap_location=$(swapon --show=NAME --noheadings)
 
 
-        if [[ $physical_memory -ge 60 && $free_memory -gt 30 && $NO_RAMDISK != 1 ]]; then
-            echo "There is more than 64 gigabytes of RAM. Mounting shared_mem..."
+        if [[ $physical_memory -ge 58 && $free_memory -gt 30 && $NO_RAMDISK != 1 ]]; then
+            echo "There is at least 58 gigabytes of usable RAM. Mounting shared_mem..."
             if [ ! -d "/mnt/haf_shared_mem" ]; then
                 mkdir /mnt/haf_shared_mem
             fi
