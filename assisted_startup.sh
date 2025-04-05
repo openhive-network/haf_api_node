@@ -440,7 +440,10 @@ else
     fi
 
     # Create a snapshot of the ZFS pool
-    ./snapshot_zfs_datasets.sh $SNAPSHOT_NAME
+    # (specify --force to prevent snapshot_zfs_datasets from erroring out
+    # if the blockchain and shared_memory write times are too far apart,
+    # something that can easily happen when copying the shared memory file)
+    ./snapshot_zfs_datasets.sh --force $SNAPSHOT_NAME
 
     # Restart Docker Compose
     docker compose up -d
