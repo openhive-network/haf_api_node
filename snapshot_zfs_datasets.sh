@@ -62,7 +62,7 @@ while true; do
       ;;
     --force|-f)
       FORCE=1
-      shift 2
+      shift
       ;;
     --help|-h)
       print_help
