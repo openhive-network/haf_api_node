@@ -66,9 +66,8 @@ services:
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: hivesense_owner
-    command:
-      - process_blocks
-      - "${HIVESENSE_SYNC_ARGS:-}"
+    command: >
+      process_blocks ${HIVESENSE_SYNC_ARGS:-}
     networks:
       haf-network:
     healthcheck:
@@ -135,8 +134,6 @@ services:
         [{url: "https://${PUBLIC_HOSTNAME:-localhost}/hivesense-api/", name: "Hivesense"}]
     networks:
       haf-network:
-    ports:
-      - "8081:8080"  # Map host port 8081 to container port 8080, host 8080 is reserved for common HAF apps swagger
     #healthcheck:
     #  test: ["CMD-SHELL","curl -f localhost:8080"]
     depends_on:
