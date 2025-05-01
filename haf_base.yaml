@@ -9,7 +9,7 @@ services:
     tty: true
     stdin_open: true
     init: true
-    command: "$ARGUMENTS"
+    command: "${ARGUMENTS:-}"
 
     # after requesting a shutdown with SIGTERM, allow the container two minutes to exit
     # before killing it.  The default of ten seconds isn't enough for postgresql to
