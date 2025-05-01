@@ -21,8 +21,6 @@ services:
     profiles:
       - apps
       - hivemind
-    environment:
-      HIVEMIND_SYNC_ARGS:
     networks:
       haf-network:
     command:
