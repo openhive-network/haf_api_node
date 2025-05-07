@@ -107,7 +107,7 @@ services:
       - type: bind
         source: ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/haf_wal}
         target: /home/hived/wal_dir
-    shm_size: 4gb
+    shm_size: 8gb
     healthcheck:
       test: ["CMD-SHELL","curl -f 127.0.0.1:8091"]
       interval: 10s
