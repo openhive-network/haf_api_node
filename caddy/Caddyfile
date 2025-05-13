@@ -163,5 +163,5 @@
   }
 
   # Route everything else (currently just swagger documentation)
-  reverse_proxy http://swagger:8080
+  reverse_proxy http://swagger
 }

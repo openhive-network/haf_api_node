@@ -1,20 +1,14 @@
 services:
   swagger:
-    image: swaggerapi/swagger-ui
+    image: ${SWAGGER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/swagger}:${SWAGGER_VERSION:-latest}
     profiles:
       - hafbe
       - hivemind
       - hivesense
       - apps
-    environment:
-      URLS: >-
-        [{url: "/hafbe-api/", name: "HAF Block Explorer"},
-         {url: "/balance-api/", name: "Balance Tracker"},
-         {url: "/reputation-api/", name: "Reputation Tracker"},
-         {url: "/hivesense-api/", name: "Hivesense"},
-         {url: "/hafah-api/", name: "HAfAH"},
-         {url: "/hivemind-api/", name: "Hivemind"}]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       haf-network:
-    #healthcheck:
-    #  test: ["CMD-SHELL","curl -f localhost:8080"]
+    healthcheck:
+      test: ["CMD-SHELL","curl -sf localhost > /dev/null || exit 1"]

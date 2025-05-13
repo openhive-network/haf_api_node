@@ -1,0 +1,27 @@
+{{- /* templates/swagger.tmpl */ -}}
+window.onload = function() {
+  //<editor-fold desc="Changeable Configuration Block">
+  window.ui = SwaggerUIBundle({
+    dom_id: '#swagger-ui',
+    deepLinking: true,
+    presets: [
+      SwaggerUIBundle.presets.apis,
+      SwaggerUIStandalonePreset
+    ],
+    plugins: [
+      SwaggerUIBundle.plugins.DownloadUrl
+    ],
+    layout: "StandaloneLayout",
+    queryConfigEnabled: false,
+    urls: [
+      {{- $svcs := whereLabelExists . "io.hive.swagger.url" }}
+      {{- range $i, $c := $svcs }}
+      {
+        url: "{{ index $c.Labels "io.hive.swagger.url" }}",
+        name: "{{ index $c.Labels "io.hive.swagger.name" }}"
+      }{{ if lt (add $i 1) (len $svcs) }},{{ end }}
+      {{- end }}
+    ]
+  });
+  //</editor-fold>
+};
