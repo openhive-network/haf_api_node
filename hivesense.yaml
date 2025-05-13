@@ -151,6 +151,10 @@ services:
       timeout: 3s
       retries: 10
       start_period: 1m
+    labels:
+      # for Swagger UI
+      - "io.hive.swagger.url=/hivesense-api/"
+      - "io.hive.swagger.name=HiveSense"
     depends_on:
       hivesense-install-schema:
         condition: service_completed_successfully

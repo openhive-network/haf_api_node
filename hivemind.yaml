@@ -86,6 +86,10 @@ services:
       # when debugging, you can enable this
       # PGRST_DB_PLAN_ENABLED: true
       PGRST_LOG_LEVEL: ${HIVEMIND_SERVER_LOG_LEVEL:-error}
+    labels:
+      # for Swagger UI
+      - "io.hive.swagger.url=/hivemind-api/"
+      - "io.hive.swagger.name=Hivemind"
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
       interval: 10s

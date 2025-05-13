@@ -71,6 +71,10 @@ services:
       timeout: 3s
       retries: 10
       start_period: 1m
+    labels:
+      # for Swagger UI
+      - "io.hive.swagger.url=/hafah-api/"
+      - "io.hive.swagger.name=HAF Account History"
     depends_on:
       hafah-postgrest:
         condition: service_healthy
