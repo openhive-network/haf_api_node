@@ -13,14 +13,39 @@ services:
       - OLLAMA_KEEP_ALIVE=-1
       - OLLAMA_MODELS=/tmp/ollama
     tty: true
-    ports:
-      - "11435:11434"
     networks:
       haf-network:
     volumes:
       - type: bind
-        source: ${HAF_DATA_DIRECTORY}/ollama
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/ollama
         target: /tmp/ollama
+    entrypoint: /bin/sh
+    command: >
+      -c "
+        ollama serve &
+
+        until ollama list > /dev/null 2>&1; do
+          echo 'Waiting for ollama to start...'
+          sleep 1
+        done
+
+        echo 'Pulling model...'
+        ollama pull \${HIVESENSE_MODEL:-yxchia/multilingual-e5-base:F16}
+        echo 'Ready.'
+
+        wait
+      "
+    # uncomment for nvidia:
+    ### runtime: nvidia
+    # or uncomment for amd:
+    ### image: ollama/ollama:0.7.0-rc1-rocm
+    ### environment:
+    ###  - HIP_VISIBLE_DEVICES=0
+    ### devices:
+    ###  - /dev/kfd
+    ###  - /dev/dri
+    ### group_add:
+    ###  - video
   hivesense-install-schema:
     image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -34,6 +59,14 @@ services:
       - "--ollama=${HIVESENSE_OLLAMA:-http://hivesense-ollama:11434}"
       - "--start_block=${HIVESENSE_START_BLOCK:-1}"
       - "--parallel_workers=${HIVESENSE_WORKERS:-16}"
+      - "--embedding_batch_size=${HIVESENSE_EMBEDDING_BATCH_SIZE:-100}"
+      - "--tokenizer-model=${HIVESENSE_TOKENIZER_MODEL_NAME:-intfloat/multilingual-e5-base}"
+      - "--tokens_per_chunk=${HIVESENSE_TOKENS_PER_CHUNK:-512}"
+      - "--overlap_amount=${HIVESENSE_OVERLAP_AMOUNT:-0.15}"
+      - "--sentence_language_model=${HIVESENSE_SENTENCE_LANGUAGE_MODEL:-xx_sent_ud_sm}"
+      - "--use-halfvec-index=${HIVESENSE_USE_HALFVEC_INDEX:-FALSE}"
+      - "--document-prefix=${HIVESENSE_DOCUMENT_PREFIX-passage: }"
+      - "--query-prefix=${HIVESENSE_QUERY_PREFIX-query: }"
       - "--swagger-url=${PUBLIC_HOSTNAME}/"
     networks:
       haf-network:
