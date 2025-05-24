@@ -9,6 +9,7 @@ services:
         [{url: "/hafbe-api/", name: "HAF Block Explorer"},
          {url: "/balance-api/", name: "Balance Tracker"},
          {url: "/reputation-api/", name: "Reputation Tracker"},
+         {url: "/hivesense-api/", name: "Hivesense"},
          {url: "/hafah-api/", name: "HAfAH"}]
     networks:
       haf-network:
