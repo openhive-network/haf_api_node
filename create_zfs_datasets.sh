@@ -93,9 +93,15 @@ zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DAT
 # create an uncompressed dataset for the blockchain.  Blocks in it are already compressed, so won't compress further.
 zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 
+# create a dataset for state-related data
+zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state"
+
 # create an uncompressed dataset for the shared_memory.bin file and WAL.
 # AFAIK we haven't done studies on whether compression helps shared_memory.bin.
-zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
+zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state/shared_memory"
+
+# create an uncompressed dataset for rocksdb 
+zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state/rocksdb"
 
 # create an unmountable dataset to serve as the parent for pgdata & tablespaces
 zfs create $zfs_common_options $zfs_compressed_options -o canmount=off "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store"
@@ -116,7 +122,7 @@ zfs create $zfs_common_options $zfs_compressed_options $zfs_postgres_options -o 
 zfs create $zfs_common_options $zfs_compressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 
 # needs to exist to be bind-mounted, no real reason to make it a dataset of its own though
-mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/shared_memory/haf_wal"
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/state/shared_memory/haf_wal"
 
 # 1000:100 is hived:users inside the container
 chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT"

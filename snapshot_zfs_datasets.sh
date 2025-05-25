@@ -132,7 +132,9 @@ check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/pgdat
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/tablespace"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
-check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/state/shared_memory"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/state/rocksdb"
+check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/state"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}"
 if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
   check_dataset_is_unmountable "${SWAP_LOGS_DATASET}"
@@ -141,12 +143,12 @@ fi
 echo "All datasets appear unmountable"
 
 if [ "$SNAPSHOT_NAME" != "empty" ]; then
-  if [ ! -e "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/shared_memory.bin" ]; then
-    echo "Warning: No shared memory file found in the shared_memory directory"
+  if [ ! -e "${TOP_LEVEL_DATASET_MOUNTPOINT}/state/shared_memory/shared_memory.bin" ]; then
+    echo "Warning: No shared memory file found in the state/shared_memory directory"
     exit 1
   fi
 
-  last_shared_memory_write=$(stat -c %Y "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/shared_memory.bin")
+  last_shared_memory_write=$(stat -c %Y "${TOP_LEVEL_DATASET_MOUNTPOINT}/state/shared_memory/shared_memory.bin")
   last_blockchain_write=$(find "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain" -type f -printf '%T@\n' | sort -n | tail -1 | cut -d. -f1)
 
   if [ -z "$last_blockchain_write" ]; then
@@ -213,7 +215,9 @@ unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
-unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
+unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/state/shared_memory"
+unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/state/rocksdb"
+unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/state"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
 if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
@@ -241,7 +245,9 @@ remount() {
 }
 
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}"
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
+remount "${ZPOOL}/${TOP_LEVEL_DATASET}/state"
+remount "${ZPOOL}/${TOP_LEVEL_DATASET}/state/shared_memory"
+remount "${ZPOOL}/${TOP_LEVEL_DATASET}/state/rocksdb"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
@@ -259,7 +265,9 @@ fi
 
 
 zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory@${SNAPSHOT_NAME}" \
+         "${ZPOOL}/${TOP_LEVEL_DATASET}/state@${SNAPSHOT_NAME}" \
+         "${ZPOOL}/${TOP_LEVEL_DATASET}/state/shared_memory@${SNAPSHOT_NAME}" \
+         "${ZPOOL}/${TOP_LEVEL_DATASET}/state/rocksdb@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain@${SNAPSHOT_NAME}" \
          "${SWAP_LOGS_DATASET:-${ZPOOL}/${TOP_LEVEL_DATASET}/logs}@${SNAPSHOT_NAME}" \
          "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace@${SNAPSHOT_NAME}" \
