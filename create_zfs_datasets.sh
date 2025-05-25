@@ -89,6 +89,10 @@ zfs_uncompressed_options="-o compression=off"
 # kills compression ratios for haf_block_log, so we've decided to leave it at the default 128k
 zfs_postgres_options="" # or "-o recordsize=8k -o recordsize=16k", consider also "-o logbias=throughput"
 zfs_shared_memory_options="-o primarycache=metadata -o recordsize=64k -o logbias=throughput -o sync=disabled"
+# RocksDB optimizations: smaller recordsize for better random I/O, disabled compression (RocksDB handles it),
+# and settings to optimize for write-heavy workloads with compaction
+zfs_rocksdb_options="-o recordsize=16k -o primarycache=all -o logbias=throughput -o sync=standard -o redundant_metadata=most"
+
 zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
 # create an uncompressed dataset for the blockchain.  Blocks in it are already compressed, so won't compress further.
@@ -101,8 +105,12 @@ zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DAT
 # Optimized for memory-mapped files with reduced latency and tuned for random access patterns
 zfs create $zfs_common_options $zfs_uncompressed_options $zfs_shared_memory_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state/shared_memory"
 
-# create an uncompressed dataset for rocksdb 
-zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state/rocksdb"
+# create an optimized dataset for RocksDB with settings tuned for LSM-tree databases:
+# - smaller recordsize (16k) for better random I/O performance
+# - full caching for both data and metadata to improve read performance
+# - logbias=throughput to optimize for write-heavy workloads with compaction
+# - redundant_metadata=most for better resilience during power loss
+zfs create $zfs_common_options $zfs_uncompressed_options $zfs_rocksdb_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state/rocksdb"
 
 # create an unmountable dataset to serve as the parent for pgdata & tablespaces
 zfs create $zfs_common_options $zfs_compressed_options -o canmount=off "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store"
