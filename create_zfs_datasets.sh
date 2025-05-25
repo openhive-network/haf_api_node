@@ -88,6 +88,7 @@ zfs_uncompressed_options="-o compression=off"
 # several sites recommend 8k blocks for optimizing postgres on zfs, but we have found that it
 # kills compression ratios for haf_block_log, so we've decided to leave it at the default 128k
 zfs_postgres_options="" # or "-o recordsize=8k -o recordsize=16k", consider also "-o logbias=throughput"
+zfs_shared_memory_options="-o primarycache=metadata -o recordsize=64k -o logbias=throughput -o sync=disabled"
 zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
 # create an uncompressed dataset for the blockchain.  Blocks in it are already compressed, so won't compress further.
@@ -97,8 +98,8 @@ zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_D
 zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state"
 
 # create an uncompressed dataset for the shared_memory.bin file and WAL.
-# AFAIK we haven't done studies on whether compression helps shared_memory.bin.
-zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state/shared_memory"
+# Optimized for memory-mapped files with reduced latency and tuned for random access patterns
+zfs create $zfs_common_options $zfs_uncompressed_options $zfs_shared_memory_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state/shared_memory"
 
 # create an uncompressed dataset for rocksdb 
 zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state/rocksdb"
