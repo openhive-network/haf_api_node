@@ -2,4 +2,4 @@
 . ./.env
 sudo rm -rf ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/postgresql/*
 sudo rm -rf ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/haf_db_store/*
-rm -rf ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/shared_memory.bin ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/haf_wal/* ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/comments-rocksdb-storage
+rm -rf ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/shared_memory.bin ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/state/haf_wal}/* ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/comments-rocksdb-storage

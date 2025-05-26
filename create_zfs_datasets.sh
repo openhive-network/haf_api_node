@@ -92,11 +92,14 @@ zfs_shared_memory_options="-o primarycache=metadata -o recordsize=64k -o logbias
 # RocksDB optimizations: smaller recordsize for better random I/O, disabled compression (RocksDB handles it),
 # and settings to optimize for write-heavy workloads with compaction
 zfs_rocksdb_options="-o recordsize=16k -o primarycache=all -o logbias=throughput -o sync=standard -o redundant_metadata=most"
+# Blockchain optimizations: larger recordsize for sequential access, metadata caching, and enhanced prefetch
+zfs_blockchain_options="-o recordsize=1M -o prefetch=1 -o logbias=latency"
 
 zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
 # create an uncompressed dataset for the blockchain.  Blocks in it are already compressed, so won't compress further.
-zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
+# Optimized with larger recordsize for sequential access, metadata-only caching, and enhanced prefetch for large files
+zfs create $zfs_common_options $zfs_uncompressed_options $zfs_blockchain_options "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 
 # create a dataset for state-related data
 zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/state"
@@ -131,7 +134,7 @@ zfs create $zfs_common_options $zfs_compressed_options $zfs_postgres_options -o 
 zfs create $zfs_common_options $zfs_compressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 
 # needs to exist to be bind-mounted, no real reason to make it a dataset of its own though
-mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/state/shared_memory/haf_wal"
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/state/haf_wal"
 
 # 1000:100 is hived:users inside the container
 chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT"

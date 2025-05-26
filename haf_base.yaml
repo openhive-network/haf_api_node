@@ -4,6 +4,11 @@ services:
       - core
       - block-explorer-uninstall
     image: ${HAF_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf}:${HAF_VERSION:-${HIVE_API_NODE_VERSION}}
+    privileged: true
+    cap_add: [SYS_ADMIN]
+    security_opt:
+       - apparmor=unconfined
+       - label=disable
     networks:
       - haf-network
     tty: true
@@ -105,8 +110,12 @@ services:
         source: ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/
         target: /home/hived/shm_dir
       - type: bind
-        source: ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/haf_wal}
+        source: ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/state/haf_wal}
         target: /home/hived/wal_dir
+      - type: bind
+        source: /proc/sys/vm
+        target: /host-proc/sys/vm
+        read_only: false
     shm_size: 8gb
     healthcheck:
       test: ["CMD-SHELL","curl -f 127.0.0.1:8091"]
