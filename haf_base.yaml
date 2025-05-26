@@ -107,11 +107,14 @@ services:
         source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/postgresql
         target: /home/hived/postgresql_logs/
       - type: bind
-        source: ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/
-        target: /home/hived/shm_dir
+        source: ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/state/shared_memory}/
+        target: /home/hived/state/shm_dir
       - type: bind
         source: ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/state/haf_wal}
-        target: /home/hived/wal_dir
+        target: /home/hived/state/wal_dir
+      - type: bind
+        source: ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/state/rocksdb}
+        target: /home/hived/state/rocksdb
       - type: bind
         source: /proc/sys/vm
         target: /host-proc/sys/vm

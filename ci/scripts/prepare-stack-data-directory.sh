@@ -7,8 +7,9 @@ HAF_MOUNTPOINT="${1:?"Please pass a valid path for the stack's data directory to
 echo "Creating HAF's mountpoint at ${HAF_MOUNTPOINT}..."
 
 mkdir -p "${HAF_MOUNTPOINT}/blockchain"
-mkdir -p "${HAF_MOUNTPOINT}/shared_memory"
+mkdir -p "${HAF_MOUNTPOINT}/state/shared_memory"
 mkdir -p "${HAF_MOUNTPOINT}/state/haf_wal"
+mkdir -p "${HAF_MOUNTPOINT}/state/rocksdb"
 mkdir -p "${HAF_MOUNTPOINT}/logs/caddy"
 mkdir -p "${HAF_MOUNTPOINT}/logs/pgbadger"
 mkdir -p "${HAF_MOUNTPOINT}/logs/postgresql"
