@@ -10,6 +10,7 @@ services:
       - "setup"
       - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
       - "--statement-timeout=${HIVEMIND_STATEMENT_TIMEOUT:-5000}"
+      - "--swagger-url=${PUBLIC_HOSTNAME}"
     depends_on:
       haf:
         condition: service_healthy
@@ -81,7 +82,7 @@ services:
       PGRST_DB_ANON_ROLE: hivemind_user
       PGRST_DB_POOL: 40
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
-      PGRST_OPENAPI_MODE: "disabled" # unclear why this is set, I guess because we currently only support json-rpc?
+      # PGRST_OPENAPI_MODE: "disabled" # unclear why this is set, I guess because we currently only support json-rpc?
       # when debugging, you can enable this
       # PGRST_DB_PLAN_ENABLED: true
       PGRST_LOG_LEVEL: ${HIVEMIND_SERVER_LOG_LEVEL:-error}
