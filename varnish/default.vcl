@@ -46,6 +46,11 @@ backend hivesense {
     .port = "7011";
 }
 
+backend hivemind {
+    .host = "haproxy";
+    .port = "7002";
+}
+
 #backend hivesense_swagger {
 #     .host = "hivesense-swagger";
 #     .port = "81";
@@ -125,6 +130,17 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url == "/hivemind-api/") {
+        set req.url = "/";
+        set req.backend_hint = hivemind;
+    } elseif (req.url ~ "^/hivemind-api/") {
+        # rewrite the URL to where PostgREST expects it
+        set req.url = regsub(req.url, "^/hivemind-api/(.*)$", "/\1");
+        set req.backend_hint = hivemind;
+
+        if (req.method == "POST") {
+            call recv_cachable_post;
+        }
     } elseif (req.url == "/varnishcheck") {
         return(synth(200, "Ok"));
     } else {
@@ -139,7 +155,7 @@ sub vcl_backend_fetch {
 }
 
 sub vcl_backend_response {
-    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense) {
+    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense || bereq.backend == hivemind) {
         # PostgREST generates invalid content-range headers, and varnish will refuse to cache/proxy calls because of it.
         # Until they fix it, just remove the header.  (see https://github.com/PostgREST/postgrest/issues/1089)
         unset beresp.http.Content-Range;
@@ -171,7 +187,9 @@ sub vcl_hash {
     } else if (req.backend_hint == haf_block_explorer) {
         hash_data("hafbe-api");
     } else if (req.backend_hint == hivesense) {
-             hash_data("hivesense-api");
+        hash_data("hivesense-api");
+    } else if (req.backend_hint == hivemind) {
+        hash_data("hivemind-api");
     }
 
     # To cache POST and PUT requests
