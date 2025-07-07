@@ -77,6 +77,7 @@ services:
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivesense-install-schema-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-install-schema-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-block-processing-1.${NETWORK_NAME}          trust\n
+        host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-sync-1.${NETWORK_NAME}                      trust\n
         host    haf_block_log    hivesense_user   ${COMPOSE_PROJECT_NAME}-hivesense-postgrest-1.${NETWORK_NAME}                 trust\n
         "
       SHM_DIR: /home/hived/shm_dir
@@ -109,7 +110,7 @@ services:
         target: /home/hived/wal_dir
     shm_size: 8gb
     healthcheck:
-      test: ["CMD-SHELL","curl -f 127.0.0.1:8091"]
+      test: ["CMD-SHELL", "wget -T2 -nv -t1 --spider http://127.0.0.1:8091/ || exit 1"]
       interval: 10s
       timeout: 2s
       retries: 10

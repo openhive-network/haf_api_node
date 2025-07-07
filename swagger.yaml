@@ -3,6 +3,8 @@ services:
     image: swaggerapi/swagger-ui
     profiles:
       - hafbe
+      - hivemind
+      - hivesense
       - apps
     environment:
       URLS: >-

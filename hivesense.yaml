@@ -50,6 +50,7 @@ services:
     image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - hivesense
+      - hivesense-install
     environment:
       POSTGRES_HOST: haf
     command:
@@ -60,13 +61,16 @@ services:
       - "--start_block=${HIVESENSE_START_BLOCK:-1}"
       - "--parallel_workers=${HIVESENSE_WORKERS:-16}"
       - "--embedding_batch_size=${HIVESENSE_EMBEDDING_BATCH_SIZE:-100}"
-      - "--tokenizer-model=${HIVESENSE_TOKENIZER_MODEL_NAME:-intfloat/multilingual-e5-base}"
+      - "--tokenizer-model=${HIVESENSE_TOKENIZER_MODEL_NAME:-e5-base}"
       - "--tokens_per_chunk=${HIVESENSE_TOKENS_PER_CHUNK:-512}"
       - "--overlap_amount=${HIVESENSE_OVERLAP_AMOUNT:-0.15}"
       - "--sentence_language_model=${HIVESENSE_SENTENCE_LANGUAGE_MODEL:-xx_sent_ud_sm}"
       - "--use-halfvec-index=${HIVESENSE_USE_HALFVEC_INDEX:-FALSE}"
+      - "--store-halfvec-embeddings=${HIVESENSE_STORE_HALFVEC_EMBEDDINGS:-FALSE}"
       - "--document-prefix=${HIVESENSE_DOCUMENT_PREFIX-passage: }"
       - "--query-prefix=${HIVESENSE_QUERY_PREFIX-query: }"
+      - "--min-token-threshold=${HIVESENSE_MIN_TOKEN_THRESHOLD:-75}"
+      - "--min-token-search-threshold=${HIVESENSE_MIN_TOKEN_SEARCH_THRESHOLD:-0}"
       - "--swagger-url=${PUBLIC_HOSTNAME}/"
     networks:
       haf-network:
@@ -91,9 +95,9 @@ services:
       haf:
         condition: service_healthy
   hivesense-block-processing:
-    image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_block_explorer}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
-      - hivesense
+      - hivesense-local
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: hivesense_owner
@@ -112,6 +116,20 @@ services:
         condition: service_completed_successfully
       haf:
         condition: service_healthy
+  hivesense-sync:
+    image: ${HIVESENSE_SYNCER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/syncer}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - hivesense-sync
+    environment:
+      POSTGRES_URI: postgresql://hivesense_owner@haf/haf_block_log?application_name=hivesense_sync
+      HIVESENSE_EMBED_API: https://steem-20.syncad.com/hivesense-api/embedding-updates
+    networks:
+      haf-network:
+    depends_on:
+      hivesense-install-schema:
+        condition: service_completed_successfully
+      haf:
+        condition: service_healthy
   hivesense-postgrest-rewriter:
     image: ${HIVESENSE_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/postgrest-rewriter}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -122,6 +140,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 1m
+    init: true
     depends_on:
       hivesense-postgrest:
         condition: service_healthy
