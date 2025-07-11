@@ -1,5 +1,5 @@
 services:
-  drone:
+  drone-real:
     image: ${DRONE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/drone}:${DRONE_VERSION:-latest}
     profiles:
       - servers
@@ -18,23 +18,23 @@ services:
   # to use our log analysis tools, we need to capture drone's traffic using a 
   # specific nginx logging config.  To do this, rename the actual drone
   # service above to 'drone-real', then uncomment the next section. 
-  # drone:
-  #   image: nginx
-  #   profiles:
-  #     - servers
-  #   volumes:
-  #     - type: bind
-  #       source: ./drone/nginx.conf
-  #       target: /etc/nginx/nginx.conf
-  #       read_only: true
-  #     - type: bind
-  #       source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/drone
-  #       target: /var/log/drone
-  #   depends_on:
-  #     drone-real:
-  #       condition: service_started
-  #   networks:
-  #     - haf-network
+  drone:
+    image: nginx
+    profiles:
+      - servers
+    volumes:
+      - type: bind
+        source: ./drone/nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+      - type: bind
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/drone
+        target: /var/log/drone
+    depends_on:
+      drone-real:
+        condition: service_started
+    networks:
+      - haf-network
   # drone:
   #   image: mitmproxy/mitmproxy
   #   profiles:

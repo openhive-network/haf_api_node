@@ -2,7 +2,8 @@ services:
   # use this ollama instance for testing
   # for production it is better to use remote server with CUDA GPU cards
   hivesense-ollama:
-    image: ollama/ollama:0.6.5
+    #image: ollama/ollama:rocm
+    image: ollama/ollama:0.7.0-rc1-rocm
     profiles:
       - ollama
     environment:
@@ -12,14 +13,51 @@ services:
       - OLLAMA_NUM_THREADS=16
       - OLLAMA_KEEP_ALIVE=-1
       - OLLAMA_MODELS=/tmp/ollama
+      #- HSA_OVERRIDE_GFX_VERSION=11.0.0
+      - HIP_VISIBLE_DEVICES=0
     tty: true
-    ports:
-      - "11435:11434"
     networks:
       haf-network:
+    ports:
+      - "11434:11434"
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - video
     volumes:
+      - /sys/module/amdgpu:/sys/module/amdgpu:ro
       - type: bind
-        source: ${HAF_DATA_DIRECTORY}/ollama
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/ollama/
+        target: /tmp/ollama
+  hivesense-ollama-2:
+    #image: ollama/ollama:rocm
+    image: ollama/ollama:0.7.0-rc1-rocm
+    profiles:
+      - ollama
+    environment:
+      - TZ=America/New_York
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_NUM_PARALLEL=16
+      - OLLAMA_NUM_THREADS=16
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_MODELS=/tmp/ollama
+      #- HSA_OVERRIDE_GFX_VERSION=11.0.0
+      - HIP_VISIBLE_DEVICES=0
+    tty: true
+    networks:
+      haf-network:
+    ports:
+      - "11435:11434"
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - video
+    volumes:
+      - /sys/module/amdgpu:/sys/module/amdgpu:ro
+      - type: bind
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/ollama-2/
         target: /tmp/ollama
   hivesense-install-schema:
     image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
