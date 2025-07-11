@@ -125,6 +125,7 @@ services:
     environment:
       POSTGRES_URI: postgresql://hivesense_owner@haf/haf_block_log?application_name=hivesense_sync
       HIVESENSE_API: ${HIVESENSE_SYNC_API:-https://api.hive.blog/hivesense-api}
+    init: true
     networks:
       haf-network:
     depends_on:
