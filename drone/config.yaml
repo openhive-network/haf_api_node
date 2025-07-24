@@ -25,6 +25,7 @@ translate_to_appbase:
 # the order they appear in this file doesn't matter
 urls:
   bridge: hivemind
+  search-api: hivemind
   hafsql-api: hafsql
   hive: hivemind
   hived: hived
@@ -134,11 +135,14 @@ ttls:
   bridge.get_community: 12
   bridge.get_trending_topics: 30
   bridge.does_user_follow_any_lists: 3
+  search-api: NO_CACHE
+  search-api.find_text: 30
   hafsql: NO_CACHE
 
 # how long to wait for the backend to respond before giving up
 timeouts:
   bridge: 30
+  search-api: 30
   hafsql: 30
   hive: 30
   hived: 5
