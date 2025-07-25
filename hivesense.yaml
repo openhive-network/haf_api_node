@@ -1,13 +1,19 @@
 services:
-  # run an ollama instance to compute vector embeddings.  # Without editing this config,
-  # your ollama instance will run entirely on CPU.  This is fine for embedding the query
-  # strings necessary for handling a low-to-moderate volume of search API calls, but
-  # you will need GPU acceleration if you want to generate embeddings for posts.
+  # run an ollama instance to compute vector embeddings.  
+  # Without editing this config, your ollama instance will run entirely on CPU.
+  # This is fine for embedding the query strings necessary for handling a low-to-moderate
+  # volume of search API calls, but you will need GPU acceleration if you want to 
+  # generate embeddings for posts.
+  #
+  # By default, we use a stripped-down ollama image that's fine for CPU embedding.
+  # If you're using a GPU, you will likely need to switch to the official ollama image,
+  # by setting OLLAMA_IMAGE=ollama/ollama in the .env file
   hivesense-ollama:
-    image: ollama/ollama:0.6.5
+    image: ${OLLAMA_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/ollama}:${OLLAMA_VERSION:-0.6.5}
     profiles:
       - hivesense
       - apps
+      - ollama
     environment:
       - TZ=America/New_York
       - OLLAMA_HOST=0.0.0.0
