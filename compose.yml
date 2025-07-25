@@ -15,6 +15,7 @@ include:
   - monitoring.yaml
   - swagger.yaml
   - hivesense.yaml
+  - hivesense-${HIVESENSE_CONFIGURATION:-sync}.yaml
 
 networks:
   haf-network:

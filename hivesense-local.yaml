@@ -1,0 +1,24 @@
+services:
+  hivesense-block-processing:
+    image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - hivesense
+      - apps
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: hivesense_owner
+    command: >
+      process_blocks ${HIVESENSE_SYNC_ARGS:-}
+    networks:
+      haf-network:
+    healthcheck:
+      test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 48h
+    depends_on:
+      hivesense-install-schema:
+        condition: service_completed_successfully
+      haf:
+        condition: service_healthy

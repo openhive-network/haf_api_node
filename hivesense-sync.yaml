@@ -1,0 +1,17 @@
+services:
+  hivesense-sync:
+    image: ${HIVESENSE_SYNCER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/syncer}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - hivesense
+      - apps
+    environment:
+      POSTGRES_URI: postgresql://hivesense_owner@haf/haf_block_log?application_name=hivesense_sync
+      HIVESENSE_API: ${HIVESENSE_SYNC_API:-https://api.hive.blog/hivesense-api}
+    init: true
+    networks:
+      haf-network:
+    depends_on:
+      hivesense-install-schema:
+        condition: service_completed_successfully
+      haf:
+        condition: service_healthy
