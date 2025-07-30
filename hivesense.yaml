@@ -81,6 +81,15 @@ services:
       - "--min-token-threshold=${HIVESENSE_MIN_TOKEN_THRESHOLD:-75}"
       - "--min-token-search-threshold=${HIVESENSE_MIN_TOKEN_SEARCH_THRESHOLD:-0}"
       - "--swagger-url=${PUBLIC_HOSTNAME}/"
+      - "--use-reduced-embeddings=${HIVESENSE_USE_REDUCED_EMBEDDINGS:-false}"
+      - "--reduced-matrix-json=/home/haf_admin/pca_projection_matrix.json"
+      - "--reduced-dim=${HIVESENSE_REDUCED_DIMENSION:-128}"
+      - "--hnsw-m=${HIVESENSE_HNSW_M:-16}"
+      - "--hnsw-ef-construction=${HIVESENSE_HNSW_EF_CONSTRUCTION:-200}"
+    volumes:
+      - type: bind
+        source: ${HIVESENSE_REDUCED_MATRIX_JSON:-/dev/null}
+        target: /home/haf_admin/pca_projection_matrix.json
     networks:
       haf-network:
     depends_on:
