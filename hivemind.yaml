@@ -14,6 +14,8 @@ services:
     depends_on:
       haf:
         condition: service_healthy
+      hafah-install:
+        condition: service_completed_successfully
       reputation-tracker-install:
         condition: service_completed_successfully
 
@@ -46,8 +48,6 @@ services:
     depends_on:
       haf:
         condition: service_healthy
-      reputation-tracker-install:
-        condition: service_completed_successfully
       hivemind-install:
         condition: service_completed_successfully
 
