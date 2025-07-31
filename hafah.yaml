@@ -6,6 +6,7 @@ services:
       - hafah
       - hafbe
       - haf-block-explorer-drop-db
+      - hivemind
     environment:
       POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
     command:
