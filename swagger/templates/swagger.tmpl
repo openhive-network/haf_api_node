@@ -1,6 +1,114 @@
 {{- /* templates/swagger.tmpl */ -}}
-window.onload = function() {
-  //<editor-fold desc="Changeable Configuration Block">
+window.onload = function () {
+  // Build a list of specs from Docker labels, including an optional "interceptor" flag
+  const SPEC_LIST = [
+    {{- $svcs := whereLabelExists . "io.hive.swagger.url" }}
+    {{- range $i, $c := $svcs }}
+    {
+      url: "{{ index $c.Labels "io.hive.swagger.url" }}",
+      name: "{{ index $c.Labels "io.hive.swagger.name" }}",
+      interceptor: "{{ index $c.Labels "io.hive.swagger.interceptor" }}"
+    }{{ if lt (add $i 1) (len $svcs) }},{{ end }}
+    {{- end }}
+  ];
+
+  // Helpers to normalize URLs and build lookups
+  const norm = (u) => {
+    try { return new URL(u, window.location.origin).pathname; }
+    catch { return u; }
+  };
+
+  const URL_TO_NAME = Object.fromEntries(SPEC_LIST.map(s => [norm(s.url), s.name]));
+  const JSONRPC_PATHS = new Set(
+    SPEC_LIST.filter(s => (s.interceptor || "").toLowerCase() === "jsonrpc")
+             .map(s => norm(s.url))
+  );
+
+  // Track the currently selected definition (by normalized pathname)
+  window.__activeSpecPath = null;
+  window.__activeSpecName = null;
+
+  // Transformer for JSON-RPC functions
+  const jsonRpcTransform = (req) => {
+    // Don't touch spec loads
+    if (req.loadSpec) return req;
+
+    // Get the active spec and compute the server base as an absolute URL
+    const sys = window.ui?.getSystem?.();
+    const spec = sys?.specSelectors?.specJson?.();
+
+    let serverHref = "/";
+    if (spec?.openapi && Array.isArray(spec.servers) && spec.servers.length) {
+      const selIdx = sys?.specSelectors?.selectedServer?.(); // may be undefined on older UI
+      const idx = Number.isInteger(selIdx) ? selIdx : 0;
+      serverHref = spec.servers[idx]?.url || "/";
+    } else if (spec?.swagger === "2.0") {
+      const scheme = (spec.schemes && spec.schemes[0]) || window.location.protocol.replace(":", "");
+      const host = spec.host || window.location.host;
+      const basePath = spec.basePath || "/";
+      serverHref = `${scheme}://${host}${basePath}`;
+    }
+
+    const serverAbs = new URL(serverHref, window.location.origin); // resolve relative like "/"
+    const origin = serverAbs.origin;                                // e.g. "https://foo.bar.com"
+    const basePath = serverAbs.pathname.endsWith("/")
+      ? serverAbs.pathname                                         // e.g. "/api/"
+      : serverAbs.pathname + "/";                                   // normalize to trailing "/"
+
+    // Derive the method by removing the known server prefix from the (possibly broken) URL
+    const s1 = origin + basePath;                                   // preferred prefix
+    const s2 = origin;                                              // fallback if UI omitted the "/" entirely
+
+    const raw = String(req.url);
+    let rest = "";
+    if (raw.startsWith(s1)) {
+      rest = raw.slice(s1.length);                                  // good: host + basePath present
+    } else if (raw.startsWith(s2)) {
+      rest = raw.slice(s2.length);                                  // broken: host glued to path
+      if (rest.startsWith("/")) rest = rest.slice(1);               // trim if it *did* have a slash
+    } else {
+      // last resort: parse as relative to window origin and take its pathname
+      try {
+        const u = new URL(raw, window.location.origin);
+        rest = u.pathname.replace(/^\/+/, "");
+      } catch {
+        return req; // can't recover; leave it alone
+      }
+    }
+
+    if (!rest) return req;                                          // nothing to transform
+
+    // "/block_api/get_block" -> "block_api.get_block" (keep dots if already dotted)
+    const method = rest.includes(".")
+      ? rest
+      : rest.split("/").filter(Boolean).join(".");
+
+    // Merge/parse body (string or object)
+    let paramsBody = {};
+    try {
+      if (req.body) {
+        paramsBody = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      }
+    } catch { /* ignore malformed JSON; keep {} */ }
+
+    // Rewrite as JSON-RPC to the *server base*, discarding the path
+    req.method = "POST";
+    req.url = origin + basePath;                                    // always absolute, with trailing "/"
+    req.headers = Object.assign({}, req.headers, {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    });
+    req.body = JSON.stringify({
+      jsonrpc: "2.0",
+      method,
+      id: 1,
+      params: paramsBody
+    });
+
+    return req;
+  };
+
+  // Build Swagger UI
   window.ui = SwaggerUIBundle({
     dom_id: '#swagger-ui',
     deepLinking: true,
@@ -13,15 +121,29 @@ window.onload = function() {
     ],
     layout: "StandaloneLayout",
     queryConfigEnabled: false,
-    urls: [
-      {{- $svcs := whereLabelExists . "io.hive.swagger.url" }}
-      {{- range $i, $c := $svcs }}
-      {
-        url: "{{ index $c.Labels "io.hive.swagger.url" }}",
-        name: "{{ index $c.Labels "io.hive.swagger.name" }}"
-      }{{ if lt (add $i 1) (len $svcs) }},{{ end }}
-      {{- end }}
-    ]
+    persistAuthorization: true,
+
+    // Populate the topbar dropdown
+    urls: SPEC_LIST.map(({ url, name }) => ({ url, name })),
+
+    // Conditionally apply interceptor based on selected topbar item
+    requestInterceptor: (req) => {
+      // When a spec is being loaded, record which one is active
+      if (req.loadSpec) {
+        const path = norm(req.url);
+        if (URL_TO_NAME[path]) {
+          window.__activeSpecPath = path;
+          window.__activeSpecName = URL_TO_NAME[path];
+        }
+        return req;
+      }
+
+      // If the active spec is marked as JSON-RPC, transform requests
+      if (window.__activeSpecPath && JSONRPC_PATHS.has(window.__activeSpecPath)) {
+        return jsonRpcTransform(req);
+      }
+
+      return req;
+    }
   });
-  //</editor-fold>
 };
