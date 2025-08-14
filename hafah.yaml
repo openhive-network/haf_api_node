@@ -75,6 +75,7 @@ services:
       # for Swagger UI
       - "io.hive.swagger.url=/hafah-api/"
       - "io.hive.swagger.name=HAF Account History"
+      - "io.hive.swagger.order=2"
     depends_on:
       hafah-postgrest:
         condition: service_healthy

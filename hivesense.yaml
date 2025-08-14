@@ -155,6 +155,7 @@ services:
       # for Swagger UI
       - "io.hive.swagger.url=/hivesense-api/"
       - "io.hive.swagger.name=HiveSense"
+      - "io.hive.swagger.order=4"
     depends_on:
       hivesense-install-schema:
         condition: service_completed_successfully

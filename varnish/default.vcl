@@ -51,6 +51,12 @@ backend hivemind {
     .port = "7002";
 }
 
+# seems kind of silly to clutter our haproxy config for one static file, so go direct here:
+backend hived_openapi_spec {
+    .host = "hive-openapi-spec";
+    .port = "80";
+}
+
 #backend hivesense_swagger {
 #     .host = "hivesense-swagger";
 #     .port = "81";
@@ -141,6 +147,9 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url == "/hived-api/") {
+        set req.url = "/openapi.json";
+        set req.backend_hint = hived_openapi_spec;
     } elseif (req.url == "/varnishcheck") {
         return(synth(200, "Ok"));
     } else {
