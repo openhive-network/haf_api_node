@@ -90,6 +90,7 @@ services:
       # for Swagger UI
       - "io.hive.swagger.url=/hivemind-api/"
       - "io.hive.swagger.name=Hivemind"
+      - "io.hive.swagger.order=3"
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
       interval: 10s

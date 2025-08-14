@@ -141,7 +141,7 @@
   }
 
   @rest_apis {
-    path /hafah-api/* /balance-api/* /reputation-api/* /hafbe-api/* /hivesense-api/* /hivemind-api/*
+    path /hafah-api/* /balance-api/* /reputation-api/* /hafbe-api/* /hivesense-api/* /hivemind-api/* /hived-api/*
   }
 
   handle @rest_apis {

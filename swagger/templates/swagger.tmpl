@@ -7,7 +7,8 @@ window.onload = function () {
     {
       url: "{{ index $c.Labels "io.hive.swagger.url" }}",
       name: "{{ index $c.Labels "io.hive.swagger.name" }}",
-      interceptor: "{{ index $c.Labels "io.hive.swagger.interceptor" }}"
+      interceptor: "{{ index $c.Labels "io.hive.swagger.interceptor" }}",
+      order: Number("{{ index $c.Labels "io.hive.swagger.order" }}") || 0
     }{{ if lt (add $i 1) (len $svcs) }},{{ end }}
     {{- end }}
   ];
@@ -108,6 +109,11 @@ window.onload = function () {
     return req;
   };
 
+  const URLS = SPEC_LIST
+    .slice()
+    .sort((a,b) => (a.order - b.order) || a.name.localeCompare(b.name, undefined, { numeric: true }))
+    .map(({ url, name }) => ({ url, name }));
+
   // Build Swagger UI
   window.ui = SwaggerUIBundle({
     dom_id: '#swagger-ui',
@@ -124,7 +130,7 @@ window.onload = function () {
     persistAuthorization: true,
 
     // Populate the topbar dropdown
-    urls: SPEC_LIST.map(({ url, name }) => ({ url, name })),
+    urls: URLS,
 
     // Conditionally apply interceptor based on selected topbar item
     requestInterceptor: (req) => {

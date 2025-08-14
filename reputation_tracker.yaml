@@ -76,6 +76,7 @@ services:
       # for Swagger UI
       - "io.hive.swagger.url=/reputation-api/"
       - "io.hive.swagger.name=Reputation Tracker"
+      - "io.hive.swagger.order=5"
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
       interval: 10s
