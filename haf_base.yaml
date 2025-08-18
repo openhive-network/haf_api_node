@@ -32,6 +32,10 @@ services:
         host    haf_block_log    reptracker_owner ${COMPOSE_PROJECT_NAME}-reputation-tracker-block-processing-1.${NETWORK_NAME} trust\n
         host    haf_block_log    reptracker_user  ${COMPOSE_PROJECT_NAME}-reputation-tracker-postgrest-1.${NETWORK_NAME}        trust\n
 
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-nft-tracker-install-1.${NETWORK_NAME}                 trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-nft-tracker-uninstall-1.${NETWORK_NAME}               trust\n
+        host    haf_block_log    nfttracker_owner ${COMPOSE_PROJECT_NAME}-nft-tracker-block-processing-1.${NETWORK_NAME}        trust\n
+
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-uninstall-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-install-1.${NETWORK_NAME}                       trust\n
         host    haf_block_log    hafah_user       ${COMPOSE_PROJECT_NAME}-hafah-postgrest-1.${NETWORK_NAME}                     trust\n
