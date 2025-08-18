@@ -11,4 +11,5 @@ include:
   - log_rotation/varnish.log_rotation.yaml
   - log_rotation/monitoring.log_rotation.yaml
   - log_rotation/reputation_tracker.log_rotation.yaml
+  - log_rotation/nft_tracker.log_rotation.yaml
   - log_rotation/swagger.log_rotation.yaml
