@@ -17,6 +17,7 @@ include:
   - swagger.yaml
   - hivesense.yaml
   - hivesense-${HIVESENSE_CONFIGURATION:-sync}.yaml
+  - hafsql.yaml
 
 networks:
   haf-network:
