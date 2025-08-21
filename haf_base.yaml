@@ -125,7 +125,7 @@ services:
     networks:
       - haf-network
     healthcheck:
-      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:80 || exit 1"]
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:80/openapi.json || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 10
