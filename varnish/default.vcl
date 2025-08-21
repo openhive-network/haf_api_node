@@ -46,6 +46,11 @@ backend hivesense {
     .port = "7011";
 }
 
+backend nft_tracker {
+    .host = "haproxy";
+    .port = "7013";
+}
+
 backend hivemind {
     .host = "haproxy";
     .port = "7002";
@@ -136,6 +141,14 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url ~ "^/nft-tracker-api/") {
+        # rewrite the URL to where PostgREST expects it
+        set req.url = regsub(req.url, "^/nft-tracker-api/(.*)$", "/\1");
+        set req.backend_hint = nft_tracker;
+
+        if (req.method == "POST") {
+            call recv_cachable_post;
+        }
     } elseif (req.url == "/hivemind-api/") {
         set req.url = "/";
         set req.backend_hint = hivemind;
@@ -164,7 +177,7 @@ sub vcl_backend_fetch {
 }
 
 sub vcl_backend_response {
-    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense || bereq.backend == hivemind) {
+    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense || bereq.backend == nft_tracker || bereq.backend == hivemind) {
         # PostgREST generates invalid content-range headers, and varnish will refuse to cache/proxy calls because of it.
         # Until they fix it, just remove the header.  (see https://github.com/PostgREST/postgrest/issues/1089)
         unset beresp.http.Content-Range;
@@ -197,6 +210,8 @@ sub vcl_hash {
         hash_data("hafbe-api");
     } else if (req.backend_hint == hivesense) {
         hash_data("hivesense-api");
+    } else if (req.backend_hint == nft_tracker) {
+        hash_data("nft-tracker-api");
     } else if (req.backend_hint == hivemind) {
         hash_data("hivemind-api");
     }
