@@ -66,7 +66,7 @@ services:
       PGRST_DB_URI: postgresql://reptracker_user@haf/haf_block_log?application_name=reputation_tracker_postgrest
       PGRST_DB_SCHEMA: reptracker_endpoints
       PGRST_DB_ANON_ROLE: reptracker_user
-      PGRST_DB_POOL: 20
+      PGRST_DB_POOL: 10
       PGRST_DB_ROOT_SPEC: root
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_DB_EXTRA_SEARCH_PATH: reptracker_app
