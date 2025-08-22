@@ -17,7 +17,7 @@ variables:
     # HIVEMIND_REWRITER_IMAGE: "${HIVE_API_NODE_REGISTRY}/hivemind/postgrest-rewriter"
     # REPUTATION_TRACKER_IMAGE: "${HIVE_API_NODE_REGISTRY}/reputation_tracker"
     # REPUTATION_TRACKER_REWRITER_IMAGE: "${HIVE_API_NODE_REGISTRY}/reputation_tracker/postgrest-rewriter"
-    LAST_BLOCK_NUMBER: "5000000"
+    LAST_BLOCK_NUMBER: "10000"
     ARGUMENTS: "--replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
     HIVEMIND_SYNC_ARGS: "--community-start-block=4998000"
     USE_ALTERNATE_HAPROXY_CONFIG: "true"
