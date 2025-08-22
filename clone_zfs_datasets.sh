@@ -90,6 +90,8 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# Get all datasets under the top-level dataset
+# This will automatically include comments-rocksdb-storage if it exists, and skip it if it doesn't
 set -- $(zfs list -r -H -o name -s mountpoint "$ZPOOL/$TOP_LEVEL_DATASET")
 
 for dataset; do

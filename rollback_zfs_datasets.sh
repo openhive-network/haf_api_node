@@ -94,7 +94,10 @@ check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/pgdat
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/tablespace"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
-check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/comments-rocksdb-storage"
+# Check if comments-rocksdb-storage exists before checking if it's unmountable
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
+  check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/comments-rocksdb-storage"
+fi
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}"
 echo "All datasets appear unmountable"
@@ -129,7 +132,10 @@ unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
-unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+# Unmount comments-rocksdb-storage if it exists
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
+  unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+fi
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
@@ -140,7 +146,10 @@ rollback() {
 }
 
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}"
-rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+# Rollback comments-rocksdb-storage if it exists
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
+  rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+fi
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
@@ -156,18 +165,27 @@ remount() {
 
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+# Remount comments-rocksdb-storage if it exists
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
+  remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+fi
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 
-zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/logs" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
+# Build list of datasets to display
+DATASET_LIST="${ZPOOL}/${TOP_LEVEL_DATASET}"
+DATASET_LIST="${DATASET_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
+# Add comments-rocksdb-storage if it exists
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
+  DATASET_LIST="${DATASET_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+fi
+DATASET_LIST="${DATASET_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
+DATASET_LIST="${DATASET_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+DATASET_LIST="${DATASET_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
+DATASET_LIST="${DATASET_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
+DATASET_LIST="${DATASET_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
+
+zfs list ${DATASET_LIST}

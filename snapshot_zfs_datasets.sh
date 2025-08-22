@@ -132,7 +132,10 @@ check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/pgdat
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/tablespace"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
-check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/comments-rocksdb-storage"
+# Check if comments-rocksdb-storage exists before checking if it's unmountable
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
+  check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/comments-rocksdb-storage"
+fi
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}"
 if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
@@ -214,7 +217,10 @@ unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
-unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+# Unmount comments-rocksdb-storage if it exists
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
+  unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+fi
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 
@@ -244,7 +250,10 @@ remount() {
 
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+# Remount comments-rocksdb-storage if it exists
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
+  remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+fi
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
@@ -261,11 +270,17 @@ if [ $PUBLIC_SNAPSHOT -eq 1 ]; then
 fi
 
 
-zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory@${SNAPSHOT_NAME}" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage@${SNAPSHOT_NAME}" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain@${SNAPSHOT_NAME}" \
-         "${SWAP_LOGS_DATASET:-${ZPOOL}/${TOP_LEVEL_DATASET}/logs}@${SNAPSHOT_NAME}" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace@${SNAPSHOT_NAME}" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata@${SNAPSHOT_NAME}" \
-         "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal@${SNAPSHOT_NAME}"
+# Build list of snapshots to display
+SNAPSHOT_LIST="${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"
+SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory@${SNAPSHOT_NAME}"
+# Add comments-rocksdb-storage snapshot if it exists
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage@${SNAPSHOT_NAME}" >/dev/null 2>&1; then
+  SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage@${SNAPSHOT_NAME}"
+fi
+SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain@${SNAPSHOT_NAME}"
+SNAPSHOT_LIST="${SNAPSHOT_LIST} ${SWAP_LOGS_DATASET:-${ZPOOL}/${TOP_LEVEL_DATASET}/logs}@${SNAPSHOT_NAME}"
+SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace@${SNAPSHOT_NAME}"
+SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata@${SNAPSHOT_NAME}"
+SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal@${SNAPSHOT_NAME}"
+
+zfs list ${SNAPSHOT_LIST}
