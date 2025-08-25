@@ -89,7 +89,7 @@ services:
         host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-pca-1.${NETWORK_NAME}                       trust\n
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafsql-1.${NETWORK_NAME}                              trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafsql-uninstall-1.${NETWORK_NAME}                              trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafsql-uninstall-1.${NETWORK_NAME}                    trust\n
         "
       SHM_DIR: /home/hived/shm_dir
       WAL_DIR: /home/hived/wal_dir
