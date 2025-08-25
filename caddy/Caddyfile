@@ -136,8 +136,7 @@
   }
 
   @rest_apis {
-    path /hafah-api/* /balance-api/* /reputation-api/* /hafbe-api/* /hivesense-api/* /hivemind-api/* /nft-tracker-api/* /hived-api/* /hafsql*
-    # /hafsql* is intentional as we want the access to /hafsql
+    path /hafah-api/* /balance-api/* /reputation-api/* /hafbe-api/* /hivesense-api/* /hivemind-api/* /nft-tracker-api/* /hived-api/* /hafsql /hafsql/*
   }
 
   handle @rest_apis {
