@@ -1,0 +1,60 @@
+services:
+  hafsql:
+    profiles:
+      - hafsql
+    image: mahdiyari/hafsql:${HAFSQL_VERSION}
+    networks:
+      - haf-network
+    tty: true
+    stdin_open: true
+    environment:
+      HAFSQL_PGHOST: haf
+      # Can disable parts of hafsql if not needed
+      HAFSQL_BALANCES: true
+      HAFSQL_ACCOUNTS: true
+      HAFSQL_FOLLOWS: true # follows, mutes, blacklists
+      HAFSQL_COMMUNITIES: true
+      HAFSQL_RC_DELEGATIONS: true
+      HAFSQL_DELEGATIONS: true
+      HAFSQL_PROPOSALS: true
+      HAFSQL_COMMENTS: true
+      HAFSQL_REBLOGS: true # depends on HAFSQL_COMMENTS
+      HAFSQL_REWARDS: true # depends on HAFSQL_COMMENTS
+      HAFSQL_REPUTATIONS: true # depends on HAFSQL_COMMENTS
+      HAFSQL_MARKET: true
+      HAFSQL_PUBLICUSER: true
+      API_PREFIX: /hafsql
+    depends_on:
+      haf:
+        condition: service_healthy
+    labels:
+      # for Swagger UI
+      - "io.hive.swagger.url=/hafsql/openapi.json"
+      - "io.hive.swagger.name=HafSQL"
+      - "io.hive.swagger.order=7"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 5
+
+  hafsql-uninstall:
+    profiles:
+      - hafsql-uninstall
+    image: mahdiyari/hafsql:${HAFSQL_VERSION}
+    networks:
+      - haf-network
+    tty: true
+    stdin_open: true
+    stop_grace_period: 10m
+    command: purge
+    environment:
+      HAFSQL_PGHOST: haf
+    depends_on:
+      haf:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 5

@@ -56,6 +56,11 @@ backend hivemind {
     .port = "7002";
 }
 
+backend hafsql {
+    .host = "haproxy";
+    .port = "7007";
+}
+
 # seems kind of silly to clutter our haproxy config for one static file, so go direct here:
 backend hived_openapi_spec {
     .host = "hive-openapi-spec";
@@ -163,6 +168,9 @@ sub vcl_recv {
     } elseif (req.url == "/hived-api/") {
         set req.url = "/openapi.json";
         set req.backend_hint = hived_openapi_spec;
+    } elseif (req.url ~ "^/hafsql") {
+        # redirect /hafsql and /hafsql/* to hafsql
+        set req.backend_hint = hafsql;
     } elseif (req.url == "/varnishcheck") {
         return(synth(200, "Ok"));
     } else {
