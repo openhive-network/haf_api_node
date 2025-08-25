@@ -10,6 +10,7 @@ services:
       haf-network:
     command:
       - install_app
+      - --swagger-url=${PUBLIC_HOSTNAME}
     depends_on:
       haf:
         condition: service_healthy
