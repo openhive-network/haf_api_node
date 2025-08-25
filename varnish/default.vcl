@@ -57,7 +57,7 @@ backend hivemind {
 }
 
 backend hafsql {
-    .host = "hafsql";
+    .host = "haproxy";
     .port = "7007";
 }
 
