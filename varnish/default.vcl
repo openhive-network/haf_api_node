@@ -168,7 +168,8 @@ sub vcl_recv {
     } elseif (req.url == "/hived-api/") {
         set req.url = "/openapi.json";
         set req.backend_hint = hived_openapi_spec;
-    } elseif (req.url ~ "^/hafsql/") {
+    } elseif (req.url ~ "^/hafsql") {
+        # redirect /hafsql and /hafsql/* to hafsql
         set req.backend_hint = hafsql;
     } elseif (req.url == "/varnishcheck") {
         return(synth(200, "Ok"));
