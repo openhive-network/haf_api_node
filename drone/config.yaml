@@ -14,7 +14,6 @@ backends:
   hivemind: http://haproxy:7002
   hafah: http://haproxy:7003
   hived-sync: http://haproxy:7006
-  hafsql: http://haproxy:7007
 # translate calls in these namespaces to appbase calls.  calls to methods
 # in other namespaces will not be translated.
 # This is done after jussi has rewritten the method name.
@@ -26,7 +25,6 @@ translate_to_appbase:
 urls:
   bridge: hivemind
   search-api: hivemind
-  hafsql-api: hafsql
   hive: hivemind
   hived: hived
   hived.network_broadcast_api.broadcast_transaction_synchronous: hived-sync
@@ -137,13 +135,11 @@ ttls:
   bridge.does_user_follow_any_lists: 3
   search-api: NO_CACHE
   search-api.find_text: 30
-  hafsql: NO_CACHE
 
 # how long to wait for the backend to respond before giving up
 timeouts:
   bridge: 30
   search-api: 30
-  hafsql: 30
   hive: 30
   hived: 5
   hived.network_broadcast_api: 0
