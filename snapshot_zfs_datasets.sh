@@ -132,6 +132,13 @@ check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/pgdat
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/haf_db_store/tablespace"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain"
+# Check if hivesense datasets exist before checking if they're unmountable
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama" >/dev/null 2>&1; then
+  check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/hivesense/ollama"
+fi
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense" >/dev/null 2>&1; then
+  check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/hivesense"
+fi
 # Check if comments-rocksdb-storage exists before checking if it's unmountable
 if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
   check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/comments-rocksdb-storage"
@@ -217,6 +224,13 @@ unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
+# Unmount hivesense datasets if they exist
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama" >/dev/null 2>&1; then
+  unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
+fi
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense" >/dev/null 2>&1; then
+  unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense"
+fi
 # Unmount comments-rocksdb-storage if it exists
 if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
   unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
@@ -255,6 +269,13 @@ if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storag
   remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
 fi
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
+# Remount hivesense datasets if they exist
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense" >/dev/null 2>&1; then
+  remount "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense"
+fi
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama" >/dev/null 2>&1; then
+  remount "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
+fi
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
@@ -278,6 +299,13 @@ if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storag
   SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage@${SNAPSHOT_NAME}"
 fi
 SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain@${SNAPSHOT_NAME}"
+# Add hivesense snapshots if they exist
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense@${SNAPSHOT_NAME}" >/dev/null 2>&1; then
+  SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense@${SNAPSHOT_NAME}"
+fi
+if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama@${SNAPSHOT_NAME}" >/dev/null 2>&1; then
+  SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama@${SNAPSHOT_NAME}"
+fi
 SNAPSHOT_LIST="${SNAPSHOT_LIST} ${SWAP_LOGS_DATASET:-${ZPOOL}/${TOP_LEVEL_DATASET}/logs}@${SNAPSHOT_NAME}"
 SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace@${SNAPSHOT_NAME}"
 SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata@${SNAPSHOT_NAME}"
