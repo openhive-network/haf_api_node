@@ -26,7 +26,7 @@ services:
       haf-network:
     volumes:
       - type: bind
-        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/ollama
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/hivesense/ollama
         target: /tmp/ollama
     entrypoint: /bin/sh
     command: >
@@ -82,14 +82,16 @@ services:
       - "--min-token-search-threshold=${HIVESENSE_MIN_TOKEN_SEARCH_THRESHOLD:-0}"
       - "--swagger-url=${PUBLIC_HOSTNAME}/"
       - "--use-reduced-embeddings=${HIVESENSE_USE_REDUCED_EMBEDDINGS:-false}"
-      - "--reduced-matrix-json=/home/haf_admin/pca_projection_matrix.json"
+      - "--reduced-matrix-url=${HIVESENSE_MATRIX_JSON_URL:-https://gitlab.syncad.com/hive/hivesense/-/wikis/uploads/0eebabf30d7cceb5776cb62c41abb2c9/projection_matrix_768_128_20250722.json.gz}"
+      - "--reduced-matrix-file=${HIVESENSE_MATRIX_JSON_FILE:-}"
+      - "--config-dir=/hivesense/config"
       - "--reduced-dim=${HIVESENSE_REDUCED_DIMENSION:-128}"
       - "--hnsw-m=${HIVESENSE_HNSW_M:-16}"
       - "--hnsw-ef-construction=${HIVESENSE_HNSW_EF_CONSTRUCTION:-200}"
     volumes:
       - type: bind
-        source: ${HIVESENSE_REDUCED_MATRIX_JSON:-/dev/null}
-        target: /home/haf_admin/pca_projection_matrix.json
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/hivesense/config
+        target: /hivesense/config
     networks:
       haf-network:
     depends_on:
@@ -185,7 +187,7 @@ services:
         #command: ["python", "convert_embeddings.py", "--workers", "20"]
     volumes:
       - type: bind
-        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/hivesense-pca
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/hivesense/pca
         target: /app/output
     depends_on:
       hivesense-install-schema:
