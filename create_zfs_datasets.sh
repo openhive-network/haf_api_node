@@ -115,30 +115,35 @@ zfs create $zfs_common_options $zfs_compressed_options $zfs_postgres_options -o 
 # create a dataset for logs (hived and postgresql, for now)
 zfs create $zfs_common_options $zfs_compressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 
+# create a parent dataset for hivesense components (compressed for config files)
+# This is optional - only created if hivesense is being used
+zfs create $zfs_common_options $zfs_compressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense"
+
+# create a child dataset for ollama models (already compressed, so no ZFS compression)
+zfs create $zfs_common_options $zfs_uncompressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
+
 # needs to exist to be bind-mounted, no real reason to make it a dataset of its own though
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/shared_memory/haf_wal"
 
-# 1000:100 is hived:users inside the container
-chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT"
+# Create hivesense subdirectories
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/pca"
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config"
 
-# 105:109 is postgres:postgres inside the container
-chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_db_store"
-
+# Copy PostgreSQL configuration files
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 cp pgtune.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 cp zfs.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 cp compression.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 cp logging.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
-# 105:109 is postgres:postgres inside the container
-chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 
+# Create log subdirectories
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/caddy"
-# 1000:100 is hived:users inside the container
-chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs"
-# 105:109 is postgres:postgres inside the container
-chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql" "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
+
+# Use repair_permissions.sh to set all permissions correctly
+echo "Setting permissions..."
+./repair_permissions.sh --zpool="$ZPOOL" --top-level-dataset="$TOP_LEVEL_DATASET"
 
 if [ "$SKIP_EMPTY_SNAPSHOT" = false ]; then
   # Create a snapshot called 'empty'
