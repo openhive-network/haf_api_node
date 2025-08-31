@@ -22,6 +22,8 @@ COPY ci/config.ini /haf-api-node/ci/config.ini
 COPY *.yaml /haf-api-node/
 COPY compose.yml compose.yml
 COPY .env.example .env
+COPY --chmod=755 create_directories.sh create_directories.sh
+COPY --chmod=755 repair_permissions.sh repair_permissions.sh
 
 # Disable Hivemind's healthcheck since it randomly breaks the stack and is not necessary
 # for CI

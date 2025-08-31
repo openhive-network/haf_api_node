@@ -38,7 +38,8 @@ rm "${REPLAY_DIRECTORY:?}/"* -rf
 ls "${REPLAY_DIRECTORY:?}" -lath
 
 # Create directories needed by the stack and set their permissions
-/haf-api-node/ci/scripts/prepare-stack-data-directory.sh "${REPLAY_DIRECTORY:?}"
+# Using the production create_directories.sh script to test it in CI
+/haf-api-node/create_directories.sh --data-dir="${REPLAY_DIRECTORY:?}"
 
 touch "${REPLAY_DIRECTORY:?}/replay_running"
 echo -e "\e[0Ksection_end:$(date +%s):check\r\e[0K"

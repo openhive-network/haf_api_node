@@ -16,7 +16,8 @@ EOF
 WORKDIR /haf-api-node
 
 COPY --chmod=755 ci/dind/entrypoint.sh entrypoint.sh
-COPY --chmod=755 ci/scripts/prepare-stack-data-directory.sh prepare-stack-data-directory.sh
+COPY --chmod=755 create_directories.sh create_directories.sh
+COPY --chmod=755 repair_permissions.sh repair_permissions.sh
 
 COPY --exclude=ci/* \
      --exclude=*.md \
