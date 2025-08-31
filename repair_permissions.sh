@@ -3,20 +3,22 @@
 set -e
 
 print_help() {
-  echo "Usage: $0 [--env-file=filename]"
+  echo "Usage: $0 [--env-file=filename] [--data-dir=path]"
   echo "  Repairs ownership and permissions for all HAF directories"
   echo "  --env-file=filename  Use specified environment file instead of .env"
+  echo "  --data-dir=path      Base directory for HAF data (overrides environment)"
 }
 
-if ! OPTIONS=$(getopt -o he: --long env-file:,help,zpool:,top-level-dataset: -n "$0" -- "$@"); then
+if ! OPTIONS=$(getopt -o he:d: --long env-file:,help,data-dir:,zpool:,top-level-dataset: -n "$0" -- "$@"); then
     print_help
     exit 1
 fi
 
-ZPOOL=""
-TOP_LEVEL_DATASET=""
-ZPOOL_MOUNT_POINT=""
-TOP_LEVEL_DATASET_MOUNTPOINT=""
+# Don't clear if already set in environment
+[ -z "$ZPOOL" ] && ZPOOL=""
+[ -z "$TOP_LEVEL_DATASET" ] && TOP_LEVEL_DATASET=""
+[ -z "$ZPOOL_MOUNT_POINT" ] && ZPOOL_MOUNT_POINT=""
+[ -z "$TOP_LEVEL_DATASET_MOUNTPOINT" ] && TOP_LEVEL_DATASET_MOUNTPOINT=""
 
 eval set -- "$OPTIONS"
 
@@ -24,6 +26,10 @@ while true; do
   case $1 in
     --env-file|-e)
       ENV_FILE="$2"
+      shift 2
+      ;;
+    --data-dir|-d)
+      TOP_LEVEL_DATASET_MOUNTPOINT="$2"
       shift 2
       ;;
     --zpool)
@@ -45,25 +51,31 @@ while true; do
   esac
 done
 
-if [ -z "$ZPOOL" ] || [ -z "$TOP_LEVEL_DATASET" ]; then
-  if [ -n "$ENV_FILE" ]; then
-    echo "Reading $ENV_FILE"
-    # shellcheck disable=SC1090
-    . "$ENV_FILE"
-  elif [ -f .env ]; then
-    echo "Reading configuration from .env"
-    # shellcheck disable=SC1091
-    . ./.env
-  else
-    echo "You must either provide an --env-file argument or both a --zpool and --top-level-dataset"
-    echo "argument to tell this script where to repair permissions."
+# If TOP_LEVEL_DATASET_MOUNTPOINT was provided via --data-dir, we can skip the rest
+if [ -z "$TOP_LEVEL_DATASET_MOUNTPOINT" ]; then
+  if [ -z "$ZPOOL" ] || [ -z "$TOP_LEVEL_DATASET" ]; then
+    if [ -n "$ENV_FILE" ]; then
+      echo "Reading $ENV_FILE"
+      # shellcheck disable=SC1090
+      . "$ENV_FILE"
+    elif [ -f .env ]; then
+      echo "Reading configuration from .env"
+      # shellcheck disable=SC1091
+      . ./.env
+    else
+      echo "You must either provide a --data-dir argument, an --env-file argument, or both"
+      echo "a --zpool and --top-level-dataset argument to tell this script where to repair permissions."
+      exit 1
+    fi
+  fi
+
+  if [ -z "$ZPOOL" ] || [ -z "$TOP_LEVEL_DATASET" ]; then
+    echo "Your environment file must define the ZPOOL and TOP_LEVEL_DATASET environment variables"
     exit 1
   fi
-fi
 
-if [ -z "$ZPOOL" ] || [ -z "$TOP_LEVEL_DATASET" ]; then
-  echo "Your environment file must define the ZPOOL and TOP_LEVEL_DATASET environment variables"
-  exit 1
+  [ -z "$ZPOOL_MOUNT_POINT" ] && ZPOOL_MOUNT_POINT="/$ZPOOL"
+  [ -z "$TOP_LEVEL_DATASET_MOUNTPOINT" ] && TOP_LEVEL_DATASET_MOUNTPOINT="${ZPOOL_MOUNT_POINT}/${TOP_LEVEL_DATASET}"
 fi
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -71,12 +83,11 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-[ -z "$ZPOOL_MOUNT_POINT" ] && ZPOOL_MOUNT_POINT="/$ZPOOL"
-[ -z "$TOP_LEVEL_DATASET_MOUNTPOINT" ] && TOP_LEVEL_DATASET_MOUNTPOINT="${ZPOOL_MOUNT_POINT}/${TOP_LEVEL_DATASET}"
-
 echo "Repairing permissions for HAF directories"
-echo "Top-level dataset: $TOP_LEVEL_DATASET"
-echo "  mounted on:      $TOP_LEVEL_DATASET_MOUNTPOINT"
+if [ -n "$TOP_LEVEL_DATASET" ]; then
+  echo "Top-level dataset: $TOP_LEVEL_DATASET"
+fi
+echo "Data directory:    $TOP_LEVEL_DATASET_MOUNTPOINT"
 echo ""
 
 # Default ownership for most directories

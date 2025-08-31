@@ -39,6 +39,7 @@ variables:
       alias: dind
       variables:
         HEALTHCHECK_TCP_PORT: '2376'
+        TOP_LEVEL_DATASET_MOUNTPOINT: "${REPLAY_DIRECTORY}"
 
 .haf-node-replay:
   extends: .api-node-job
