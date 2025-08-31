@@ -5,6 +5,14 @@
 # Setup a trap to kill potentially pending wget at script exit
 trap "trap - 2 15 && kill -- -\$\$ && wait" 2 15
 
+# Calculate time offset if EXPECTED_BLOCK_TIME is set (for CI environments)
+if [ -n "${EXPECTED_BLOCK_TIME:-}" ]; then
+  EXPECTED_EPOCH=$(date +%s -d "${EXPECTED_BLOCK_TIME}")
+  CURRENT_EPOCH=$(date +%s)
+  TIME_OFFSET=$((CURRENT_EPOCH - EXPECTED_EPOCH))
+else
+  TIME_OFFSET=0
+fi
 
 if ! WGET_RESULT=$(wget -q --timeout=15 -O - --post-data '{"jsonrpc": "2.0", "id": 1, "method": "node_status_api.get_node_status", "params": {}}' http://${HIVED_HOSTNAME:-haf}:8091/); then
   echo "down #wget returned an error"
@@ -20,9 +28,21 @@ HIVED_HEAD_BLOCK_TIME_STRING=$(echo "$WGET_RESULT" | sed 's/^.*"last_processed_b
 HIVED_HEAD_BLOCK_TIME_EPOCH=$(date +%s -d "$(echo "$HIVED_HEAD_BLOCK_TIME_STRING" | tr -- -T .-)")
 CURRENT_TIME_EPOCH=$(date +%s)
 HEAD_BLOCK_AGE_SEC=$((CURRENT_TIME_EPOCH - HIVED_HEAD_BLOCK_TIME_EPOCH))
-if [ $HEAD_BLOCK_AGE_SEC -gt 15 ]; then
+
+# Adjust age for CI environments
+if [ "$TIME_OFFSET" -gt 0 ]; then
+  ADJUSTED_AGE=$((HEAD_BLOCK_AGE_SEC - TIME_OFFSET))
+else
+  ADJUSTED_AGE=$HEAD_BLOCK_AGE_SEC
+fi
+
+if [ $ADJUSTED_AGE -gt 15 ]; then
   age_string=$(format_seconds $HEAD_BLOCK_AGE_SEC)
-  echo "down #head block too old (age: $age_string)"
+  if [ "$TIME_OFFSET" -gt 0 ]; then
+    echo "down #head block too old (age: $age_string, adjusted from CI offset)"
+  else
+    echo "down #head block too old (age: $age_string)"
+  fi
   exit 3
 fi
 

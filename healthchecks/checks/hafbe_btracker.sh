@@ -9,9 +9,15 @@ trap "trap - 2 15 && kill -- -\$\$" 2 15
 check_haf_lib
 
 BTRACKER_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_BTRACKER" --quiet --no-align --tuples-only --command="select extract('epoch' from hive.get_app_current_block_age('hafbe_bal'))::integer")
-if [ "$BTRACKER_LAST_PROCESSED_BLOCK_AGE" -gt 60 ]; then
+# Adjust age for CI environments (TIME_OFFSET is set by check_haf_lib)
+BTRACKER_ADJUSTED_AGE=$(adjust_age_for_ci "$BTRACKER_LAST_PROCESSED_BLOCK_AGE")
+if [ "$BTRACKER_ADJUSTED_AGE" -gt 60 ]; then
   age_string=$(format_seconds "$BTRACKER_LAST_PROCESSED_BLOCK_AGE")
-  echo "down #hafbe_bal block over a minute old ($age_string)"
+  if [ "$TIME_OFFSET" -gt 0 ]; then
+    echo "down #hafbe_bal block over a minute old ($age_string, adjusted from CI offset)"
+  else
+    echo "down #hafbe_bal block over a minute old ($age_string)"
+  fi
   exit 3
 fi
 

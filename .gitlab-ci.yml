@@ -52,7 +52,7 @@ docker-build:
   script:
     - |
       echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking Docker images..."
-      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "ci"
+      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "pipeline-images"
       echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
   tags:
     - public-runner-docker
@@ -99,21 +99,20 @@ haf_api_node_test:
 
 ######## Publish ########
 
-build_haproxy_healthchecks_docker_image:
+# Publish healthchecks to blog registry on release tags
+publish-haproxy-healthchecks-release:
   stage: publish
+  extends: 
+    - .docker_image_builder_job_template
   variables:
-    DOCKER_BUILDKIT: 1
-    DOCKER_DRIVER: overlay2
-    DOCKER_TLS_CERTDIR: "/certs"
-  image: docker:27.3.1
-  services:
-    - docker:27.3.1-dind
+    TAG: "${CI_COMMIT_TAG}"
+    CI_COMMIT_TAG: "${CI_COMMIT_TAG}"
+  before_script:
+    - !reference [.docker_image_builder_job_template, before_script]
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    - docker login -u "$BLOG_REGISTRY_USER" -p "$BLOG_REGISTRY_PASSWORD" registry-upload.hive.blog
   script:
-    - "docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY"
-    - "docker login -u $BLOG_REGISTRY_USER -p $BLOG_REGISTRY_PASSWORD registry-upload.hive.blog"
-    - "(cd healthchecks && docker build -t $CI_REGISTRY_IMAGE/haproxy-healthchecks:$CI_COMMIT_TAG -t registry-upload.hive.blog/haf_api_node/haproxy-healthchecks:$CI_COMMIT_TAG .)"
-    - "docker push $CI_REGISTRY_IMAGE/haproxy-healthchecks:$CI_COMMIT_TAG"
-    - "docker push registry-upload.hive.blog/haf_api_node/haproxy-healthchecks:$CI_COMMIT_TAG"
+    - docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "haproxy-healthchecks-release"
   tags:
     - public-runner-docker
   rules:

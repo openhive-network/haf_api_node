@@ -9,9 +9,15 @@ trap "trap - 2 15 && kill -- -\$\$" 2 15
 check_haf_lib
 
 HIVESENSE_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_HIVESENSE" --quiet --no-align --tuples-only --command="select extract('epoch' from hive.get_app_current_block_age('hivesense_app'))::integer")
-if [ "$HIVESENSE_LAST_PROCESSED_BLOCK_AGE" -gt 60 ]; then
+# Adjust age for CI environments (TIME_OFFSET is set by check_haf_lib)
+HIVESENSE_ADJUSTED_AGE=$(adjust_age_for_ci "$HIVESENSE_LAST_PROCESSED_BLOCK_AGE")
+if [ "$HIVESENSE_ADJUSTED_AGE" -gt 60 ]; then
   age_string=$(format_seconds "$HIVESENSE_LAST_PROCESSED_BLOCK_AGE")
-  echo "down #hivesense_app block over a minute old ($age_string)"
+  if [ "$TIME_OFFSET" -gt 0 ]; then
+    echo "down #hivesense_app block over a minute old ($age_string, adjusted from CI offset)"
+  else
+    echo "down #hivesense_app block over a minute old ($age_string)"
+  fi
   exit 3
 fi
 
