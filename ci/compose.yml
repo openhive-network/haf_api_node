@@ -47,7 +47,7 @@ services:
       TOP_LEVEL_DATASET_MOUNTPOINT: /cache/haf-datadir
       PUBLIC_HOSTNAME:
       FAKETIME:
-      USE_ALTERNATE_HAPROXY_CONFIG:
+      EXPECTED_BLOCK_TIME:
       HIVEMIND_SYNC_ARGS:
       HIVE_API_NODE_VERSION:
       HAF_IMAGE:
@@ -61,6 +61,7 @@ services:
       HIVEMIND_VERSION:
       HAFAH_VERSION:
       REPUTATION_TRACKER_VERSION:
+      HAPROXY_HEALTHCHECKS_VERSION:
       
     volumes:
       - type: volume

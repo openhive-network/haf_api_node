@@ -22,8 +22,14 @@ group "default" {
   targets = ["compose", "dind"]
 }
 
-group "ci" {
+# CI infrastructure images (used for running tests)
+group "ci-infrastructure" {
   targets = ["compose-ci", "dind-ci"]
+}
+
+# All images that need to be built and pushed on every pipeline
+group "pipeline-images" {
+  targets = ["compose-ci", "dind-ci", "haproxy-healthchecks-ci"]
 }
 
 target "compose" {
@@ -75,6 +81,46 @@ target "compose-ci" {
 
 target "dind-ci" {
   inherits = ["dind"]
+  output = [
+    "type=registry"
+  ]
+}
+
+target "haproxy-healthchecks" {
+  dockerfile = "Dockerfile"
+  context = "healthchecks"
+  tags = [
+    "${registry-name("haproxy-healthchecks", "")}:${TAG}",
+    notempty(CI_COMMIT_TAG) ? "${registry-name("haproxy-healthchecks", "")}:${CI_COMMIT_TAG}": ""
+  ]
+  cache-to = [
+    "type=inline"
+  ]
+  cache-from = [
+    "${registry-name("haproxy-healthchecks", "")}:${TAG}",
+  ]
+  platforms = [
+    "linux/amd64"
+  ]
+  output = [
+    "type=docker"
+  ]
+}
+
+target "haproxy-healthchecks-ci" {
+  inherits = ["haproxy-healthchecks"]
+  output = [
+    "type=registry"
+  ]
+}
+
+# Special target for publishing to blog registry on releases
+target "haproxy-healthchecks-release" {
+  inherits = ["haproxy-healthchecks"]
+  tags = [
+    "${registry-name("haproxy-healthchecks", "")}:${CI_COMMIT_TAG}",
+    "registry-upload.hive.blog/haf_api_node/haproxy-healthchecks:${CI_COMMIT_TAG}"
+  ]
   output = [
     "type=registry"
   ]
