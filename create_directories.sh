@@ -14,7 +14,8 @@ if ! OPTIONS=$(getopt -o he:d: --long env-file:,help,data-dir: -n "$0" -- "$@");
     exit 1
 fi
 
-TOP_LEVEL_DATASET_MOUNTPOINT=""
+# Don't clear if already set in environment
+[ -z "$TOP_LEVEL_DATASET_MOUNTPOINT" ] && TOP_LEVEL_DATASET_MOUNTPOINT=""
 
 eval set -- "$OPTIONS"
 
@@ -126,7 +127,11 @@ echo ""
 echo "Setting permissions..."
 
 # Run the repair_permissions script to set correct ownership
-if [ -f ./repair_permissions.sh ]; then
+# Check in the same directory as this script first
+SCRIPT_DIR="$(dirname "$0")"
+if [ -f "$SCRIPT_DIR/repair_permissions.sh" ]; then
+  "$SCRIPT_DIR/repair_permissions.sh" "$@"
+elif [ -f ./repair_permissions.sh ]; then
   ./repair_permissions.sh "$@"
 else
   echo "Warning: repair_permissions.sh not found. Setting basic permissions..."
