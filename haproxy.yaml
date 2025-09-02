@@ -21,7 +21,11 @@ services:
     networks:
       - haf-network
     healthcheck:
-      test: wget -q --spider 127.0.0.1:8001 
+      test: ["CMD-SHELL", "wget -q -T 2 --spider http://127.0.0.1:8001/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
     command: -W -db -f /usr/local/etc/haproxy
   haproxy-healthchecks:
     image: ${HAPROXY_HEALTHCHECKS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy-healthchecks}:${HAPROXY_HEALTHCHECKS_VERSION:-${HIVE_API_NODE_VERSION}}
