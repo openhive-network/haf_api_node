@@ -315,6 +315,10 @@ Usage:
 sudo ./make_ramdisk.sh
 ```
 
+## Email Alerts
+
+HAF API Node supports email notifications when services go down. To enable email alerts, configure the appropriate environment variables in your `.env` file. See `.env.example` for detailed configuration instructions.
+
 ## clone_zfs_datasets.sh
 This script clones an existing ZFS dataset to create a new dataset. It is useful for creating backups or duplicating datasets for testing purposes. The script takes the source dataset and the target dataset as arguments and performs the cloning operation.
 

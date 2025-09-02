@@ -1,2 +1,0 @@
-include:
-  - email-alerts/haproxy.email-alerts.yaml

@@ -3,4 +3,7 @@ FROM haproxy:2.9.7-alpine
 # you to interact with the admin socket
 USER root
 RUN apk add --no-cache socat && mkdir -p /run/haproxy && chown haproxy:haproxy /run/haproxy
+COPY docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 USER haproxy
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

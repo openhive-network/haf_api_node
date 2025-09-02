@@ -99,8 +99,8 @@ haf_api_node_test:
 
 ######## Publish ########
 
-# Publish healthchecks to blog registry on release tags
-publish-haproxy-healthchecks-release:
+# Publish all release images to blog registry on release tags
+publish-images-release:
   stage: publish
   extends: 
     - .docker_image_builder_job_template
@@ -112,7 +112,7 @@ publish-haproxy-healthchecks-release:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
     - docker login -u "$BLOG_REGISTRY_USER" -p "$BLOG_REGISTRY_PASSWORD" registry-upload.hive.blog
   script:
-    - docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "haproxy-healthchecks-release"
+    - docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "release-images"
   tags:
     - public-runner-docker
   rules:

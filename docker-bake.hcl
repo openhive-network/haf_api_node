@@ -29,7 +29,12 @@ group "ci-infrastructure" {
 
 # All images that need to be built and pushed on every pipeline
 group "pipeline-images" {
-  targets = ["compose-ci", "dind-ci", "haproxy-healthchecks-ci"]
+  targets = ["compose-ci", "dind-ci", "haproxy-healthchecks-ci", "haproxy-ci"]
+}
+
+# All images that need to be published to blog registry on release
+group "release-images" {
+  targets = ["haproxy-healthchecks-release", "haproxy-release"]
 }
 
 target "compose" {
@@ -86,6 +91,27 @@ target "dind-ci" {
   ]
 }
 
+target "haproxy" {
+  dockerfile = "Dockerfile"
+  context = "haproxy"
+  tags = [
+    "${registry-name("haproxy", "")}:${TAG}",
+    notempty(CI_COMMIT_TAG) ? "${registry-name("haproxy", "")}:${CI_COMMIT_TAG}": ""
+  ]
+  cache-to = [
+    "type=inline"
+  ]
+  cache-from = [
+    "${registry-name("haproxy", "")}:${TAG}",
+  ]
+  platforms = [
+    "linux/amd64"
+  ]
+  output = [
+    "type=docker"
+  ]
+}
+
 target "haproxy-healthchecks" {
   dockerfile = "Dockerfile"
   context = "healthchecks"
@@ -107,6 +133,13 @@ target "haproxy-healthchecks" {
   ]
 }
 
+target "haproxy-ci" {
+  inherits = ["haproxy"]
+  output = [
+    "type=registry"
+  ]
+}
+
 target "haproxy-healthchecks-ci" {
   inherits = ["haproxy-healthchecks"]
   output = [
@@ -114,7 +147,18 @@ target "haproxy-healthchecks-ci" {
   ]
 }
 
-# Special target for publishing to blog registry on releases
+# Special targets for publishing to blog registry on releases
+target "haproxy-release" {
+  inherits = ["haproxy"]
+  tags = [
+    "${registry-name("haproxy", "")}:${CI_COMMIT_TAG}",
+    "registry-upload.hive.blog/haf_api_node/haproxy:${CI_COMMIT_TAG}"
+  ]
+  output = [
+    "type=registry"
+  ]
+}
+
 target "haproxy-healthchecks-release" {
   inherits = ["haproxy-healthchecks"]
   tags = [
