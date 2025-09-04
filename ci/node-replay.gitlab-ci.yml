@@ -4,6 +4,8 @@ variables:
 .api-node-job:
   extends: .job-defaults
   variables:
+    # Override the version for HAF API Node images to use the ones built in this pipeline
+    HAF_API_NODE_VERSION: "${CI_COMMIT_SHORT_SHA}"
     # HIVE_API_NODE_VERSION: "1.27.10"
     # HAF_VERSION: "${HIVE_API_NODE_VERSION}"
     # HIVEMIND_VERSION: "${HIVE_API_NODE_VERSION}"
@@ -17,9 +19,6 @@ variables:
     # HIVEMIND_REWRITER_IMAGE: "${HIVE_API_NODE_REGISTRY}/hivemind/postgrest-rewriter"
     # REPUTATION_TRACKER_IMAGE: "${HIVE_API_NODE_REGISTRY}/reputation_tracker"
     # REPUTATION_TRACKER_REWRITER_IMAGE: "${HIVE_API_NODE_REGISTRY}/reputation_tracker/postgrest-rewriter"
-    # Use the haproxy images built in this pipeline
-    HAPROXY_VERSION: "${CI_COMMIT_SHORT_SHA}"
-    HAPROXY_HEALTHCHECKS_VERSION: "${CI_COMMIT_SHORT_SHA}"
     LAST_BLOCK_NUMBER: "10000"
     ARGUMENTS: "--replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
     HIVEMIND_SYNC_ARGS: "--community-start-block=4998000"

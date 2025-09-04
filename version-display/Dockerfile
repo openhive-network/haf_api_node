@@ -5,6 +5,9 @@ COPY api.js index.js package.json package-lock.json /home/node/app
 WORKDIR /home/node/app
 RUN npm ci
 
+CMD ["node", "api.js"]
+
+# Labels at the end for better layer caching
 ARG BUILD_TIME
 ARG GIT_COMMIT_SHA
 ARG GIT_CURRENT_BRANCH
@@ -25,5 +28,3 @@ LABEL io.hive.image.branch="$GIT_CURRENT_BRANCH"
 LABEL io.hive.image.commit.log_message="$GIT_LAST_LOG_MESSAGE"
 LABEL io.hive.image.commit.author="$GIT_LAST_COMMITTER"
 LABEL io.hive.image.commit.date="$GIT_LAST_COMMIT_DATE"
-
-CMD ["node", "api.js"]

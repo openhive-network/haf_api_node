@@ -52,6 +52,13 @@ docker-build:
   script:
     - |
       echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking Docker images..."
+      # Export build arguments for version-display image
+      export BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      export GIT_COMMIT_SHA="${CI_COMMIT_SHA}"
+      export GIT_CURRENT_BRANCH="${CI_COMMIT_BRANCH}"
+      export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
+      export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
+      export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
       docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "pipeline-images"
       echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
   tags:
@@ -121,6 +128,28 @@ publish-images-release:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^1\..+$/
+      when: always
+
+# Tag images as 'develop' when on develop branch
+publish-images-develop:
+  stage: publish
+  extends: 
+    - .docker_image_builder_job_template
+  variables:
+    TAG: "develop"
+  before_script:
+    - !reference [.docker_image_builder_job_template, before_script]
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  script:
+    - docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "develop-images"
+  tags:
+    - public-runner-docker
+  rules:
+    - if: $CI_PIPELINE_TRIGGERED
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_COMMIT_BRANCH == "develop"
       when: always
 
 ######## End publish ########

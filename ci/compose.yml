@@ -61,7 +61,6 @@ services:
       HIVEMIND_VERSION:
       HAFAH_VERSION:
       REPUTATION_TRACKER_VERSION:
-      HAPROXY_HEALTHCHECKS_VERSION:
       
     volumes:
       - type: volume
