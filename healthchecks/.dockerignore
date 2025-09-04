@@ -1,0 +1,6 @@
+# Ignore everything except what's needed for the build
+*
+!Dockerfile
+!checks/
+!healthcheck_healthcheck.sh
+!docker_entrypoint.sh

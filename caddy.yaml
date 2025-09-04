@@ -1,6 +1,6 @@
 services:
   caddy:
-    image: ${CADDY_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/caddy}:${CADDY_VERSION:-latest}
+    image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/caddy:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - admin
       - servers
@@ -57,7 +57,7 @@ services:
     networks:
       - haf-network
   version-display:
-    image: ${VERSION_DISPLAY_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/version-display}:${VERSION_DISPLAY_VERSION:-latest}
+    image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/version-display:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - admin
       - servers
