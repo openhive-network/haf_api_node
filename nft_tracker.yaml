@@ -57,10 +57,10 @@ services:
       - nft-tracker
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
-      PGRST_DB_URI: postgresql://nfttracker_user@haf/haf_block_log?application_name=nft_tracker_postgrest
+      PGRST_DB_URI: postgresql://nfttracker_user@pgbouncer:6432/haf_block_log?application_name=nft_tracker_postgrest
       PGRST_DB_SCHEMA: nfttracker_endpoints
       PGRST_DB_ANON_ROLE: nfttracker_user
-      PGRST_DB_POOL: 20
+      PGRST_DB_POOL: 8
       PGRST_DB_ROOT_SPEC: root
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_DB_EXTRA_SEARCH_PATH: nfttracker_app
@@ -82,7 +82,7 @@ services:
     depends_on:
       nft-tracker-install:
         condition: service_completed_successfully
-      haf:
+      pgbouncer:
         condition: service_healthy
   nft-tracker-postgrest-rewriter:
     image: ${NFT_TRACKER_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/nft_tracker/postgrest-rewriter}:${NFT_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}

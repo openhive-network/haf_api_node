@@ -137,10 +137,10 @@ services:
       - apps
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
-      PGRST_DB_URI: postgresql://hivesense_user@haf/haf_block_log?application_name=hivesense_postgrest
+      PGRST_DB_URI: postgresql://hivesense_user@pgbouncer:6432/haf_block_log?application_name=hivesense_postgrest
       PGRST_DB_SCHEMA: hivesense_endpoints
       PGRST_DB_ANON_ROLE: hivesense_user
-      PGRST_DB_POOL: 10
+      PGRST_DB_POOL: 6
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_DB_ROOT_SPEC: root
       PGRST_DB_EXTRA_SEARCH_PATH: hivesense_app
@@ -160,7 +160,7 @@ services:
     depends_on:
       hivesense-install-schema:
         condition: service_completed_successfully
-      haf:
+      pgbouncer:
         condition: service_healthy
   hivesense-pca:
     image: ${HIVESENSE_SYNCER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/pca}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}

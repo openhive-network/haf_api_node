@@ -66,10 +66,10 @@ services:
       - hafbe
     environment:
       PGRST_ADMIN_SERVER_PORT: 3001
-      PGRST_DB_URI: postgresql://btracker_user@haf/haf_block_log?application_name=balance_tracker_postgrest
+      PGRST_DB_URI: postgresql://btracker_user@pgbouncer:6432/haf_block_log?application_name=balance_tracker_postgrest
       PGRST_DB_SCHEMA: btracker_endpoints
       PGRST_DB_ANON_ROLE: btracker_user
-      PGRST_DB_POOL: 10
+      PGRST_DB_POOL: 6
       PGRST_DB_ROOT_SPEC: root
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_DB_EXTRA_SEARCH_PATH: ${BTRACKER_SCHEMA:-hafbe_bal}
@@ -90,7 +90,7 @@ services:
       block-explorer-install-balance-tracker:
         condition: service_completed_successfully
         required: false # allow this service to be missing (when only running standalone)
-      haf:
+      pgbouncer:
         condition: service_healthy
   balance-tracker-postgrest-rewriter:
     image: ${BALANCE_TRACKER_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/balance_tracker/postgrest-rewriter}:${BALANCE_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}

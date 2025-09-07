@@ -1,0 +1,48 @@
+services:
+  pgbouncer:
+    image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/pgbouncer:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - servers
+    environment:
+      # Users allowed to connect through PgBouncer (space-separated list)
+      # These users must also be allowed in PostgreSQL's pg_hba.conf
+      PGBOUNCER_USERS: "hafah_user hivemind_user hafbe_user btracker_user reptracker_user nfttracker_user nft_tracker_user hivesense_user stats postgres haf_admin pghero pgbouncer"
+      # Database connection settings
+      PGBOUNCER_DB_HOST: haf
+      PGBOUNCER_DB_PORT: 5432
+      PGBOUNCER_DB_NAME: haf_block_log
+      # Pool configuration
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_DEFAULT_POOL_SIZE: 25
+      PGBOUNCER_RESERVE_POOL_SIZE: 5
+      PGBOUNCER_RESERVE_POOL_TIMEOUT: 3
+      PGBOUNCER_MAX_CLIENT_CONN: 200
+      PGBOUNCER_MAX_DB_CONNECTIONS: 30
+      # Timeouts
+      PGBOUNCER_SERVER_IDLE_TIMEOUT: 600
+      PGBOUNCER_SERVER_LIFETIME: 3600
+      PGBOUNCER_SERVER_CHECK_DELAY: 30
+      PGBOUNCER_QUERY_WAIT_TIMEOUT: 120
+      PGBOUNCER_CLIENT_IDLE_TIMEOUT: 0
+      PGBOUNCER_CLIENT_LOGIN_TIMEOUT: 60
+      # Low-level tuning
+      PGBOUNCER_PKT_BUF: 4096
+      PGBOUNCER_TCP_KEEPALIVE: 1
+      PGBOUNCER_TCP_KEEPCNT: 3
+      PGBOUNCER_TCP_KEEPIDLE: 60
+      PGBOUNCER_TCP_KEEPINTVL: 10
+      # Logging
+      PGBOUNCER_LOG_CONNECTIONS: 0
+      PGBOUNCER_LOG_DISCONNECTIONS: 0
+      PGBOUNCER_STATS_PERIOD: 60
+    networks:
+      haf-network:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U haf_admin -d haf_block_log || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      haf:
+        condition: service_healthy
