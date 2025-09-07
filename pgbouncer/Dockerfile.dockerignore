@@ -1,0 +1,5 @@
+# Ignore everything
+*
+
+# Except the entrypoint script
+!docker-entrypoint.sh
