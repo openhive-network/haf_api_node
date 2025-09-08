@@ -1,6 +1,6 @@
-FROM alpine:3.18.3
+FROM registry.gitlab.syncad.com/hive/haf_api_node/alpine:3.22.1
 
-RUN apk --no-cache add postgresql14-client
+RUN apk --no-cache add postgresql-client
 
 COPY checks/hived.sh /checks/hived.sh
 COPY checks/hafbe_btracker.sh /checks/hafbe_btracker.sh

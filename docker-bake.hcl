@@ -67,10 +67,12 @@ target "compose" {
     notempty(CI_COMMIT_TAG) ? "${registry-name("compose", "")}:${CI_COMMIT_TAG}": ""
   ]
   cache-to = [
-    "type=inline"
+    "type=registry,ref=${registry-name("compose", "")}:buildcache,mode=max"
   ]
   cache-from = [
-    "${registry-name("compose", "")}:${TAG}",
+    "type=registry,ref=${registry-name("compose", "")}:buildcache",
+    "type=registry,ref=${registry-name("compose", "")}:${TAG}",
+    "type=registry,ref=${registry-name("compose", "")}:develop",
   ]
   platforms = [
     "linux/amd64"
@@ -87,10 +89,12 @@ target "dind" {
     notempty(CI_COMMIT_TAG) ? "${registry-name("dind", "")}:${CI_COMMIT_TAG}": "",
   ]
   cache-to = [
-    "type=inline"
+    "type=registry,ref=${registry-name("dind", "")}:buildcache,mode=max"
   ]
   cache-from = [
+    "type=registry,ref=${registry-name("dind", "")}:buildcache",
     "type=registry,ref=${registry-name("dind", "")}:${TAG}",
+    "type=registry,ref=${registry-name("dind", "")}:develop",
   ]
   platforms = [
     "linux/amd64"
@@ -122,10 +126,12 @@ target "haproxy" {
     notempty(CI_COMMIT_TAG) ? "${registry-name("haproxy", "")}:${CI_COMMIT_TAG}": ""
   ]
   cache-to = [
-    "type=inline"
+    "type=registry,ref=${registry-name("haproxy", "")}:buildcache,mode=max"
   ]
   cache-from = [
-    "${registry-name("haproxy", "")}:${TAG}",
+    "type=registry,ref=${registry-name("haproxy", "")}:buildcache",
+    "type=registry,ref=${registry-name("haproxy", "")}:${TAG}",
+    "type=registry,ref=${registry-name("haproxy", "")}:develop",
   ]
   platforms = [
     "linux/amd64"
@@ -143,10 +149,12 @@ target "haproxy-healthchecks" {
     notempty(CI_COMMIT_TAG) ? "${registry-name("haproxy-healthchecks", "")}:${CI_COMMIT_TAG}": ""
   ]
   cache-to = [
-    "type=inline"
+    "type=registry,ref=${registry-name("haproxy-healthchecks", "")}:buildcache,mode=max"
   ]
   cache-from = [
-    "${registry-name("haproxy-healthchecks", "")}:${TAG}",
+    "type=registry,ref=${registry-name("haproxy-healthchecks", "")}:buildcache",
+    "type=registry,ref=${registry-name("haproxy-healthchecks", "")}:${TAG}",
+    "type=registry,ref=${registry-name("haproxy-healthchecks", "")}:develop",
   ]
   platforms = [
     "linux/amd64"
@@ -179,10 +187,12 @@ target "caddy" {
     notempty(CI_COMMIT_TAG) ? "${registry-name("caddy", "")}:${CI_COMMIT_TAG}": ""
   ]
   cache-to = [
-    "type=inline"
+    "type=registry,ref=${registry-name("caddy", "")}:buildcache,mode=max"
   ]
   cache-from = [
-    "${registry-name("caddy", "")}:${TAG}",
+    "type=registry,ref=${registry-name("caddy", "")}:buildcache",
+    "type=registry,ref=${registry-name("caddy", "")}:${TAG}",
+    "type=registry,ref=${registry-name("caddy", "")}:develop",
   ]
   platforms = [
     "linux/amd64"
@@ -208,10 +218,12 @@ target "postgrest" {
     notempty(CI_COMMIT_TAG) ? "${registry-name("postgrest", "")}:${CI_COMMIT_TAG}": ""
   ]
   cache-to = [
-    "type=inline"
+    "type=registry,ref=${registry-name("postgrest", "")}:buildcache,mode=max"
   ]
   cache-from = [
-    "${registry-name("postgrest", "")}:${TAG}",
+    "type=registry,ref=${registry-name("postgrest", "")}:buildcache",
+    "type=registry,ref=${registry-name("postgrest", "")}:${TAG}",
+    "type=registry,ref=${registry-name("postgrest", "")}:develop",
   ]
   platforms = [
     "linux/amd64"
@@ -237,10 +249,12 @@ target "swagger" {
     notempty(CI_COMMIT_TAG) ? "${registry-name("swagger", "")}:${CI_COMMIT_TAG}": ""
   ]
   cache-to = [
-    "type=inline"
+    "type=registry,ref=${registry-name("swagger", "")}:buildcache,mode=max"
   ]
   cache-from = [
-    "${registry-name("swagger", "")}:${TAG}",
+    "type=registry,ref=${registry-name("swagger", "")}:buildcache",
+    "type=registry,ref=${registry-name("swagger", "")}:${TAG}",
+    "type=registry,ref=${registry-name("swagger", "")}:develop",
   ]
   platforms = [
     "linux/amd64"
@@ -274,10 +288,12 @@ target "version-display" {
     GIT_LAST_COMMIT_DATE = "${GIT_LAST_COMMIT_DATE}"
   }
   cache-to = [
-    "type=inline"
+    "type=registry,ref=${registry-name("version-display", "")}:buildcache,mode=max"
   ]
   cache-from = [
-    "${registry-name("version-display", "")}:${TAG}",
+    "type=registry,ref=${registry-name("version-display", "")}:buildcache",
+    "type=registry,ref=${registry-name("version-display", "")}:${TAG}",
+    "type=registry,ref=${registry-name("version-display", "")}:develop",
   ]
   platforms = [
     "linux/amd64"
@@ -303,10 +319,12 @@ target "pgbouncer" {
     notempty(CI_COMMIT_TAG) ? "${registry-name("pgbouncer", "")}:${CI_COMMIT_TAG}": ""
   ]
   cache-to = [
-    "type=inline"
+    "type=registry,ref=${registry-name("pgbouncer", "")}:buildcache,mode=max"
   ]
   cache-from = [
-    "${registry-name("pgbouncer", "")}:${TAG}",
+    "type=registry,ref=${registry-name("pgbouncer", "")}:buildcache",
+    "type=registry,ref=${registry-name("pgbouncer", "")}:${TAG}",
+    "type=registry,ref=${registry-name("pgbouncer", "")}:develop",
   ]
   platforms = [
     "linux/amd64"

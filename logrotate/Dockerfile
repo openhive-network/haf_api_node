@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM registry.gitlab.syncad.com/hive/haf_api_node/alpine:3.22.1
 
 RUN apk add --no-cache dcron logrotate run-parts
 # change logrotate to run hourly, instead of the default daily
