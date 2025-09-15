@@ -1,0 +1,53 @@
+services:
+  block-explorer-ui:
+    image: registry.gitlab.syncad.com/hive/block_explorer_ui/explorer-subdirectory:${BLOCK_EXPLORER_UI_VERSION:-${HIVE_API_NODE_VERSION}}
+    environment:
+      PORT: 80
+      REACT_APP_API_ADDRESS: https://${PUBLIC_HOSTNAME}
+      REACT_APP_HIVE_BLOG_API_ADDRESS: https://${PUBLIC_HOSTNAME}
+    profiles:
+      - ui
+    networks:
+      haf-network:
+  denser-blog:
+    image: registry.gitlab.syncad.com/hive/denser/blog-subdirectory:${DENSER_VERSION:-${HIVE_API_NODE_VERSION}}
+    environment:
+      PORT: 80
+      REACT_APP_API_ENDPOINT: https://${PUBLIC_HOSTNAME}
+      REACT_APP_IMAGES_ENDPOINT: https://images.hive.blog/
+      REACT_APP_SITE_DOMAIN: https://${PUBLIC_HOSTNAME}/blog
+      REACT_APP_BLOG_DOMAIN: https://${PUBLIC_HOSTNAME}/blog
+      REACT_APP_WALLET_ENDPOINT: https://${PUBLIC_HOSTNAME}/wallet
+      REACT_APP_EXPLORER_DOMAIN: https://${PUBLIC_HOSTNAME}/explorer
+      REACT_APP_AI_DOMAIN: https://${PUBLIC_HOSTNAME}
+      REACT_APP_BASE_PATH: /blog
+    healthcheck:
+      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://127.0.0.1/ || exit 1']
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    profiles:
+      - ui
+    networks:
+      haf-network:
+  denser-wallet:
+    image: registry.gitlab.syncad.com/hive/denser/wallet-subdirectory:${DENSER_VERSION:-${HIVE_API_NODE_VERSION}}
+    environment:
+      PORT: 80
+      REACT_APP_API_ENDPOINT: https://${PUBLIC_HOSTNAME}
+      REACT_APP_SSR_HOST: https://${PUBLIC_HOSTNAME}
+      REACT_APP_IMAGES_ENDPOINT: https://images.hive.blog/
+      REACT_APP_BASE_PATH: /wallet
+      REACT_APP_WALLET_ENDPOINT: https://${PUBLIC_HOSTNAME}/wallet
+      REACT_APP_BLOG_DOMAIN: https://${PUBLIC_HOSTNAME}/blog
+    healthcheck:
+      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://127.0.0.1/ || exit 1']
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    profiles:
+      - ui
+    networks:
+      haf-network:

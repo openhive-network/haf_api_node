@@ -110,6 +110,27 @@
     file_server
   }
 
+  handle /explorer {
+      reverse_proxy http://block-explorer-ui
+  }
+  handle /explorer/* {
+      reverse_proxy http://block-explorer-ui
+  }
+
+  handle /blog {
+      reverse_proxy http://denser-blog
+  }
+  handle /blog/* {
+      reverse_proxy http://denser-blog
+  }
+
+  handle /wallet {
+      reverse_proxy http://denser-wallet
+  }
+  handle /wallet/* {
+      reverse_proxy http://denser-wallet
+  }
+
   # Route all POST calls to the root URL to jussi/drone (assume they're old-style JSON-RPC calls)
   @post_to_root {
     method POST

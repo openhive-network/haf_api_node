@@ -31,9 +31,7 @@ services:
         host    haf_block_log    hivesense_user   ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    nft_tracker_user ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
-        host    haf_block_log    pghero           ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    postgres         haf_admin        ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
-        host    postgres         pghero           ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
 
         # Direct connections for install/uninstall/processing (not pooled)\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-balance-tracker-install-1.${NETWORK_NAME}             trust\n
@@ -76,6 +74,9 @@ services:
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
         host    postgres         haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
+
+        host    haf_block_log    pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                              trust\n
+        host    postgres         pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                              trust\n
 
         host    postgres         postgres         ${COMPOSE_PROJECT_NAME}-postgresexporter-1.${NETWORK_NAME}                    trust\n
 
