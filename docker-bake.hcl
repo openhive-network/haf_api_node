@@ -47,17 +47,17 @@ group "ci-infrastructure" {
 
 # All images that need to be built and pushed on every pipeline
 group "pipeline-images" {
-  targets = ["compose-ci", "dind-ci", "haproxy-healthchecks-ci", "haproxy-ci", "caddy-ci", "postgrest-ci", "swagger-ci", "version-display-ci", "pgbouncer-ci"]
+  targets = ["compose-ci", "dind-ci", "haproxy-healthchecks-ci", "haproxy-ci", "caddy-ci", "postgrest-ci", "swagger-ci", "version-display-ci", "pgbouncer-ci", "status-ci"]
 }
 
 # All images that need to be published to blog registry on release
 group "release-images" {
-  targets = ["haproxy-healthchecks-release", "haproxy-release", "caddy-release", "postgrest-release", "swagger-release", "version-display-release", "pgbouncer-release"]
+  targets = ["haproxy-healthchecks-release", "haproxy-release", "caddy-release", "postgrest-release", "swagger-release", "version-display-release", "pgbouncer-release", "status-release"]
 }
 
 # All images that need to be tagged as develop when on develop branch
 group "develop-images" {
-  targets = ["haproxy-healthchecks-develop", "haproxy-develop", "caddy-develop", "postgrest-develop", "swagger-develop", "version-display-develop", "pgbouncer-develop"]
+  targets = ["haproxy-healthchecks-develop", "haproxy-develop", "caddy-develop", "postgrest-develop", "swagger-develop", "version-display-develop", "pgbouncer-develop", "status-develop"]
 }
 
 target "compose" {
@@ -341,6 +341,45 @@ target "pgbouncer-ci" {
   ]
 }
 
+# Status API image
+target "status" {
+  dockerfile = "Dockerfile"
+  context = "status"
+  tags = [
+    "${registry-name("status", "")}:${TAG}",
+    notempty(CI_COMMIT_TAG) ? "${registry-name("status", "")}:${CI_COMMIT_TAG}": ""
+  ]
+  args = {
+    BUILD_TIME = "${BUILD_TIME}"
+    GIT_COMMIT_SHA = "${GIT_COMMIT_SHA}"
+    GIT_CURRENT_BRANCH = "${GIT_CURRENT_BRANCH}"
+    GIT_LAST_LOG_MESSAGE = "${GIT_LAST_LOG_MESSAGE}"
+    GIT_LAST_COMMITTER = "${GIT_LAST_COMMITTER}"
+    GIT_LAST_COMMIT_DATE = "${GIT_LAST_COMMIT_DATE}"
+  }
+  cache-to = [
+    "type=registry,ref=${registry-name("status", "")}:buildcache,mode=max"
+  ]
+  cache-from = [
+    "type=registry,ref=${registry-name("status", "")}:buildcache",
+    "type=registry,ref=${registry-name("status", "")}:${TAG}",
+    "type=registry,ref=${registry-name("status", "")}:develop",
+  ]
+  platforms = [
+    "linux/amd64"
+  ]
+  output = [
+    "type=docker"
+  ]
+}
+
+target "status-ci" {
+  inherits = ["status"]
+  output = [
+    "type=registry"
+  ]
+}
+
 # Special targets for publishing to blog registry on releases
 target "haproxy-release" {
   inherits = ["haproxy"]
@@ -419,6 +458,17 @@ target "pgbouncer-release" {
   ]
 }
 
+target "status-release" {
+  inherits = ["status"]
+  tags = [
+    "${registry-name("status", "")}:${CI_COMMIT_TAG}",
+    "registry-upload.hive.blog/haf_api_node/status:${CI_COMMIT_TAG}"
+  ]
+  output = [
+    "type=registry"
+  ]
+}
+
 # Develop branch targets
 target "haproxy-develop" {
   inherits = ["haproxy"]
@@ -484,6 +534,16 @@ target "pgbouncer-develop" {
   inherits = ["pgbouncer"]
   tags = [
     "${registry-name("pgbouncer", "")}:develop"
+  ]
+  output = [
+    "type=registry"
+  ]
+}
+
+target "status-develop" {
+  inherits = ["status"]
+  tags = [
+    "${registry-name("status", "")}:develop"
   ]
   output = [
     "type=registry"

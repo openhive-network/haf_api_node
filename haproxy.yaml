@@ -48,7 +48,7 @@ services:
       POSTGRES_URL_BTRACKER: postgresql://btracker_user@pgbouncer:6432/haf_block_log
       POSTGRES_URL_REPTRACKER: postgresql://reptracker_user@pgbouncer:6432/haf_block_log
       POSTGRES_URL_HIVESENSE: postgresql://hivesense_user@pgbouncer:6432/haf_block_log
-      POSTGRES_URL_NFTTRACKER: postgresql://nft_tracker_user@pgbouncer:6432/haf_block_log
+      POSTGRES_URL_NFTTRACKER: postgresql://nfttracker_user@pgbouncer:6432/haf_block_log
       EXPECTED_BLOCK_TIME: "${EXPECTED_BLOCK_TIME:-}"
     healthcheck:
       test: ["CMD-SHELL", "/healthcheck_healthcheck.sh || exit 1"]

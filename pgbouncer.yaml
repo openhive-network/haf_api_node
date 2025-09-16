@@ -6,7 +6,7 @@ services:
     environment:
       # Users allowed to connect through PgBouncer (space-separated list)
       # These users must also be allowed in PostgreSQL's pg_hba.conf
-      PGBOUNCER_USERS: "hafah_user hivemind_user hafbe_user btracker_user reptracker_user nfttracker_user nft_tracker_user hivesense_user stats postgres haf_admin pghero pgbouncer"
+      PGBOUNCER_USERS: "hafah_user hivemind_user hafbe_user btracker_user reptracker_user nfttracker_user hivesense_user stats postgres haf_admin pghero pgbouncer"
       # Database connection settings
       PGBOUNCER_DB_HOST: haf
       PGBOUNCER_DB_PORT: 5432

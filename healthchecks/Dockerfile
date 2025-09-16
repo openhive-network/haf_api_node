@@ -11,6 +11,8 @@ COPY checks/hafbe.sh /checks/hafbe.sh
 COPY checks/format_seconds.sh /checks/format_seconds.sh
 COPY checks/check_haf_lib.sh /checks/check_haf_lib.sh
 COPY checks/hivesense.sh /checks/hivesense.sh
+COPY checks/nft_tracker.sh /checks/nft_tracker.sh
+COPY checks/status.sh /checks/status.sh
 COPY healthcheck_healthcheck.sh /
 COPY docker_entrypoint.sh /
 
