@@ -1,0 +1,9 @@
+{
+  "name": "haf-status-api",
+  "version": "1.0.0",
+  "main": "app.js",
+  "dependencies": {
+    "express": "^4.18.2",
+    "dockerode": "^3.3.5"
+  }
+}

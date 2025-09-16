@@ -20,6 +20,7 @@ include:
   - hivesense-${HIVESENSE_CONFIGURATION:-sync}.yaml
   - hafsql.yaml
   - ui.yaml
+  - status.yaml
 
 networks:
   haf-network:

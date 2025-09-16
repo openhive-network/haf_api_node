@@ -103,6 +103,7 @@ services:
       - "io.hive.swagger.url=/balance-api/"
       - "io.hive.swagger.name=Balance Tracker"
       - "io.hive.swagger.order=1"
+      - "io.hive.healthcheck.port=7004"
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
       interval: 10s

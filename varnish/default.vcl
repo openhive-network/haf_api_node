@@ -51,6 +51,11 @@ backend nft_tracker {
     .port = "7013";
 }
 
+backend status {
+    .host = "haproxy";
+    .port = "7014";
+}
+
 backend hivemind {
     .host = "haproxy";
     .port = "7002";
@@ -154,6 +159,10 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url ~ "^/status-api/") {
+        # rewrite the URL for status API
+        set req.url = regsub(req.url, "^/status-api/(.*)$", "/\1");
+        set req.backend_hint = status;
     } elseif (req.url == "/hivemind-api/") {
         set req.url = "/";
         set req.backend_hint = hivemind;

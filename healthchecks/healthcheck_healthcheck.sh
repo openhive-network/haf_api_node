@@ -1,2 +1,2 @@
 #! /bin/sh
-#exec netstat -tln | grep -E ':(7001|7002|7003|7004|7005|7009|7011|7013)\b' | wc -l | grep -q '^8$'
+exec netstat -tln | grep -E ':(7001|7002|7003|7004|7005|7009|7011|7013|7014)\b' | wc -l | grep -q '^9$'

@@ -127,6 +127,7 @@ services:
       - "io.hive.swagger.url=/hafbe-api/"
       - "io.hive.swagger.name=HAF Block Explorer"
       - "io.hive.swagger.order=2"
+      - "io.hive.healthcheck.port=7005"
     networks:
       haf-network:
     healthcheck:

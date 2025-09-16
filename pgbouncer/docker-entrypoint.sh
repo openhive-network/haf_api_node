@@ -18,7 +18,6 @@ else
 "btracker_user" "trusted"
 "reptracker_user" "trusted"
 "nfttracker_user" "trusted"
-"nft_tracker_user" "trusted"
 "hivesense_user" "trusted"
 "stats" "trusted"
 "postgres" "trusted"

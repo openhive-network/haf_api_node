@@ -30,7 +30,6 @@ services:
         host    haf_block_log    nfttracker_user  ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    hivesense_user   ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
-        host    haf_block_log    nft_tracker_user ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    postgres         haf_admin        ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
 
         # Direct connections for install/uninstall/processing (not pooled)\n
@@ -142,6 +141,7 @@ services:
       - "io.hive.swagger.name=Legacy Hive JSON-RPC API"
       - "io.hive.swagger.interceptor=jsonrpc"
       - "io.hive.swagger.order=99"
+      - "io.hive.healthcheck.port=7003"
   logrotate:
     image: ${LOGROTATE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/logrotate}:${LOGROTATE_VERSION:-latest}
     profiles:

@@ -1,0 +1,29 @@
+services:
+  status-api:
+    image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/status:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - servers
+      - status
+    labels:
+      - "io.hive.swagger.url=/status-api/"
+      - "io.hive.swagger.name=Status API"
+      - "io.hive.swagger.order=100"
+      - "io.hive.healthcheck.port=7014"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      HEALTHCHECK_HOST: haproxy-healthchecks
+      HEALTHCHECK_TIMEOUT: 2000
+      UPDATE_INTERVAL: 10000
+      PORT: 3000
+    networks:
+      - haf-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      haproxy-healthchecks:
+        condition: service_started
