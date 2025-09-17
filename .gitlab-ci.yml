@@ -59,6 +59,8 @@ docker-build:
       export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
       export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
       export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
+      export TAG="${TAG:-${CI_COMMIT_SHORT_SHA}}"
+      export CI_COMMIT_TAG="${CI_COMMIT_TAG}"
       docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "pipeline-images"
       echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
   tags:
@@ -128,6 +130,7 @@ publish-images-release:
       export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
       export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
       export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
+      export CI_COMMIT_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_REF_NAME}"
       docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "release-images"
   tags:
     - public-runner-docker
@@ -162,6 +165,7 @@ publish-images-develop:
       export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
       export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
       export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
+      export TAG="${TAG:-develop}"
       docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "develop-images"
   tags:
     - public-runner-docker
