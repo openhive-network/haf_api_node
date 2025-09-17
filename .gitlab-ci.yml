@@ -109,17 +109,26 @@ haf_api_node_test:
 # Publish all release images to blog registry on release tags
 publish-images-release:
   stage: publish
-  extends: 
+  extends:
     - .docker_image_builder_job_template
   variables:
-    TAG: "${CI_COMMIT_TAG}"
-    CI_COMMIT_TAG: "${CI_COMMIT_TAG}"
+    # Use CI_COMMIT_TAG if available, otherwise use CI_COMMIT_REF_NAME (for tags pushed with commits)
+    TAG: "${CI_COMMIT_TAG:-$CI_COMMIT_REF_NAME}"
+    CI_COMMIT_TAG: "${CI_COMMIT_TAG:-$CI_COMMIT_REF_NAME}"
   before_script:
     - !reference [.docker_image_builder_job_template, before_script]
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
     - docker login -u "$BLOG_REGISTRY_USER" -p "$BLOG_REGISTRY_PASSWORD" registry-upload.hive.blog
   script:
-    - docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "release-images"
+    - |
+      # Export build arguments for images that need them
+      export BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      export GIT_COMMIT_SHA="${CI_COMMIT_SHA}"
+      export GIT_CURRENT_BRANCH="${CI_COMMIT_BRANCH}"
+      export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
+      export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
+      export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
+      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "release-images"
   tags:
     - public-runner-docker
   rules:
@@ -127,7 +136,11 @@ publish-images-release:
       when: never
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^1\..+$/
+    # Handle tags pushed separately (source: tag)
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^[v01].*/
+      when: always
+    # Handle tags pushed with commits (source: push) - check if ref looks like a release tag
+    - if: $CI_COMMIT_REF_NAME =~ /^[v01].*/ && $CI_COMMIT_REF_PROTECTED == "true"
       when: always
 
 # Tag images as 'develop' when on develop branch
@@ -141,7 +154,15 @@ publish-images-develop:
     - !reference [.docker_image_builder_job_template, before_script]
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "develop-images"
+    - |
+      # Export build arguments for images that need them
+      export BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      export GIT_COMMIT_SHA="${CI_COMMIT_SHA}"
+      export GIT_CURRENT_BRANCH="${CI_COMMIT_BRANCH}"
+      export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
+      export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
+      export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
+      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "develop-images"
   tags:
     - public-runner-docker
   rules:
