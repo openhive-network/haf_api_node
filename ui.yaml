@@ -6,9 +6,17 @@ services:
       REACT_APP_API_ADDRESS: https://${PUBLIC_HOSTNAME}
       REACT_APP_HIVE_BLOG_API_ADDRESS: https://${PUBLIC_HOSTNAME}
     profiles:
-      - ui
+    - ui
     networks:
       haf-network:
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --no-verbose --tries=1 --spider http://$(hostname -i):80/explorer || exit 1
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
   denser-blog:
     image: registry.gitlab.syncad.com/hive/denser/blog-subdirectory:${DENSER_VERSION:-${HIVE_API_NODE_VERSION}}
     environment:
@@ -22,13 +30,15 @@ services:
       REACT_APP_AI_DOMAIN: https://${PUBLIC_HOSTNAME}
       REACT_APP_BASE_PATH: /blog
     healthcheck:
-      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://127.0.0.1/ || exit 1']
+      test:
+      - CMD-SHELL
+      - wget --no-verbose --tries=1 --spider http://$(hostname -i):80/blog || exit 1
       interval: 1m30s
       timeout: 30s
       retries: 5
       start_period: 30s
     profiles:
-      - ui
+    - ui
     networks:
       haf-network:
   denser-wallet:
@@ -42,12 +52,14 @@ services:
       REACT_APP_WALLET_ENDPOINT: https://${PUBLIC_HOSTNAME}/wallet
       REACT_APP_BLOG_DOMAIN: https://${PUBLIC_HOSTNAME}/blog
     healthcheck:
-      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://127.0.0.1/ || exit 1']
+      test:
+      - CMD-SHELL
+      - wget --no-verbose --tries=1 --spider http://$(hostname -i):80/wallet || exit 1
       interval: 1m30s
       timeout: 30s
       retries: 5
       start_period: 30s
     profiles:
-      - ui
+    - ui
     networks:
       haf-network:
