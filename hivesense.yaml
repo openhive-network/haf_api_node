@@ -81,7 +81,7 @@ services:
       - "--min-token-threshold=${HIVESENSE_MIN_TOKEN_THRESHOLD:-75}"
       - "--min-token-search-threshold=${HIVESENSE_MIN_TOKEN_SEARCH_THRESHOLD:-0}"
       - "--swagger-url=${PUBLIC_HOSTNAME}/"
-      - "--use-reduced-embeddings=${HIVESENSE_USE_REDUCED_EMBEDDINGS:-false}"
+      - "--use-reduced-embeddings=${HIVESENSE_USE_REDUCED_EMBEDDINGS:-true}"
       - "--reduced-matrix-source=${HIVESENSE_MATRIX_SOURCE:-https://gitlab.syncad.com/hive/hivesense/-/wikis/uploads/0eebabf30d7cceb5776cb62c41abb2c9/projection_matrix_768_128_20250722.json.gz}"
       - "--config-dir=/hivesense/config"
       - "--reduced-dim=${HIVESENSE_REDUCED_DIMENSION:-128}"
