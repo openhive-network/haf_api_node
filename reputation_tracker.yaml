@@ -13,6 +13,7 @@ services:
     command:
       - install_app
       - --swagger-url=${PUBLIC_HOSTNAME}
+      - --is_forking=${REPUTATION_TRACKER_IS_FORKING:-${IS_FORKING:-TRUE}}
     depends_on:
       haf:
         condition: service_healthy
