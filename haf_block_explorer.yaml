@@ -9,6 +9,7 @@ services:
     command:
       - install_app
       - --swagger-url=${PUBLIC_HOSTNAME}
+      - --is_forking=${HAF_BLOCK_EXPLORER_IS_FORKING:-${IS_FORKING:-TRUE}}
     networks:
       haf-network:
     depends_on:
@@ -48,6 +49,7 @@ services:
       - install_app
       - --schema=hafbe_bal
       - --swagger-url=${PUBLIC_HOSTNAME}
+      - --is_forking=${HAF_BLOCK_EXPLORER_IS_FORKING:-${IS_FORKING:-TRUE}}
     depends_on:
       haf:
         condition: service_healthy

@@ -119,7 +119,7 @@ services:
       - type: bind
         source: ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/haf_wal}
         target: /home/hived/wal_dir
-    shm_size: 8gb
+    shm_size: ${HAF_SHM_SIZE:-8gb}
     healthcheck:
       test: ["CMD-SHELL", "wget -T2 -nv -t1 --spider http://127.0.0.1:8091/ || exit 1"]
       interval: 10s
