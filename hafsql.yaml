@@ -23,6 +23,8 @@ services:
       HAFSQL_REPUTATIONS: true # depends on HAFSQL_COMMENTS
       HAFSQL_MARKET: true
       HAFSQL_PUBLICUSER: true
+      HAFSQL_PUBLICUSERNAME: ${HAFSQL_PUBLICUSERNAME}
+      HAFSQL_PUBLICPASSWORD: ${HAFSQL_PUBLICPASSWORD}
       API_PREFIX: /hafsql
     depends_on:
       haf:
