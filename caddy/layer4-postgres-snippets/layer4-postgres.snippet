@@ -1,0 +1,25 @@
+# Layer4 TCP proxy for PostgreSQL public access
+# This snippet is only loaded when the postgres-public compose file is included
+layer4 {
+	# Port 5432: TLS with ALPN for PostgreSQL 17+ clients using sslnegotiation=direct
+	:5432 {
+		route {
+			# Enable TLS with PostgreSQL ALPN for direct SSL negotiation
+			tls {
+				connection_policy {
+					alpn postgresql
+				}
+			}
+			# Proxy to pgbouncer-public service
+			proxy pgbouncer-public:6432
+		}
+	}
+
+	# Port 5433: Plain TCP proxy for all PostgreSQL clients (no TLS)
+	:5433 {
+		route {
+			# Direct TCP proxy without TLS - works with all PostgreSQL versions
+			proxy pgbouncer-public:6432
+		}
+	}
+}

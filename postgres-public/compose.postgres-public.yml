@@ -1,0 +1,68 @@
+# PostgreSQL public access configuration
+# Add this to COMPOSE_FILE to enable:
+# COMPOSE_FILE=compose.yml:postgres-public/compose.postgres-public.yml
+
+services:
+  # Extend caddy service to expose PostgreSQL ports
+  caddy:
+    ports:
+      - 5432:5432  # TLS port for PostgreSQL 17+ clients (sslnegotiation=direct)
+      - 5433:5433  # Plain TCP port for all PostgreSQL clients
+    volumes:
+      - type: bind
+        source: ./caddy/layer4-postgres-snippets
+        target: /etc/caddy/layer4-postgres-snippets
+        read_only: true
+
+  # Extend haf service to add pg_hba.conf entries
+  haf:
+    environment:
+      PG_ACCESS_PGBOUNCER_PUBLIC: "
+        # Allow pgbouncer-public to connect as public user(s)\n
+        # Trust connection from pgbouncer-public container - authentication happens at PgBouncer level\n
+        host    haf_block_log    ${HAFSQL_PUBLIC_USERNAME:-hafsql_public}     ${COMPOSE_PROJECT_NAME}-pgbouncer-public-1.${NETWORK_NAME}    trust\n
+        # To add more users, extend this environment variable with additional lines\n
+        "
+  # This service provides a separate pgbouncer instance for public users
+  pgbouncer-public:
+    image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/pgbouncer:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
+    environment:
+      # Listen on all interfaces (needed for container networking)
+      PGBOUNCER_LISTEN_ADDR: 0.0.0.0
+      # Listen on default PgBouncer port
+      PGBOUNCER_LISTEN_PORT: 6432
+      # Database connection settings
+      PGBOUNCER_DB_HOST: haf
+      PGBOUNCER_DB_PORT: 5432
+      PGBOUNCER_DB_NAME: haf_block_log
+      # Users with passwords for MD5 authentication
+      # Format: "user1:pass1,user2:pass2" - the entrypoint will calculate MD5 hashes
+      PGBOUNCER_USERS_WITH_PASSWORDS: "${HAFSQL_PUBLIC_USERNAME:-hafsql_public}:${HAFSQL_PUBLIC_PASSWORD:-hafsql_public}"
+      # Authentication configuration - require password from clients
+      PGBOUNCER_AUTH_TYPE: md5
+      # Smaller pool configuration for public users
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_DEFAULT_POOL_SIZE: 5
+      PGBOUNCER_MAX_CLIENT_CONN: 10
+      PGBOUNCER_MAX_DB_CONNECTIONS: ${HAFSQL_PUBLIC_CONNECTION_LIMIT:-5}
+      # Conservative timeouts
+      PGBOUNCER_SERVER_IDLE_TIMEOUT: 300
+      PGBOUNCER_SERVER_LIFETIME: 1800
+      PGBOUNCER_QUERY_WAIT_TIMEOUT: 60
+      PGBOUNCER_CLIENT_IDLE_TIMEOUT: 0
+      PGBOUNCER_CLIENT_LOGIN_TIMEOUT: 30
+      # Logging
+      PGBOUNCER_LOG_CONNECTIONS: 1
+      PGBOUNCER_LOG_DISCONNECTIONS: 1
+      PGBOUNCER_STATS_PERIOD: 60
+    networks:
+      - haf-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${HAFSQL_PUBLIC_USERNAME:-hafsql_public} -d haf_block_log || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      haf:
+        condition: service_healthy
