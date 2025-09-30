@@ -31,6 +31,10 @@ services:
         source: ./haproxy/30-proxies.cfg
         target: /usr/local/etc/haproxy/30-proxies.cfg
         read_only: true
+      - type: bind
+        source: ./haproxy/35-ollama.cfg
+        target: /usr/local/etc/haproxy/35-ollama.cfg
+        read_only: true
     networks:
       - haf-network
     healthcheck:
