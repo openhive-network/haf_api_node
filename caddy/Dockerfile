@@ -1,10 +1,11 @@
-ARG CADDY_VERSION=2.8.0
+ARG CADDY_VERSION=2.10.2
 FROM caddy:${CADDY_VERSION}-builder-alpine AS builder
 
 RUN xcaddy build \
   --with github.com/mholt/caddy-ratelimit \
-  --with github.com/caddy-dns/cloudflare@v0.1.0 \
-  --with github.com/caddyserver/transform-encoder@47f376e021efdfdf2d47ca716c8f031b4fdfad92
+  --with github.com/caddy-dns/cloudflare@v0.2.1 \
+  --with github.com/caddyserver/transform-encoder@47f376e021efdfdf2d47ca716c8f031b4fdfad92 \
+  --with github.com/mholt/caddy-l4
 
 FROM caddy:${CADDY_VERSION}-alpine
 

@@ -1,5 +1,8 @@
 {
   order rate_limit before basicauth
+
+  # Import Layer4 configuration for PostgreSQL TCP proxy (if postgres-public compose yaml files are included)
+  import layer4-postgres-snippets/*.snippet
 }
 
 # Simple caddy config, handles SSL and forwards everything to varnish

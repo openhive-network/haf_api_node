@@ -2,12 +2,36 @@
 set -eu
 
 # Generate userlist.txt from environment variable
-# With trust auth, the password is ignored but must be present
-if [ -n "${PGBOUNCER_USERS:-}" ]; then
+if [ -n "${PGBOUNCER_USERS_WITH_PASSWORDS:-}" ]; then
   : > /etc/pgbouncer/userlist.txt  # Create empty file
-  # Convert space-separated list to quoted format with dummy password
+
+  # Parse comma-separated user:password pairs
+  OLD_IFS="$IFS"
+  IFS=','
+  for user_pass in $PGBOUNCER_USERS_WITH_PASSWORDS; do
+    # Extract user and password
+    user=$(echo "$user_pass" | cut -d: -f1 | tr -d ' ')
+    pass=$(echo "$user_pass" | cut -d: -f2-)  # Use -f2- to handle passwords with colons
+
+    if [ "${PGBOUNCER_AUTH_TYPE:-trust}" = "md5" ]; then
+      # Calculate MD5 hash: md5(password + username)
+      hash=$(echo -n "${pass}${user}" | md5sum | cut -d' ' -f1)
+      echo "\"$user\" \"md5${hash}\"" >> /etc/pgbouncer/userlist.txt
+    else
+      echo "\"$user\" \"trusted\"" >> /etc/pgbouncer/userlist.txt
+    fi
+  done
+  IFS="$OLD_IFS"
+elif [ -n "${PGBOUNCER_USERS:-}" ]; then
+  : > /etc/pgbouncer/userlist.txt  # Create empty file
+  # Backward compatibility: space-separated list without passwords
   for user in $PGBOUNCER_USERS; do
-    echo "\"$user\" \"trusted\"" >> /etc/pgbouncer/userlist.txt
+    if [ "${PGBOUNCER_AUTH_TYPE:-trust}" = "md5" ]; then
+      # Without passwords, can't generate MD5 hashes
+      echo "\"$user\" \"dummy\"" >> /etc/pgbouncer/userlist.txt
+    else
+      echo "\"$user\" \"trusted\"" >> /etc/pgbouncer/userlist.txt
+    fi
   done
 else
   # Default user list if not provided - dummy passwords for trust auth (password is ignored)
@@ -38,12 +62,15 @@ haf_block_log = host=${PGBOUNCER_DB_HOST:-haf} port=${PGBOUNCER_DB_PORT:-5432} d
 
 [pgbouncer]
 ;; Connection settings
-listen_addr = 0.0.0.0
-listen_port = 6432
+listen_addr = ${PGBOUNCER_LISTEN_ADDR:-0.0.0.0}
+listen_port = ${PGBOUNCER_LISTEN_PORT:-6432}
 
 ;; Authentication
-auth_type = trust
+auth_type = ${PGBOUNCER_AUTH_TYPE:-trust}
 auth_file = /etc/pgbouncer/userlist.txt
+EOF
+
+cat >> /etc/pgbouncer/pgbouncer.ini <<EOF
 
 ;; Pool configuration
 pool_mode = ${PGBOUNCER_POOL_MODE:-transaction}
