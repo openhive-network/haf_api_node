@@ -114,6 +114,24 @@ is not compressed because hived directly manages compression of the block_log fi
 If you have a LOT of nvme storage (e.g. 6TB+), you can get better API performance at the cost of disk
 storage by disabling ZFS compression on the database dataset, but for most nodes this isn't recommended.
 
+##### Non-ZFS users
+
+If you're not using ZFS, you can run:
+```
+sudo ./create_directories.sh
+```
+to create the directory structure on a pre-existing filesystem.
+
+##### File Ownership
+
+The docker containers require different directories to have specific user/group ownership.  The
+create_zfs_datasets/create_directories scripts automatically set ownership correctly, and you may
+never have a problem.  But if you start getting permission errors, there's a 
+```
+sudo ./repair_permissions.sh
+```
+script that will try to restore file ownership to what our stack expects.
+
 #### Speeding up the initial sync
 
 Following the instructions above will get you a working HAF node, but there are some things you can
