@@ -114,7 +114,7 @@ is not compressed because hived directly manages compression of the block_log fi
 If you have a LOT of nvme storage (e.g. 6TB+), you can get better API performance at the cost of disk
 storage by disabling ZFS compression on the database dataset, but for most nodes this isn't recommended.
 
-##### Speeding up the initial sync
+#### Speeding up the initial sync
 
 Following the instructions above will get you a working HAF node, but there are some things you can
 do to speed up the initial sync.
@@ -136,14 +136,40 @@ ARGUMENTS="--replay-blockchain"
 
 Once the replay has finished, you can revert the `ARGUMENTS` line to the empty string
 
+###### Reducing Writebacks
+
+You can tune your system to reduce how often the kernel flushes dirty pages to disk.  This
+will result in far fewer disk writes during sync.  This reduces wear on your drives, and
+significantly improves performance, giving you performance almost as good as putting hived's
+shared memory file on a ramdisk, without the hassle of creating and destroying the ramdisk
+and copying the file off after the sync.
+
+Note that unlike using a ramdisk, this changes global settings that will effect your whole
+machine.  Most of the benefit comes from preventing the OS from flushing hived's shared
+memory file when it's being heavily written to during sync.  After hived is in sync, you
+can restore the original settings with little loss in performance while the rest of the apps
+sync.
+
+There's a script `reduce_writebacks.sh` that will change your kernel parameters to the
+suggested values.  Run:
+
+```
+sudo ./reduce_writebacks.sh
+```
+
+After sync, you can restore the original values with:
+```
+sudo ./reduce_writebacks.sh --restore
+```
+
 ###### Shared Memory on Ramdisk
 
 If you have enough spare memory on your system, you can speed up the initial replay by placing the
 `shared_memory.bin` file on a ramdisk.
 
-The current default shared memory filesize is 24G, so this will only work if you have 24G free
-(that's in addition to the memory you expect to be used by hived and HAF's integrated PostgreSQL
-instance).
+The current default shared memory filesize is approximately 6G, so allowing for a little extra room,
+this will only work if you have 8G free.  (that's in addition to the memory you expect to be used by
+hived and HAF's integrated PostgreSQL instance).
 
 If you have a 64GB system, ensure you have a big enough swapfile (32GB is recommended
 and 8GB is known to not be sufficient) to handle peak memory usage needs during the replay.
