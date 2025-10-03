@@ -124,6 +124,27 @@ save_original_values() {
         IFS='|' read -r param _ _ <<< "$param_info"
         local current_value
         current_value=$(get_sysctl_value "$param")
+
+        # Special handling: dirty_bytes and dirty_ratio are mutually exclusive
+        # Save whichever one is active (non-zero)
+        if [[ "$param" == "vm.dirty_bytes" ]]; then
+            if [[ "$current_value" == "0" ]]; then
+                # Bytes mode inactive, save ratio instead
+                local ratio_value
+                ratio_value=$(get_sysctl_value "vm.dirty_ratio")
+                echo "vm.dirty_ratio=${ratio_value}" >> "$temp_file"
+                continue
+            fi
+        elif [[ "$param" == "vm.dirty_background_bytes" ]]; then
+            if [[ "$current_value" == "0" ]]; then
+                # Bytes mode inactive, save ratio instead
+                local ratio_value
+                ratio_value=$(get_sysctl_value "vm.dirty_background_ratio")
+                echo "vm.dirty_background_ratio=${ratio_value}" >> "$temp_file"
+                continue
+            fi
+        fi
+
         echo "${param}=${current_value}" >> "$temp_file"
     done
 
@@ -238,33 +259,11 @@ restore_settings() {
             print_success "$param is already set to $value (no change needed)"
         else
             print_warning "$param: restoring from $current_value to $value"
-
-            # Special handling: can't set dirty_bytes/dirty_background_bytes to 0 directly
-            # Need to set ratio parameters instead to switch back to ratio mode
-            if [[ "$param" == "vm.dirty_bytes" ]] && [[ "$value" == "0" ]]; then
-                local default_ratio=20
-                if sysctl -w "vm.dirty_ratio=${default_ratio}" > /dev/null 2>&1; then
-                    print_success "$param restored (by setting vm.dirty_ratio=$default_ratio)"
-                    changes_made=true
-                else
-                    print_error "Failed to restore $param"
-                fi
-            elif [[ "$param" == "vm.dirty_background_bytes" ]] && [[ "$value" == "0" ]]; then
-                local default_ratio=10
-                if sysctl -w "vm.dirty_background_ratio=${default_ratio}" > /dev/null 2>&1; then
-                    print_success "$param restored (by setting vm.dirty_background_ratio=$default_ratio)"
-                    changes_made=true
-                else
-                    print_error "Failed to restore $param"
-                fi
+            if sysctl -w "${param}=${value}" > /dev/null 2>&1; then
+                print_success "$param restored successfully"
+                changes_made=true
             else
-                # Normal restore
-                if sysctl -w "${param}=${value}" > /dev/null 2>&1; then
-                    print_success "$param restored successfully"
-                    changes_made=true
-                else
-                    print_error "Failed to restore $param"
-                fi
+                print_error "Failed to restore $param"
             fi
         fi
     done < "$SAVED_VALUES_FILE"
