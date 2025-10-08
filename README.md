@@ -200,7 +200,7 @@ To do this, first create a ramdisk:
 sudo mkdir /mnt/haf_shared_mem
 
 # then
-sudo mount -t tmpfs -o size=25g tmpfs /mnt/haf_shared_mem
+sudo mount -t tmpfs -o size=8g tmpfs /mnt/haf_shared_mem
 # - or -
 sudo mount -t ramfs ramfs /mnt/haf_shared_mem
 
@@ -352,7 +352,7 @@ python3 use_develop_env.py <path_to_directory>
 ```
 
 ## make_ramdisk.sh
-This script creates a ramdisk and mounts it to the `/mnt/haf_shared_mem` directory. It sets the size of the ramdisk to 26GB and changes the permissions to allow read/write access for all users.
+This script creates a ramdisk and mounts it to the `/mnt/haf_shared_mem` directory. It sets the size of the ramdisk to 8GB and changes the permissions to allow read/write access for all users.
 
 Usage:
 ```

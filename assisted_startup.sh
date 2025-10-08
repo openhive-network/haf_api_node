@@ -3,6 +3,9 @@
 # After installing zfs and docker prequisites, run this script to configure the rest of the system
 # This script will aid in the .env setup, and will automatically create a zpool and zfs datasets if needed
 
+# Ramdisk size configuration
+RAMDISK_SIZE_GB=8  # Default ramdisk size in GB
+
 for arg in "$@"; do
     case $arg in
         --no-ramdisk)
@@ -274,14 +277,14 @@ else
         swap_location=$(swapon --show=NAME --noheadings)
 
 
-        if [[ $physical_memory -ge 58 && $free_memory -gt 30 && $NO_RAMDISK != 1 ]]; then
-            echo "There is at least 58 gigabytes of usable RAM. Mounting shared_mem..."
+        if [[ $physical_memory -ge $((RAMDISK_SIZE_GB + 33)) && $free_memory -gt $((RAMDISK_SIZE_GB + 5)) && $NO_RAMDISK != 1 ]]; then
+            echo "There is at least $((RAMDISK_SIZE_GB + 33)) gigabytes of usable RAM. Mounting shared_mem..."
             if [ ! -d "/mnt/haf_shared_mem" ]; then
                 mkdir /mnt/haf_shared_mem
             fi
-            mount -t tmpfs -o size=25g tmpfs /mnt/haf_shared_mem
+            mount -t tmpfs -o size=${RAMDISK_SIZE_GB}g tmpfs /mnt/haf_shared_mem
             chown 1000:100 /mnt/haf_shared_mem
-            remove_shared_mem=25
+            remove_shared_mem=$RAMDISK_SIZE_GB
         else
             remove_shared_mem=0
         fi
