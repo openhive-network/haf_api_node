@@ -6,10 +6,20 @@
 # Ramdisk size configuration
 RAMDISK_SIZE_GB=8  # Default ramdisk size in GB
 
+# Memory thresholds for optimization selection
+RAMDISK_MIN_MEMORY_GB=$((RAMDISK_SIZE_GB + 33))  # Minimum RAM for ramdisk approach
+REDUCE_WRITEBACKS_MIN_MEMORY_GB=35                # Minimum RAM for reduce_writebacks approach
+
 for arg in "$@"; do
     case $arg in
         --no-ramdisk)
             NO_RAMDISK=1
+            ;;
+        --force-reduce-writebacks)
+            FORCE_REDUCE_WRITEBACKS=1
+            ;;
+        --no-optimizations)
+            NO_OPTIMIZATIONS=1
             ;;
         --no-autoswap)
             NO_AUTOSWAP=1
@@ -25,12 +35,23 @@ for arg in "$@"; do
             SKIP_DISK_SIZE_REQT=1
             ;;
         --help)
-            echo "Usage: assisted_startup.sh [--no-ramdisk] [--no-autoswap]"
-            echo "  --no-ramdisk: Do not use a RAM Disk for shared memory"
+            echo "Usage: assisted_startup.sh [OPTIONS]"
+            echo ""
+            echo "Performance optimization options:"
+            echo "  --no-ramdisk: Do not use a RAM disk (will use reduce_writebacks if available)"
+            echo "  --force-reduce-writebacks: Force use reduce_writebacks optimization"
+            echo "  --no-optimizations: Disable all performance optimizations"
+            echo ""
+            echo "Other options:"
             echo "  --no-autoswap: Do not automatically grow swap"
             echo "  --replay: Replay the blockchain, use only on first run, and not rerun if this script exits before snapshot"
             echo "  --skip-disk-size-reqt: Do not stop the script if less than 4T disk partitions found"
             echo "  --snapshot-name NAME: Name of the snapshot to use. default first_sync"
+            echo ""
+            echo "Memory requirements:"
+            echo "  - Ramdisk optimization: ${RAMDISK_MIN_MEMORY_GB}GB+ RAM"
+            echo "  - reduce_writebacks optimization: ${REDUCE_WRITEBACKS_MIN_MEMORY_GB}GB+ RAM"
+            echo "  - No optimization: Any amount (but slower sync)"
             exit 0
             ;;
         *)
@@ -277,24 +298,70 @@ else
         swap_location=$(swapon --show=NAME --noheadings)
 
 
-        if [[ $physical_memory -ge $((RAMDISK_SIZE_GB + 33)) && $free_memory -gt $((RAMDISK_SIZE_GB + 5)) && $NO_RAMDISK != 1 ]]; then
-            echo "There is at least $((RAMDISK_SIZE_GB + 33)) gigabytes of usable RAM. Mounting shared_mem..."
+        # Determine optimization method
+        OPTIMIZATION_METHOD=""
+
+        if [[ $NO_OPTIMIZATIONS == 1 ]]; then
+            OPTIMIZATION_METHOD="none"
+            echo "Performance optimizations disabled by user (--no-optimizations)"
+        elif [[ $FORCE_REDUCE_WRITEBACKS == 1 ]]; then
+            OPTIMIZATION_METHOD="reduce_writebacks"
+            echo "Using reduce_writebacks optimization (--force-reduce-writebacks)"
+        elif [[ $physical_memory -ge $RAMDISK_MIN_MEMORY_GB && $free_memory -gt $((RAMDISK_SIZE_GB + 5)) && $NO_RAMDISK != 1 ]]; then
+            OPTIMIZATION_METHOD="ramdisk"
+            echo "Sufficient memory detected (${physical_memory}GB). Using ramdisk optimization..."
+        elif [[ $physical_memory -ge $REDUCE_WRITEBACKS_MIN_MEMORY_GB ]]; then
+            OPTIMIZATION_METHOD="reduce_writebacks"
+            if [[ $NO_RAMDISK == 1 ]]; then
+                echo "Using reduce_writebacks optimization (--no-ramdisk specified)..."
+            else
+                echo "Using reduce_writebacks optimization (insufficient memory for ramdisk)..."
+            fi
+        elif [[ $physical_memory -lt $REDUCE_WRITEBACKS_MIN_MEMORY_GB ]]; then
+            echo "WARNING: Only ${physical_memory}GB RAM detected. Recommended minimum:"
+            echo "  - ${RAMDISK_MIN_MEMORY_GB}GB for ramdisk optimization"
+            echo "  - ${REDUCE_WRITEBACKS_MIN_MEMORY_GB}GB for reduce_writebacks optimization"
+            read -p "Try reduce_writebacks anyway? (y/N): " choice
+            if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
+                OPTIMIZATION_METHOD="reduce_writebacks"
+            else
+                OPTIMIZATION_METHOD="none"
+            fi
+        else
+            OPTIMIZATION_METHOD="none"
+            echo "No performance optimizations will be applied"
+        fi
+
+        # Apply chosen optimization
+        if [[ $OPTIMIZATION_METHOD == "ramdisk" ]]; then
+            echo "There is at least $RAMDISK_MIN_MEMORY_GB gigabytes of usable RAM. Mounting shared_mem..."
             if [ ! -d "/mnt/haf_shared_mem" ]; then
                 mkdir /mnt/haf_shared_mem
             fi
             mount -t tmpfs -o size=${RAMDISK_SIZE_GB}g tmpfs /mnt/haf_shared_mem
             chown 1000:100 /mnt/haf_shared_mem
             remove_shared_mem=$RAMDISK_SIZE_GB
+        elif [[ $OPTIMIZATION_METHOD == "reduce_writebacks" ]]; then
+            echo "Applying reduce_writebacks optimization..."
+            if ./reduce_writebacks.sh; then
+                echo "reduce_writebacks optimization applied successfully"
+            else
+                echo "WARNING: Failed to apply reduce_writebacks optimization"
+                OPTIMIZATION_METHOD="none"
+            fi
+            remove_shared_mem=0
         else
             remove_shared_mem=0
         fi
+
         echo "Available Memory: $(( physical_memory - remove_shared_mem + swap_memory ))G"
         echo "Current swapsize: $swap_memory"
         echo "64G of memory is recommended, with at least 8G of swap"
         echo "This script will attempt to allocate aditional swap if needed"
 
-        # write variable to a temp file
+        # write variables to a temp file
         echo "remove_shared_mem=$remove_shared_mem" > startup.temp
+        echo "OPTIMIZATION_METHOD=$OPTIMIZATION_METHOD" >> startup.temp
 
         # Modify the .env file to use only the core and admin profile and the shared_mem directory
         while IFS= read -r line; do
@@ -425,15 +492,27 @@ fi
 if docker compose ps | grep haf | grep Up >/dev/null 2>&1; then
     echo "Docker Compose is still running."
 else
+    # Load optimization method from startup.temp
+    source startup.temp
+
     # Restore the original line
     sed -i "s/$modified_line/$original_line/g" .env
 
-    # Move the shared_mem file to the blockchain directory
-    if [[ $remove_shared_mem != 0 ]]; then
+    # Restore optimization settings based on method used
+    if [[ $OPTIMIZATION_METHOD == "ramdisk" && $remove_shared_mem != 0 ]]; then
+        # Move the shared_mem file to the blockchain directory
         sed -i "s#^$modified_HAF_SHM#$original_HAF_SHM#g" .env
         cp --sparse=always /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory
         chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
         umount /mnt/haf_shared_mem
+        echo "Ramdisk optimization cleanup completed"
+    elif [[ $OPTIMIZATION_METHOD == "reduce_writebacks" ]]; then
+        echo "Restoring original kernel parameters..."
+        if ./reduce_writebacks.sh --restore; then
+            echo "Kernel parameters restored successfully"
+        else
+            echo "WARNING: Failed to restore kernel parameters. They will reset on next reboot."
+        fi
     fi
 
 
@@ -454,6 +533,17 @@ else
     echo "Startup Complete"
     echo "Sync Complete"
     echo "Forward haf.log to the HAF team for performance tracking."
+
+    # Report which optimization was used
+    if [[ $OPTIMIZATION_METHOD == "ramdisk" ]]; then
+        echo "Ramdisk optimization was used for this sync"
+    elif [[ $OPTIMIZATION_METHOD == "reduce_writebacks" ]]; then
+        echo "reduce_writebacks optimization was used for this sync"
+        echo "Kernel parameters have been restored to original values"
+    else
+        echo "No performance optimizations were used for this sync"
+    fi
+
     if [[ $made_swap == 1 ]]; then
         echo "Swap file(s) created to prevent OOM crash. Please manually remove them if desired. (swapon --help)"
     fi
