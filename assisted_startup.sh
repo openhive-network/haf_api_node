@@ -4,7 +4,7 @@
 # This script will aid in the .env setup, and will automatically create a zpool and zfs datasets if needed
 
 # Ramdisk size configuration
-RAMDISK_SIZE_GB=8  # Default ramdisk size in GB
+RAMDISK_SIZE_GB=7  # Default ramdisk size in GB (for shared_memory.bin only)
 
 # Memory thresholds for optimization selection
 RAMDISK_MIN_MEMORY_GB=$((RAMDISK_SIZE_GB + 33))  # Minimum RAM for ramdisk approach
@@ -334,12 +334,17 @@ else
 
         # Apply chosen optimization
         if [[ $OPTIMIZATION_METHOD == "ramdisk" ]]; then
-            echo "There is at least $RAMDISK_MIN_MEMORY_GB gigabytes of usable RAM. Mounting shared_mem..."
+            echo "Mounting ${RAMDISK_SIZE_GB}GB ramdisk for shared_memory.bin only..."
             if [ ! -d "/mnt/haf_shared_mem" ]; then
                 mkdir /mnt/haf_shared_mem
             fi
             mount -t tmpfs -o size=${RAMDISK_SIZE_GB}g tmpfs /mnt/haf_shared_mem
             chown 1000:100 /mnt/haf_shared_mem
+
+            # Ensure RocksDB directories exist on disk
+            mkdir -p /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/comments-rocksdb-storage
+            chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/comments-rocksdb-storage
+
             remove_shared_mem=$RAMDISK_SIZE_GB
         elif [[ $OPTIMIZATION_METHOD == "reduce_writebacks" ]]; then
             echo "Applying reduce_writebacks optimization..."
@@ -363,6 +368,11 @@ else
         echo "remove_shared_mem=$remove_shared_mem" > startup.temp
         echo "OPTIMIZATION_METHOD=$OPTIMIZATION_METHOD" >> startup.temp
 
+        # Track what lines we added (vs modified) so we can remove them later
+        added_lines=""
+        modified_lines=""
+        added_rocksdb_arg=""
+
         # Modify the .env file to use only the core and admin profile and the shared_mem directory
         while IFS= read -r line; do
             if [[ $line == COMPOSE_PROFILES=* ]]; then
@@ -372,11 +382,8 @@ else
                 echo "Intended Profiles: $original_line"
                 echo "Startup Profiles: $modified_line"
             fi
-            if [[ $line == HAF_SHM_DIRECTORY=* ]]; then
-                original_HAF_SHM="$line"
-                modified_HAF_SHM="HAF_SHM_DIRECTORY=\"/mnt/haf_shared_mem\""
-
-            fi
+            # We'll handle HAF_SHM_DIRECTORY outside the loop
+            # since it might not exist in the file
 
             if [[ $line == ARGUMENTS=* && ($line == *--replay-blockchain* || $line == *--force-replay*) ]]; then
                 original_arguments="$line"
@@ -389,16 +396,60 @@ else
 
         sed -i "s/$original_line/$modified_line/g" .env
 
-        if [[ $remove_shared_mem != 0 ]]; then
-            sed -i "s#^$original_HAF_SHM#$modified_HAF_SHM#g" .env
-            echo "original_HAF_SHM=$original_HAF_SHM"
-            echo "modified_HAF_SHM=$modified_HAF_SHM"
-            echo "original_HAF_SHM=$original_HAF_SHM" >> startup.temp
-            echo "modified_HAF_SHM=$modified_HAF_SHM" >> startup.temp
+        # Handle optional HAF_SHM_DIRECTORY and HAF_ROCKSDB_DIRECTORY
+        if [[ $OPTIMIZATION_METHOD == "ramdisk" ]]; then
+            # Check if HAF_SHM_DIRECTORY exists
+            if grep -q "^HAF_SHM_DIRECTORY=" .env; then
+                # Variable exists, modify it
+                original_HAF_SHM=$(grep "^HAF_SHM_DIRECTORY=" .env)
+                modified_HAF_SHM="HAF_SHM_DIRECTORY=\"/mnt/haf_shared_mem\""
+                sed -i "s#^$original_HAF_SHM#$modified_HAF_SHM#g" .env
+                echo "original_HAF_SHM=$original_HAF_SHM" >> startup.temp
+                echo "modified_HAF_SHM=$modified_HAF_SHM" >> startup.temp
+                echo "modified_HAF_SHM_EXISTS=1" >> startup.temp
+            else
+                # Variable doesn't exist, add it
+                echo "HAF_SHM_DIRECTORY=\"/mnt/haf_shared_mem\"" >> .env
+                echo "added_HAF_SHM=1" >> startup.temp
+                added_lines="${added_lines}HAF_SHM_DIRECTORY\n"
+            fi
+
+            # Check if HAF_ROCKSDB_DIRECTORY exists
+            if grep -q "^HAF_ROCKSDB_DIRECTORY=" .env; then
+                # Variable exists, save original
+                original_HAF_ROCKSDB=$(grep "^HAF_ROCKSDB_DIRECTORY=" .env)
+                echo "original_HAF_ROCKSDB=$original_HAF_ROCKSDB" >> startup.temp
+                echo "HAF_ROCKSDB_EXISTS=1" >> startup.temp
+            else
+                # Variable doesn't exist, add it
+                echo "HAF_ROCKSDB_DIRECTORY=\"/$ZPOOL/$TOP_LEVEL_DATASET/shared_memory\"" >> .env
+                echo "added_HAF_ROCKSDB=1" >> startup.temp
+                added_lines="${added_lines}HAF_ROCKSDB_DIRECTORY\n"
+            fi
+
+            # Add rocksdb path to ARGUMENTS
+            current_args=$(grep "^ARGUMENTS=" .env | sed 's/ARGUMENTS=//' | sed 's/^"//' | sed 's/"$//')
+            rocksdb_arg="--comments-rocksdb-path=/home/hived/rocksdb_dir/comments-rocksdb-storage"
+
+            if [[ -z "$current_args" || "$current_args" == '""' || "$current_args" == "" ]]; then
+                new_args="\"$rocksdb_arg\""
+            else
+                new_args="\"${current_args} ${rocksdb_arg}\""
+            fi
+
+            original_rocksdb_arguments=$(grep "^ARGUMENTS=" .env)
+            sed -i "s#^ARGUMENTS=.*#ARGUMENTS=${new_args}#g" .env
+
+            echo "original_rocksdb_arguments=$original_rocksdb_arguments" >> startup.temp
+            echo "added_rocksdb_arg=1" >> startup.temp
+            added_rocksdb_arg="1"
         fi
 
         echo "original_line=$original_line" >> startup.temp
         echo "modified_line=$modified_line" >> startup.temp
+
+        # Save what lines we added vs modified
+        echo "added_lines=$added_lines" >> startup.temp
 
         if [[ $original_arguments != "" ]]; then
             echo "original_arguments=$original_arguments" >> startup.temp
@@ -500,9 +551,35 @@ else
 
     # Restore optimization settings based on method used
     if [[ $OPTIMIZATION_METHOD == "ramdisk" && $remove_shared_mem != 0 ]]; then
-        # Move the shared_mem file to the blockchain directory
-        sed -i "s#^$modified_HAF_SHM#$original_HAF_SHM#g" .env
-        cp --sparse=always /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory
+        # Restore HAF_SHM_DIRECTORY
+        if [[ "$added_HAF_SHM" == "1" ]]; then
+            # We added this line, remove it
+            sed -i "/^HAF_SHM_DIRECTORY=/d" .env
+            echo "Removed added HAF_SHM_DIRECTORY"
+        elif [[ "$modified_HAF_SHM_EXISTS" == "1" ]]; then
+            # We modified this line, restore it
+            sed -i "s#^$modified_HAF_SHM#$original_HAF_SHM#g" .env
+            echo "Restored original HAF_SHM_DIRECTORY"
+        fi
+
+        # Restore HAF_ROCKSDB_DIRECTORY
+        if [[ "$added_HAF_ROCKSDB" == "1" ]]; then
+            # We added this line, remove it
+            sed -i "/^HAF_ROCKSDB_DIRECTORY=/d" .env
+            echo "Removed added HAF_ROCKSDB_DIRECTORY"
+        elif [[ "$HAF_ROCKSDB_EXISTS" == "1" ]]; then
+            # Variable existed but we didn't modify it, nothing to do
+            echo "HAF_ROCKSDB_DIRECTORY was not modified"
+        fi
+
+        # Remove rocksdb argument from ARGUMENTS
+        if [[ "$added_rocksdb_arg" == "1" ]]; then
+            sed -i "s#^ARGUMENTS=.*#${original_rocksdb_arguments}#g" .env
+            echo "Restored original ARGUMENTS (removed rocksdb path)"
+        fi
+
+        # Copy shared_memory.bin back to disk
+        cp --sparse=always /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/
         chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
         umount /mnt/haf_shared_mem
         echo "Ramdisk optimization cleanup completed"
