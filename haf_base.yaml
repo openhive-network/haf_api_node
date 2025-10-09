@@ -92,6 +92,7 @@ services:
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafsql-uninstall-1.${NETWORK_NAME}                    trust\n
         "
       SHM_DIR: /home/hived/shm_dir
+      ROCKSDB_DIR: /home/hived/rocksdb_dir
       WAL_DIR: /home/hived/wal_dir
       # PGCTLTIMEOUT sets how long we allow PostgreSQL to startup before giving up and shutting down the container.
       # If you have an unclean shutdown, and postgres needs to do startup recovery, working through all of the old
@@ -116,6 +117,9 @@ services:
       - type: bind
         source: ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/
         target: /home/hived/shm_dir
+      - type: bind
+        source: ${HAF_ROCKSDB_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/
+        target: /home/hived/rocksdb_dir
       - type: bind
         source: ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/haf_wal}
         target: /home/hived/wal_dir
