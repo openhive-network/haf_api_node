@@ -19,8 +19,10 @@ services:
       start_period: 30s
   denser-blog:
     image: registry.gitlab.syncad.com/hive/denser/blog-subdirectory:${DENSER_VERSION:-${HIVE_API_NODE_VERSION}}
+    restart: unless-stopped
     environment:
       PORT: 80
+      NODE_OPTIONS: --max-old-space-size=8192
       REACT_APP_API_ENDPOINT: https://${PUBLIC_HOSTNAME}
       REACT_APP_IMAGES_ENDPOINT: https://images.hive.blog/
       REACT_APP_SITE_DOMAIN: https://${PUBLIC_HOSTNAME}/blog
@@ -29,6 +31,12 @@ services:
       REACT_APP_EXPLORER_DOMAIN: https://${PUBLIC_HOSTNAME}/explorer
       REACT_APP_AI_DOMAIN: https://${PUBLIC_HOSTNAME}
       REACT_APP_BASE_PATH: /blog
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+        reservations:
+          memory: 2G
     healthcheck:
       test:
       - CMD-SHELL
