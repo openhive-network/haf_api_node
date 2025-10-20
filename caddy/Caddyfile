@@ -41,6 +41,15 @@
     respond 204
   }
 
+  # Serve robots.txt to block web scrapers from public sites
+  handle /robots.txt {
+    header Content-Type "text/plain; charset=utf-8"
+    respond `User-agent: *
+Disallow: /blog/
+Disallow: /explorer/
+Disallow: /wallet/
+` 200
+  }
 
   # reverse-proxy to the admin tools
   redir /admin /admin/
