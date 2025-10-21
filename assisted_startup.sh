@@ -6,6 +6,11 @@
 # Ramdisk size configuration
 RAMDISK_SIZE_GB=7  # Default ramdisk size in GB (for shared_memory.bin only)
 
+# Mode detection variables
+HIVE_MODE=0  # Flag to track if we're using hive profile (0=HAF mode, 1=Hive mode)
+SERVICE_NAME=""  # Will be set to either "haf" or "hive"
+SYNC_MESSAGE=""  # Will be set to appropriate sync detection string
+
 # Memory thresholds for optimization selection
 RAMDISK_MIN_MEMORY_GB=$((RAMDISK_SIZE_GB + 33))  # Minimum RAM for ramdisk approach
 REDUCE_WRITEBACKS_MIN_MEMORY_GB=35                # Minimum RAM for reduce_writebacks approach
@@ -72,7 +77,10 @@ touch startup.temp
 if [[ $REPLAY == 1 ]]; then
     rm -f startup.temp
 else
-    source startup.temp
+    # Source startup.temp if it exists, this will restore mode variables
+    if [[ -f startup.temp ]]; then
+        source startup.temp
+    fi
 fi
 
 if command -v zfs >/dev/null 2>&1; then
@@ -104,72 +112,99 @@ if [ ! -f .env ]; then
     echo ".env not found. Performing first time setup..."
     cp .env.example .env
     source .env
-    echo "PROFILES are the list of HAF services you want to run. The default is $COMPOSE_PROFILES."
-    echo "core: the minimal HAF system of a database and hived"
-    echo "admin: useful tools for administrating HAF: pgadmin, pghero"
-    echo "apps: core HAF apps: hivemind, hafah, hafbe (balance-tracker is a subapp)"
-    echo "servers: services for routing/caching API calls: haproxy, jussi/drone (JSON caching), varnish (REST caching)"
-    read -p "Run admin? (Y or N): " choice
-    if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
-        echo "Adding admin to profiles..."
-        NEW_PROFILES="core,admin"
+
+    # Ask about mode first
+    echo "Choose your deployment mode:"
+    echo "1. Traditional HAF mode - Full HAF stack with database and applications"
+    echo "2. Hive mode - Lightweight hived-only deployment without database"
+    read -p "Select mode (1 for HAF, 2 for Hive): " mode_choice
+
+    if [[ "$mode_choice" == "2" ]]; then
+        # Hive mode setup
+        echo "Setting up Hive mode..."
+        HIVE_MODE=1
+        NEW_PROFILES="hive"
         sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
         source .env
+
+        # Optional: ask about price_feed profile
+        read -p "Add price_feed profile? (Y or N): " choice
+        if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
+            echo "Adding price_feed to profiles..."
+            NEW_PROFILES="${COMPOSE_PROFILES},price_feed"
+            sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
+            source .env
+        fi
     else
-        NEW_PROFILES="core"
-        sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
-        source .env
-    fi
-    echo $COMPOSE_PROFILES
-    read -p "Run all apps? (Y or N): " choice
-    if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
-        echo "Adding apps to profiles..."
-        NEW_PROFILES="${COMPOSE_PROFILES},apps"
-        echo $NEW_PROFILES
-        sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
-        source .env
-    else
-        read -p "Run hivemind? (Y or N): " choice
+        # Traditional HAF mode setup
+        echo "Setting up traditional HAF mode..."
+        echo "PROFILES are the list of HAF services you want to run. The default is $COMPOSE_PROFILES."
+        echo "core: the minimal HAF system of a database and hived"
+        echo "admin: useful tools for administrating HAF: pgadmin, pghero"
+        echo "apps: core HAF apps: hivemind, hafah, hafbe (balance-tracker is a subapp)"
+        echo "servers: services for routing/caching API calls: haproxy, jussi/drone (JSON caching), varnish (REST caching)"
+        read -p "Run admin? (Y or N): " choice
         if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
-            echo "Adding hivemind to profiles..."
-            NEW_PROFILES="${COMPOSE_PROFILES},hivemind"
+            echo "Adding admin to profiles..."
+            NEW_PROFILES="core,admin"
+            sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
+            source .env
+        else
+            NEW_PROFILES="core"
+            sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
+            source .env
+        fi
+        echo $COMPOSE_PROFILES
+        read -p "Run all apps? (Y or N): " choice
+        if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
+            echo "Adding apps to profiles..."
+            NEW_PROFILES="${COMPOSE_PROFILES},apps"
+            echo $NEW_PROFILES
+            sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
+            source .env
+        else
+            read -p "Run hivemind? (Y or N): " choice
+            if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
+                echo "Adding hivemind to profiles..."
+                NEW_PROFILES="${COMPOSE_PROFILES},hivemind"
+                echo $NEW_PROFILES
+                sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
+                source .env
+            fi
+            read -p "Run hafah? (Y or N): " choice
+            if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
+                echo "Adding hafah to profiles..."
+                NEW_PROFILES="${COMPOSE_PROFILES},hafah"
+                echo $NEW_PROFILES
+                sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
+                source .env
+            fi
+            read -p "Run hafbe? (Y or N): " choice
+            if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
+                echo "Adding hafbe to profiles..."
+                NEW_PROFILES="${COMPOSE_PROFILES},hafbe"
+                echo $NEW_PROFILES
+                sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
+                source .env
+            fi
+            read -p "Run balance-tracker? (Y or N): " choice
+            if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
+                echo "Adding balance-tracker to profiles..."
+                NEW_PROFILES="${COMPOSE_PROFILES},balance-tracker"
+                echo $NEW_PROFILES
+                sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
+                source .env
+            fi
+        fi
+        read -p "Run servers? (Y or N): " choice
+        if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
+            echo "Adding servers to profiles..."
+            NEW_PROFILES="${COMPOSE_PROFILES},servers"
             echo $NEW_PROFILES
             sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
             source .env
         fi
-        read -p "Run hafah? (Y or N): " choice
-        if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
-            echo "Adding hafah to profiles..."
-            NEW_PROFILES="${COMPOSE_PROFILES},hafah"
-            echo $NEW_PROFILES
-            sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
-            source .env
-        fi
-        read -p "Run hafbe? (Y or N): " choice
-        if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
-            echo "Adding hafbe to profiles..."
-            NEW_PROFILES="${COMPOSE_PROFILES},hafbe"
-            echo $NEW_PROFILES
-            sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
-            source .env
-        fi
-        read -p "Run balance-tracker? (Y or N): " choice
-        if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
-            echo "Adding balance-tracker to profiles..."
-            NEW_PROFILES="${COMPOSE_PROFILES},balance-tracker"
-            echo $NEW_PROFILES
-            sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
-            source .env
-        fi
-    fi
-    read -p "Run servers? (Y or N): " choice
-    if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
-        echo "Adding servers to profiles..."
-        NEW_PROFILES="${COMPOSE_PROFILES},servers"
-        echo $NEW_PROFILES
-        sed -i "s/COMPOSE_PROFILES=\"$COMPOSE_PROFILES\"/COMPOSE_PROFILES=\"$NEW_PROFILES\"/g" .env
-        source .env
-    fi
+    fi  # End of mode choice (HAF vs Hive)
     read -p "What is your public hostname? (api.hive.blog) Leave blank if none: " choice
     if [[ "$choice" != "" ]]; then
         echo "Configuring $choice..."
@@ -190,6 +225,24 @@ if [ ! -f .env ]; then
 fi
 
 source .env
+
+# Detect which mode we're in based on COMPOSE_PROFILES
+if [[ "$COMPOSE_PROFILES" == *"hive"* ]]; then
+    HIVE_MODE=1
+    SERVICE_NAME="hive"
+    SYNC_MESSAGE="entering live mode"
+    echo "Detected Hive mode from profiles: $COMPOSE_PROFILES"
+else
+    HIVE_MODE=0
+    SERVICE_NAME="haf"
+    SYNC_MESSAGE="PROFILE: Entered LIVE sync"
+    echo "Detected HAF mode from profiles: $COMPOSE_PROFILES"
+fi
+
+# Save mode to temp file for reruns
+echo "HIVE_MODE=$HIVE_MODE" >> startup.temp
+echo "SERVICE_NAME=$SERVICE_NAME" >> startup.temp
+echo "SYNC_MESSAGE=\"$SYNC_MESSAGE\"" >> startup.temp
 
 zfs list | grep $ZPOOL &> /dev/null
 if [[ $? == 1 ]]; then
@@ -283,7 +336,7 @@ if [[ $REPLAY == 1 ]]; then
     sed -i 's/^ARGUMENTS=""/ARGUMENTS="--replay-blockchain"/g' .env
 fi
 
-if docker compose ps | grep haf | grep Up > /dev/null 2>&1; then
+if docker compose ps | grep $SERVICE_NAME | grep Up > /dev/null 2>&1; then
     echo "Docker Compose is up and running."
 else
     echo "Setting Up Startup..."
@@ -373,11 +426,15 @@ else
         modified_lines=""
         added_rocksdb_arg=""
 
-        # Modify the .env file to use only the core and admin profile and the shared_mem directory
+        # Modify the .env file to use only the appropriate startup profile based on mode
         while IFS= read -r line; do
             if [[ $line == COMPOSE_PROFILES=* ]]; then
                 original_line="$line"
-                modified_line="COMPOSE_PROFILES=\"core,admin\""
+                if [[ $HIVE_MODE == 1 ]]; then
+                    modified_line="COMPOSE_PROFILES=\"hive\""
+                else
+                    modified_line="COMPOSE_PROFILES=\"core,admin\""
+                fi
                 # Print the original and modified lines
                 echo "Intended Profiles: $original_line"
                 echo "Startup Profiles: $modified_line"
@@ -520,11 +577,15 @@ while read -r line; do
 
         fi
     fi
-    if [[ $line == *"PROFILE: Entered LIVE sync"* ]]; then
-        echo "Detected *PROFILE: Entered LIVE sync* in the output. Bringing down Docker Compose..."
+    if [[ $line == *"$SYNC_MESSAGE"* ]]; then
+        echo "Detected *$SYNC_MESSAGE* in the output. Bringing down Docker Compose..."
         entered_livesync=1
         # Write Sync time to "haf.log" for tracking, as this log will get wiped on restart
-        docker compose logs haf | grep PROFILE > haf.log
+        if [[ $HIVE_MODE == 1 ]]; then
+            docker compose logs $SERVICE_NAME | grep "entering live mode" > haf.log
+        else
+            docker compose logs $SERVICE_NAME | grep PROFILE > haf.log
+        fi
         # Write max memory and swap usage to "haf.log" for tracking
         grep "max_mem=" startup.temp >> haf.log
         grep "max_swap=" startup.temp >> haf.log
@@ -540,7 +601,7 @@ fi
 
 # prevent script completion if interupt sent to above loop
 
-if docker compose ps | grep haf | grep Up >/dev/null 2>&1; then
+if docker compose ps | grep $SERVICE_NAME | grep Up >/dev/null 2>&1; then
     echo "Docker Compose is still running."
 else
     # Load optimization method from startup.temp

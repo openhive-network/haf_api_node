@@ -409,3 +409,24 @@ Example:
 ```
 sudo ./rollback_zfs_datasets.sh --env-file=.env --zpool=haf-pool --top-level-dataset=haf-datadir snapshot_name
 ```
+# hived-only mode
+
+Instead of running a full HAF API stack, you can configure this to run a consensus node instead of a full
+HAF node.  You might want to do this to run a witness or a P2P seed node with greatly reduced system
+requirements as compared to a full HAF node.
+
+To run hived-only, specify `COMPOSE_PROFILES="hive"` in your .env file.  This option is mutually exclusive
+with the HAF-related profiles like _core_, _apps_, _servers_, etc.  The stand-alone hived will use the same
+directories to store its blockchain, shared memory, and log files, so it cannot be run alongside HAF in the
+same directories.
+
+Setting up a hived-only node is generally similar to a setting up a full HAF node:
+ - copy `.env.example` to `.env`, set the `hive` profile, choose your data directories
+ - run the `create_zfs_datasets.sh` or `create_directories` scripts to set up the directory structure.
+   This will create several directories that are unused (but harmless) in a hive-only configuration
+ - if you have a local copy of the blockchain, copy/clone it into the blockchain directory and set
+   `ARGUMENTS="--replay-blockchain"`
+ - run `sudo ./assisted_startup.sh` to run the sync or replay efficiently
+
+
+
