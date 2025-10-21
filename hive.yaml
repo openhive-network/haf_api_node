@@ -1,0 +1,39 @@
+services:
+  hive:
+    profiles:
+      - hive
+    image: ${HIVE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hive}:${HIVE_VERSION:-${HIVE_API_NODE_VERSION}}
+    tty: true
+    stdin_open: true
+    init: true
+    command: "${ARGUMENTS:-}"
+    stop_grace_period: 2m
+    environment:
+      SHM_DIR: /home/hived/shm_dir
+    # uncomment to expose the p2p port.  good for the health of the network as a whole, but 
+    # not required unless you're using this as a seed node.  
+    # ports:
+    #   - "2001:2001"
+
+    # when mounting volumes, declare the directories you want to bind-mount here, 
+    # using either the short or long syntax.  Don't declare them as top-level named
+    # volumes and mount them by name.  Declaring them inline here always results
+    # in a recursive bind.  The behavior when declaring the volumes at the top-level 
+    # seems to vary from system to system (even when `o: rbind` is specified).
+    volumes:
+      - type: bind
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/
+        target: /home/hived/datadir
+      - type: bind
+        source: ${HAF_SHM_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/
+        target: /home/hived/shm_dir
+      - type: bind
+        source: ${HAF_ROCKSDB_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/
+        target: /home/hived/rocksdb_dir
+    shm_size: 4gb
+    healthcheck:
+      test: ["CMD-SHELL","curl -f localhost:8091"]
+      interval: 10s
+      timeout: 2s
+      retries: 10
+      start_period: 72h

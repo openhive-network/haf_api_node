@@ -21,6 +21,7 @@ include:
   - hafsql.yaml
   - ui.yaml
   - status.yaml
+  - hive.yaml
 
 networks:
   haf-network:
