@@ -584,14 +584,13 @@ while read -r line; do
         echo "Detected *$SYNC_MESSAGE* in the output. Bringing down Docker Compose..."
         entered_livesync=1
         # Write Sync time to "haf.log" for tracking, as this log will get wiped on restart
-        if [[ $HIVE_MODE == 1 ]]; then
-            docker compose logs $SERVICE_NAME | grep "entering live mode" > haf.log
-        else
+        # Only generate haf.log for HAF mode (PROFILE statements are HAF-specific)
+        if [[ $HIVE_MODE == 0 ]]; then
             docker compose logs $SERVICE_NAME | grep PROFILE > haf.log
+            # Write max memory and swap usage to "haf.log" for tracking
+            grep "max_mem=" startup.temp >> haf.log
+            grep "max_swap=" startup.temp >> haf.log
         fi
-        # Write max memory and swap usage to "haf.log" for tracking
-        grep "max_mem=" startup.temp >> haf.log
-        grep "max_swap=" startup.temp >> haf.log
         docker compose down
         break
     fi
@@ -679,7 +678,11 @@ else
     rm startup.temp
     echo "Startup Complete"
     echo "Sync Complete"
-    echo "Forward haf.log to the HAF team for performance tracking."
+
+    # Only mention haf.log for HAF mode
+    if [[ $HIVE_MODE == 0 ]]; then
+        echo "Forward haf.log to the HAF team for performance tracking."
+    fi
 
     # Report which optimization was used
     if [[ $OPTIMIZATION_METHOD == "ramdisk" ]]; then
