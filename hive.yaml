@@ -2,6 +2,8 @@ services:
   hive:
     profiles:
       - hive
+    networks:
+      - haf-network
     image: ${HIVE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hive}:${HIVE_VERSION:-${HIVE_API_NODE_VERSION}}
     tty: true
     stdin_open: true
@@ -32,8 +34,22 @@ services:
         target: /home/hived/rocksdb_dir
     shm_size: 4gb
     healthcheck:
-      test: ["CMD-SHELL","curl -f localhost:8091"]
+      test: ["CMD-SHELL", "wget -T2 -nv -t1 --spider http://127.0.0.1:8091/ || exit 1"]
       interval: 10s
       timeout: 2s
       retries: 10
       start_period: 72h
+  hivefeed:
+    profiles:
+      - hivefeed
+    # the official someguy123/hivefeed-js image has a directory mounted where the config file goes, making it
+    # unusable.  instead, we use our hivefeed-js without that directory (but otherwise identical)
+    image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/hivefeed-js:${HIVEFEED_VERSION:-v4.4.0}
+    volumes:
+      - type: bind
+        source: hivefeed/config.json
+        target: /opt/hivefeed/config.json
+        read_only: true
+    # by default, uses public API servers, so hivefeed doesn't specifically need access to hived over haf-network
+    #networks:
+    #  - haf-network

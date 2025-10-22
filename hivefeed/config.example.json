@@ -1,0 +1,16 @@
+{
+  "name": "your hive name",
+  "signing_keys" : {
+    "Public Signing Key" : "Private Signing Key"
+  },
+  "network": "hive",
+  
+  "interval": 60,
+  
+  "peg": false,
+  "peg_multi": 1.0,
+  
+  "disable_exchanges": [],
+  "exchanges_no_provide": {},
+  "exchanges_provide": {}
+}
