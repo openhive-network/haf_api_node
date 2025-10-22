@@ -495,7 +495,10 @@ else
             fi
 
             original_rocksdb_arguments=$(grep "^ARGUMENTS=" .env)
-            sed -i "s#^ARGUMENTS=.*#ARGUMENTS=${new_args}#g" .env
+            # Use grep -v and echo to avoid sed quoting issues
+            grep -v "^ARGUMENTS=" .env > .env.tmp
+            echo "ARGUMENTS=${new_args}" >> .env.tmp
+            mv .env.tmp .env
 
             echo "original_rocksdb_arguments=$original_rocksdb_arguments" >> startup.temp
             echo "added_rocksdb_arg=1" >> startup.temp
@@ -635,7 +638,10 @@ else
 
         # Remove rocksdb argument from ARGUMENTS
         if [[ "$added_rocksdb_arg" == "1" ]]; then
-            sed -i "s#^ARGUMENTS=.*#${original_rocksdb_arguments}#g" .env
+            # Use grep -v and echo to avoid sed quoting issues
+            grep -v "^ARGUMENTS=" .env > .env.tmp
+            echo "${original_rocksdb_arguments}" >> .env.tmp
+            mv .env.tmp .env
             echo "Restored original ARGUMENTS (removed rocksdb path)"
         fi
 
@@ -656,7 +662,10 @@ else
 
     # Remove replay arguments
     if [[ $original_arguments != "" ]]; then
-        sed -i "s#^$original_arguments#$modified_arguments#g" .env
+        # Use grep -v and echo to avoid sed quoting issues
+        grep -v "^ARGUMENTS=" .env > .env.tmp
+        echo "${modified_arguments}" >> .env.tmp
+        mv .env.tmp .env
     fi
 
     # Create a snapshot of the ZFS pool
