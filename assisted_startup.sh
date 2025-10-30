@@ -444,14 +444,17 @@ else
 
             if [[ $line == ARGUMENTS=* && ($line == *--replay-blockchain* || $line == *--force-replay*) ]]; then
                 original_arguments="$line"
-                modified_arguments=$(echo "$line" | sed -E "s/(--replay-blockchain|--force-replay)//g")
+                modified_arguments=$(echo "$line" | sed -E "s/(--replay-blockchain|--force-replay)//g" | sed -E 's/="[[:space:]]+/="/g' | sed -E 's/[[:space:]]+"/"/g' | sed -E 's/([[:space:]])[[:space:]]+/\1/g')
                 echo "Using: $original_arguments"
                 echo "After Sync will use: $modified_arguments"
                 echo "If this isn't desired, manually change the arguments in .env before the sync is finished"
             fi
         done < .env
 
-        sed -i "s/$original_line/$modified_line/g" .env
+        # Use grep -v and echo to avoid sed quoting issues
+        grep -v "^COMPOSE_PROFILES=" .env > .env.tmp
+        echo "${modified_line}" >> .env.tmp
+        mv .env.tmp .env
 
         # Handle optional HAF_SHM_DIRECTORY and HAF_ROCKSDB_DIRECTORY
         if [[ $OPTIMIZATION_METHOD == "ramdisk" ]]; then
@@ -609,8 +612,11 @@ else
     # Load optimization method from startup.temp
     source startup.temp
 
-    # Restore the original line
-    sed -i "s/$modified_line/$original_line/g" .env
+    # Restore the original COMPOSE_PROFILES line
+    # Use grep -v and echo to avoid sed quoting issues
+    grep -v "^COMPOSE_PROFILES=" .env > .env.tmp
+    echo "${original_line}" >> .env.tmp
+    mv .env.tmp .env
 
     # Restore optimization settings based on method used
     if [[ $OPTIMIZATION_METHOD == "ramdisk" && $remove_shared_mem != 0 ]]; then
