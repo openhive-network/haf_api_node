@@ -1,0 +1,4 @@
+services:
+  nft-tracker-postgrest-rewriter:
+    ports:
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_PORT_PREFIX:-1}7013:80"

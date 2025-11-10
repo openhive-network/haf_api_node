@@ -3,6 +3,7 @@ services:
     image: ankane/pghero:v3.6.2
     profiles:
       - admin
+      - database-admin
     environment:
       DATABASE_URL: postgres://pghero@haf:5432/haf_block_log
       RAILS_RELATIVE_URL_ROOT: /admin/pghero
@@ -23,6 +24,7 @@ services:
     image: dpage/pgadmin4:${PGADMIN_VERSION:-9.8.0}
     profiles:
       - admin
+      - database-admin
     environment:
       PGADMIN_DEFAULT_EMAIL: "admin@haf.world"
       PGADMIN_DEFAULT_PASSWORD: "admin"

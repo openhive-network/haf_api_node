@@ -12,7 +12,8 @@ print_help() {
   echo "                            stays empty.  Before the snapshot, we swap the logs dataset with the empty"
   echo "                            dataset, then swap back afterwards.  That way the large logs files aren't"
   echo "                            of the snapshots.  This is a lot faster, but makes managing datasets more"
-  echo "                            complicated, so only use it if you really need to"
+  echo "                            complicated, so only use it if you really need to."
+  echo "                            This takes the parent dataset containing logs.  It also swaps hivesense/ollama"
   echo "  --force, -f               continue without prompting, even if warnings are detected"
 }
 
@@ -147,6 +148,9 @@ check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory"
 check_dataset_is_unmountable "${TOP_LEVEL_DATASET_MOUNTPOINT}"
 if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
   check_dataset_is_unmountable "${SWAP_LOGS_DATASET}"
+  check_dataset_is_unmountable "${SWAP_LOGS_DATASET}/logs"
+  check_dataset_is_unmountable "${SWAP_LOGS_DATASET}/hivesense"
+  check_dataset_is_unmountable "${SWAP_LOGS_DATASET}/hivesense/ollama"
 fi
 
 echo "All datasets appear unmountable"
@@ -241,7 +245,9 @@ unmount "${ZPOOL}/${TOP_LEVEL_DATASET}"
 if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
   echo "Swapping logs dataset"
   rename "${ZPOOL}/${TOP_LEVEL_DATASET}/logs" "${ZPOOL}/temp-saved-logs"
-  rename "${SWAP_LOGS_DATASET}" "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+  rename "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama" "${ZPOOL}/temp-saved-ollama"
+  rename "${SWAP_LOGS_DATASET}/logs" "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+  rename "${SWAP_LOGS_DATASET}/hivesense/ollama" "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
   echo -n "Done swapping logs dataset"
 fi
 
@@ -251,8 +257,10 @@ echo " done"
 
 if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
   echo "Restoring logs dataset"
-  rename "${ZPOOL}/${TOP_LEVEL_DATASET}/logs" "${SWAP_LOGS_DATASET}"
+  rename "${ZPOOL}/${TOP_LEVEL_DATASET}/logs" "${SWAP_LOGS_DATASET}/logs"
+  rename "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama" "${SWAP_LOGS_DATASET}/hivesense/ollama"
   rename "${ZPOOL}/temp-saved-logs" "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+  rename "${ZPOOL}/temp-saved-ollama" "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
   echo "Done restoring logs dataset"
 fi
 
@@ -299,14 +307,14 @@ if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storag
   SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage@${SNAPSHOT_NAME}"
 fi
 SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain@${SNAPSHOT_NAME}"
+SNAPSHOT_LIST="${SNAPSHOT_LIST} ${SWAP_LOGS_DATASET:-${ZPOOL}/${TOP_LEVEL_DATASET}}/logs@${SNAPSHOT_NAME}"
 # Add hivesense snapshots if they exist
 if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense@${SNAPSHOT_NAME}" >/dev/null 2>&1; then
   SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense@${SNAPSHOT_NAME}"
 fi
 if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama@${SNAPSHOT_NAME}" >/dev/null 2>&1; then
-  SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama@${SNAPSHOT_NAME}"
+  SNAPSHOT_LIST="${SNAPSHOT_LIST} ${SWAP_LOGS_DATASET:-${ZPOOL}/${TOP_LEVEL_DATASET}}/hivesense/ollama@${SNAPSHOT_NAME}"
 fi
-SNAPSHOT_LIST="${SNAPSHOT_LIST} ${SWAP_LOGS_DATASET:-${ZPOOL}/${TOP_LEVEL_DATASET}/logs}@${SNAPSHOT_NAME}"
 SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace@${SNAPSHOT_NAME}"
 SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata@${SNAPSHOT_NAME}"
 SNAPSHOT_LIST="${SNAPSHOT_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal@${SNAPSHOT_NAME}"

@@ -7,3 +7,6 @@ include:
   - exposed/haf_base.exposed.yaml
   - exposed/balance_tracker.exposed.yaml
   - exposed/reputation_tracker.exposed.yaml
+  - exposed/hivesense.exposed.yaml
+  - exposed/nft_tracker.exposed.yaml
+  - exposed/status.exposed.yaml
