@@ -8,6 +8,7 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 const HEALTHCHECK_HOST = process.env.HEALTHCHECK_HOST || 'haproxy-healthchecks';
 const HEALTHCHECK_TIMEOUT = parseInt(process.env.HEALTHCHECK_TIMEOUT) || 2000;
 const UPDATE_INTERVAL = parseInt(process.env.UPDATE_INTERVAL) || 10000;
+const PROJECT_NAME = process.env.PROJECT_NAME || null;
 
 // OpenAPI specification
 const openApiSpec = {
@@ -229,9 +230,17 @@ class StatusMonitor {
 
   async updateStatus() {
     try {
-      // Get containers with swagger labels
+      // Build filter labels - always include swagger URL
+      const labelFilters = ['io.hive.swagger.url'];
+
+      // If PROJECT_NAME is set, only show containers from this stack
+      if (PROJECT_NAME) {
+        labelFilters.push(`com.docker.compose.project=${PROJECT_NAME}`);
+      }
+
+      // Get containers with swagger labels (optionally filtered by project)
       const containers = await docker.listContainers({
-        filters: { label: ['io.hive.swagger.url'] }
+        filters: { label: labelFilters }
       });
 
       // Extract app info and check health in parallel
@@ -264,7 +273,8 @@ class StatusMonitor {
       const cleanedApps = apps.map(({ order, ...app }) => app);
 
       this.status = { apps: cleanedApps };
-      console.log(`Status updated: ${apps.length} apps monitored`);
+      const projectFilter = PROJECT_NAME ? ` (filtered by project: ${PROJECT_NAME})` : ' (all projects)';
+      console.log(`Status updated: ${apps.length} apps monitored${projectFilter}`);
     } catch (error) {
       console.error('Error updating status:', error);
       // Keep last known status on error

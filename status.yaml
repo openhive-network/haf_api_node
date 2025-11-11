@@ -16,6 +16,7 @@ services:
       HEALTHCHECK_TIMEOUT: 2000
       UPDATE_INTERVAL: 10000
       PORT: 3000
+      PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-}
     networks:
       - haf-network
     healthcheck:
