@@ -1,17 +1,29 @@
 {{- /* templates/swagger.tmpl */ -}}
 window.onload = function () {
   // Build a list of specs from Docker labels, including an optional "interceptor" flag
-  const SPEC_LIST = [
+  // When PROJECT_NAME is set, filter to only show containers from the same stack
+  {{- $projectName := env "PROJECT_NAME" }}
+  const PROJECT_NAME = "{{ $projectName }}";
+  const ALL_SPECS = [
     {{- $svcs := whereLabelExists . "io.hive.swagger.url" }}
     {{- range $i, $c := $svcs }}
     {
       url: "{{ index $c.Labels "io.hive.swagger.url" }}",
       name: "{{ index $c.Labels "io.hive.swagger.name" }}",
       interceptor: "{{ index $c.Labels "io.hive.swagger.interceptor" }}",
-      order: Number("{{ index $c.Labels "io.hive.swagger.order" }}") || 0
+      order: Number("{{ index $c.Labels "io.hive.swagger.order" }}") || 0,
+      composeProject: "{{ index $c.Labels "com.docker.compose.project" }}"
     }{{ if lt (add $i 1) (len $svcs) }},{{ end }}
     {{- end }}
   ];
+
+  // Filter specs to only show containers from the same stack if PROJECT_NAME is set
+  const SPEC_LIST = PROJECT_NAME && PROJECT_NAME !== ""
+    ? ALL_SPECS.filter(spec => spec.composeProject === PROJECT_NAME)
+    : ALL_SPECS; // Show all if no PROJECT_NAME is set
+
+  // Remove the composeProject field as it's not needed anymore
+  SPEC_LIST.forEach(spec => delete spec.composeProject);
 
   // Helpers to normalize URLs and build lookups
   const norm = (u) => {
