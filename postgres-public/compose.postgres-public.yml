@@ -6,8 +6,8 @@ services:
   # Extend caddy service to expose PostgreSQL ports
   caddy:
     ports:
-      - 5432:5432  # TLS port for PostgreSQL 17+ clients (sslnegotiation=direct)
-      - 5433:5433  # Plain TCP port for all PostgreSQL clients
+      - ${HAFSQL_PUBLIC_PORT_SSL:-5432}:5432  # TLS port for PostgreSQL 17+ clients (sslnegotiation=direct)
+      - ${HAFSQL_PUBLIC_PORT_TCP:-5433}:5433  # Plain TCP port for all PostgreSQL clients
     volumes:
       - type: bind
         source: ./caddy/layer4-postgres-snippets
@@ -51,6 +51,8 @@ services:
       PGBOUNCER_QUERY_WAIT_TIMEOUT: 60
       PGBOUNCER_CLIENT_IDLE_TIMEOUT: 0
       PGBOUNCER_CLIENT_LOGIN_TIMEOUT: 30
+      # Ignore unsupported startup parameters to prevent connection errors
+      PGBOUNCER_IGNORE_STARTUP_PARAMETERS: extra_float_digits
       # Logging
       PGBOUNCER_LOG_CONNECTIONS: 1
       PGBOUNCER_LOG_DISCONNECTIONS: 1
