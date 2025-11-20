@@ -95,6 +95,7 @@ tcp_keepalive = ${PGBOUNCER_TCP_KEEPALIVE:-1}
 tcp_keepcnt = ${PGBOUNCER_TCP_KEEPCNT:-3}
 tcp_keepidle = ${PGBOUNCER_TCP_KEEPIDLE:-60}
 tcp_keepintvl = ${PGBOUNCER_TCP_KEEPINTVL:-10}
+ignore_startup_parameters = ${PGBOUNCER_IGNORE_STARTUP_PARAMETERS:-extra_float_digits}
 
 ;; Logging
 log_connections = ${PGBOUNCER_LOG_CONNECTIONS:-0}
