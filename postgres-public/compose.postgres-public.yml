@@ -19,8 +19,7 @@ services:
     environment:
       PG_ACCESS_PGBOUNCER_PUBLIC: "
         # Allow pgbouncer-public to connect as public user(s)\n
-        # Trust connection from pgbouncer-public container - authentication happens at PgBouncer level\n
-        host    haf_block_log    ${HAFSQL_PUBLIC_USERNAME:-hafsql_public}     ${COMPOSE_PROJECT_NAME}-pgbouncer-public-1.${NETWORK_NAME}    trust\n
+        # Trust connection from all containers on this compose (samenet)\n
         host    haf_block_log    ${HAFSQL_PUBLIC_USERNAME:-hafsql_public}     samenet    trust\n
         # To add more users, extend this environment variable with additional lines\n
         "
