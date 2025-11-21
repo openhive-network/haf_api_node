@@ -90,9 +90,6 @@ services:
         host    haf_block_log    hafsql_owner     ${COMPOSE_PROJECT_NAME}-hafsql-1.${NETWORK_NAME}                              trust\n
         host    haf_block_log    hafsql_user      ${COMPOSE_PROJECT_NAME}-hafsql-1.${NETWORK_NAME}                              trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafsql-uninstall-1.${NETWORK_NAME}                    trust\n
-
-        # Allow connections from all the containers on the compose network\n
-        host    haf_block_log    haf_admin        samenet                    trust\n
         "
       SHM_DIR: /home/hived/shm_dir
       ROCKSDB_DIR: /home/hived/rocksdb_dir
