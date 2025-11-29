@@ -78,6 +78,7 @@ haf-node-replay:
     - docker-build
   tags:
     - data-cache-storage
+    - hive-builder-9
 
 ######## End replay ########
 
@@ -92,6 +93,7 @@ haf_api_node_replay_data_copy:
     - haf-node-replay
   tags:
     - data-cache-storage
+    - hive-builder-9
 
 # Tests if HAF API node is working properly
 haf_api_node_test:
@@ -102,6 +104,7 @@ haf_api_node_test:
     - haf_api_node_replay_data_copy
   tags:
     - data-cache-storage
+    - hive-builder-9
 
 ######## End test ########
 
@@ -198,6 +201,7 @@ cleanup_haf_api_node_pipeline_cache:
     - when: always
   tags:
     - data-cache-storage
+    - hive-builder-9
 
 # Deletes all HAF API node replay data
 cleanup_haf_api_node_cache_manual:
@@ -215,6 +219,7 @@ cleanup_haf_api_node_cache_manual:
       allow_failure: true
   tags:
     - data-cache-storage
+    - hive-builder-9
 
 # Deletes HAF API node replay data older than 7 days
 cleanup_old_haf_api_node_cache:
@@ -225,5 +230,6 @@ cleanup_old_haf_api_node_cache:
     CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
   tags:
     - data-cache-storage
+    - hive-builder-9
 
 ######## End cleanup ########
