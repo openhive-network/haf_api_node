@@ -30,6 +30,17 @@ if [[ ! -f "$COMPOSE_FILE" ]]; then
     exit 1
 fi
 
+# Get project name from .env file or use default
+ENV_FILE="${COMPOSE_DIR}/.env"
+if [[ -f "$ENV_FILE" ]]; then
+    PROJECT_NAME=$(grep -E "^PROJECT_NAME=" "$ENV_FILE" | cut -d'=' -f2 | tr -d '"' | tr -d "'" || echo "haf")
+else
+    PROJECT_NAME="haf"
+fi
+
+# Container name prefix
+PREFIX="${PROJECT_NAME}"
+
 # Function to convert seconds to human-readable format
 format_duration() {
     local seconds="$1"
@@ -134,7 +145,7 @@ print_header() {
 
 # Parse HAF timing
 parse_haf_timing() {
-    local container="haf-haf-1"
+    local container="${PREFIX}-haf-1"
 
     if ! container_exists "$container"; then
         echo -e "${YELLOW}Warning: HAF container not found${NC}" >&2
@@ -302,7 +313,7 @@ parse_haf_app_timing() {
 
 # Parse Hivemind timing (Python-based)
 parse_hivemind_timing() {
-    local container="haf-hivemind-block-processing-1"
+    local container="${PREFIX}-hivemind-block-processing-1"
     local app_name="Hivemind"
 
     if ! container_exists "$container"; then
@@ -366,7 +377,7 @@ parse_hivemind_timing() {
 
 # Parse Hivesense timing
 parse_hivesense_timing() {
-    local container="haf-hivesense-sync-1"
+    local container="${PREFIX}-hivesense-sync-1"
     local app_name="Hivesense"
 
     if ! container_exists "$container"; then
@@ -388,7 +399,7 @@ parse_hivesense_timing() {
 
     # Look for HNSW index creation info - use a single grep with multiple patterns to avoid multiple full scans
     # The logs containing HNSW info are near each other, so we can extract them together
-    local hnsw_info hnsw_start hnsw_complete hnsw_duration hnsw_size
+    local hnsw_info hnsw_start="" hnsw_complete="" hnsw_duration="" hnsw_size=""
     hnsw_info=$(docker logs "$container" 2>&1 | grep -E "(Starting HNSW index creation|HNSW Index Creation Results|Total creation time:|Index size:)" 2>/dev/null || echo "")
 
     if [[ -n "$hnsw_info" ]]; then
@@ -451,9 +462,9 @@ parse_app_timing() {
         "─────────────────────────" "───────────────" "───────────────" "────────────────────" "────────────" "──────────"
 
     # Parse each app
-    parse_haf_app_timing "haf-reputation-tracker-block-processing-1" "Reputation Tracker"
-    parse_haf_app_timing "haf-nft-tracker-block-processing-1" "NFT Tracker"
-    parse_haf_app_timing "haf-block-explorer-block-processing-1" "Block Explorer"
+    parse_haf_app_timing "${PREFIX}-reputation-tracker-block-processing-1" "Reputation Tracker"
+    parse_haf_app_timing "${PREFIX}-nft-tracker-block-processing-1" "NFT Tracker"
+    parse_haf_app_timing "${PREFIX}-block-explorer-block-processing-1" "Block Explorer"
     parse_hivemind_timing
     parse_hivesense_timing
 
@@ -468,13 +479,13 @@ print_summary() {
 
     # Get container creation time as proxy for startup time
     local haf_created
-    haf_created=$(docker inspect --format='{{.Created}}' haf-haf-1 2>/dev/null | cut -d'.' -f1 | tr 'T' ' ' || echo "Unknown")
+    haf_created=$(docker inspect --format='{{.Created}}' "${PREFIX}-haf-1" 2>/dev/null | cut -d'.' -f1 | tr 'T' ' ' || echo "Unknown")
 
     echo -e "${BOLD}Stack Started:${NC} ${haf_created}"
 
     # Check overall health
     local all_healthy=true
-    local containers=("haf-haf-1" "haf-hivemind-block-processing-1" "haf-reputation-tracker-block-processing-1" "haf-nft-tracker-block-processing-1" "haf-block-explorer-block-processing-1")
+    local containers=("${PREFIX}-haf-1" "${PREFIX}-hivemind-block-processing-1" "${PREFIX}-reputation-tracker-block-processing-1" "${PREFIX}-nft-tracker-block-processing-1" "${PREFIX}-block-explorer-block-processing-1")
 
     for container in "${containers[@]}"; do
         if container_exists "$container"; then
