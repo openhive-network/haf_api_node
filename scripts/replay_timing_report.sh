@@ -39,7 +39,7 @@ else
 fi
 
 # Container name prefix
-PREFIX="${PROJECT_NAME}"
+CONTAINER_PREFIX="${PROJECT_NAME}"
 
 # Function to convert seconds to human-readable format
 format_duration() {
@@ -140,12 +140,13 @@ print_header() {
     echo ""
     echo -e "${CYAN}Generated:${NC} $(date '+%Y-%m-%d %H:%M:%S %Z')"
     echo -e "${CYAN}Compose Dir:${NC} ${COMPOSE_DIR}"
+    echo -e "${CYAN}Project Name:${NC} ${PROJECT_NAME}"
     echo ""
 }
 
 # Parse HAF timing
 parse_haf_timing() {
-    local container="${PREFIX}-haf-1"
+    local container="${CONTAINER_PREFIX}-haf-1"
 
     if ! container_exists "$container"; then
         echo -e "${YELLOW}Warning: HAF container not found${NC}" >&2
@@ -313,7 +314,7 @@ parse_haf_app_timing() {
 
 # Parse Hivemind timing (Python-based)
 parse_hivemind_timing() {
-    local container="${PREFIX}-hivemind-block-processing-1"
+    local container="${CONTAINER_PREFIX}-hivemind-block-processing-1"
     local app_name="Hivemind"
 
     if ! container_exists "$container"; then
@@ -377,7 +378,7 @@ parse_hivemind_timing() {
 
 # Parse Hivesense timing
 parse_hivesense_timing() {
-    local container="${PREFIX}-hivesense-sync-1"
+    local container="${CONTAINER_PREFIX}-hivesense-sync-1"
     local app_name="Hivesense"
 
     if ! container_exists "$container"; then
@@ -462,30 +463,167 @@ parse_app_timing() {
         "─────────────────────────" "───────────────" "───────────────" "────────────────────" "────────────" "──────────"
 
     # Parse each app
-    parse_haf_app_timing "${PREFIX}-reputation-tracker-block-processing-1" "Reputation Tracker"
-    parse_haf_app_timing "${PREFIX}-nft-tracker-block-processing-1" "NFT Tracker"
-    parse_haf_app_timing "${PREFIX}-block-explorer-block-processing-1" "Block Explorer"
+    parse_haf_app_timing "${CONTAINER_PREFIX}-reputation-tracker-block-processing-1" "Reputation Tracker"
+    parse_haf_app_timing "${CONTAINER_PREFIX}-nft-tracker-block-processing-1" "NFT Tracker"
+    parse_haf_app_timing "${CONTAINER_PREFIX}-block-explorer-block-processing-1" "Block Explorer"
     parse_hivemind_timing
     parse_hivesense_timing
 
     echo ""
 }
 
+# Get current block from a block processor's logs
+# Returns the most recent block number found in logs, or empty if not found
+get_current_block() {
+    local container="$1"
+    local app_type="$2"  # haf, hivemind, haf_app, nft, reputation
+
+    if ! container_exists "$container"; then
+        echo ""
+        return
+    fi
+
+    local logs block
+    case "$app_type" in
+        haf)
+            # HAF: "Dump whole block 101791010" or "Got 14 transactions on block 101791010"
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:Dump whole block|on block) \K[0-9]+' | tail -1)
+            ;;
+        hivemind)
+            # Hivemind: "Last imported block is: 101790997" or block numbers in SQL calls
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Last imported block is: \K[0-9]+' | tail -1)
+            if [[ -z "$block" ]]; then
+                # Try extracting from update_last_completed_block calls
+                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'update_last_completed_block\(\K[0-9]+' | tail -1)
+            fi
+            ;;
+        haf_app)
+            # HAF apps (block explorer): "[SINGLE]  Attempting to process block: <101791004>" or "Processed blocks"
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'process block: <\K[0-9]+' | tail -1)
+            if [[ -z "$block" ]]; then
+                # Try MASSIVE sync pattern: "Processing block range: X to Y"
+                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Processing block range: [0-9]+ to \K[0-9]+' | tail -1)
+            fi
+            ;;
+        nft|reputation)
+            # NFT/Reputation: "nfttracker processed block 101791001" or "Reptracker processed block 101791002"
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:nfttracker|Reptracker) process(?:ed|ing) block[: ]+\K[0-9]+' | tail -1)
+            ;;
+    esac
+
+    echo "$block"
+}
+
+# Check if a block processor is in live mode
+is_in_live_mode() {
+    local container="$1"
+    local app_type="$2"
+
+    if ! container_exists "$container"; then
+        echo "false"
+        return
+    fi
+
+    local logs
+    case "$app_type" in
+        haf)
+            # HAF is live if we see P2P blocks being processed
+            if docker logs "$container" 2>&1 | tail -50 | grep -qE "PROFILE: Entered LIVE sync|type.*p2p"; then
+                echo "true"
+            else
+                echo "false"
+            fi
+            ;;
+        hivemind)
+            # Hivemind: "Switched to live mode" or "Tables updating in live synchronization"
+            if docker logs "$container" 2>&1 | tail -100 | grep -qE "Switched to.*live.*mode|Tables updating in live synchronization"; then
+                echo "true"
+            else
+                echo "false"
+            fi
+            ;;
+        haf_app|nft|reputation)
+            # HAF apps: "[SINGLE]" processing indicates live mode, or "Waiting for next block"
+            if docker logs "$container" 2>&1 | tail -50 | grep -qE "\[SINGLE\]|Waiting for next block"; then
+                echo "true"
+            else
+                echo "false"
+            fi
+            ;;
+    esac
+}
+
+# Print current sync progress for non-live block processors
+print_sync_progress() {
+    echo -e "${BOLD}${GREEN}3. Current Sync Progress (Non-Live Processors)${NC}"
+    echo -e "${GREEN}───────────────────────────────────────────────────────────────────${NC}"
+    echo ""
+
+    local found_syncing=false
+
+    # Define block processors to check: container_suffix:app_type:display_name
+    local processors=(
+        "haf-1:haf:HAF"
+        "hivemind-block-processing-1:hivemind:Hivemind"
+        "block-explorer-block-processing-1:haf_app:Block Explorer"
+        "nft-tracker-block-processing-1:nft:NFT Tracker"
+        "reputation-tracker-block-processing-1:reputation:Reputation Tracker"
+    )
+
+    printf "  ${BOLD}%-25s %-15s %-15s${NC}\n" "Processor" "Current Block" "Status"
+    printf "  %-25s %-15s %-15s\n" "─────────────────────────" "───────────────" "───────────────"
+
+    for processor in "${processors[@]}"; do
+        IFS=':' read -r suffix app_type display_name <<< "$processor"
+        local container="${CONTAINER_PREFIX}-${suffix}"
+
+        if ! container_exists "$container"; then
+            continue
+        fi
+
+        local is_live current_block status
+        is_live=$(is_in_live_mode "$container" "$app_type")
+
+        if [[ "$is_live" == "true" ]]; then
+            status="${GREEN}LIVE${NC}"
+            current_block="-"
+        else
+            current_block=$(get_current_block "$container" "$app_type")
+            if [[ -n "$current_block" ]]; then
+                status="${YELLOW}SYNCING${NC}"
+                found_syncing=true
+            else
+                status="${YELLOW}WAITING${NC}"
+                current_block="-"
+            fi
+        fi
+
+        printf "  %-25s %-15s %b\n" "$display_name" "${current_block}" "$status"
+    done
+
+    echo ""
+
+    if ! $found_syncing; then
+        echo -e "  ${GREEN}All block processors are in live mode or waiting.${NC}"
+        echo ""
+    fi
+}
+
 # Summary section
 print_summary() {
-    echo -e "${BOLD}${GREEN}3. Summary${NC}"
+    echo -e "${BOLD}${GREEN}4. Summary${NC}"
     echo -e "${GREEN}───────────────────────────────────────────────────────────────────${NC}"
     echo ""
 
     # Get container creation time as proxy for startup time
     local haf_created
-    haf_created=$(docker inspect --format='{{.Created}}' "${PREFIX}-haf-1" 2>/dev/null | cut -d'.' -f1 | tr 'T' ' ' || echo "Unknown")
+    haf_created=$(docker inspect --format='{{.Created}}' "${CONTAINER_PREFIX}-haf-1" 2>/dev/null | cut -d'.' -f1 | tr 'T' ' ' || echo "Unknown")
 
     echo -e "${BOLD}Stack Started:${NC} ${haf_created}"
 
     # Check overall health
     local all_healthy=true
-    local containers=("${PREFIX}-haf-1" "${PREFIX}-hivemind-block-processing-1" "${PREFIX}-reputation-tracker-block-processing-1" "${PREFIX}-nft-tracker-block-processing-1" "${PREFIX}-block-explorer-block-processing-1")
+    local containers=("${CONTAINER_PREFIX}-haf-1" "${CONTAINER_PREFIX}-hivemind-block-processing-1" "${CONTAINER_PREFIX}-reputation-tracker-block-processing-1" "${CONTAINER_PREFIX}-nft-tracker-block-processing-1" "${CONTAINER_PREFIX}-block-explorer-block-processing-1")
 
     for container in "${containers[@]}"; do
         if container_exists "$container"; then
@@ -511,6 +649,7 @@ main() {
     print_header
     parse_haf_timing
     parse_app_timing
+    print_sync_progress
     print_summary
 
     echo -e "${BLUE}═══════════════════════════════════════════════════════════════════${NC}"
