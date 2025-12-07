@@ -29,49 +29,27 @@ services:
         host    haf_block_log    reptracker_user  ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    nfttracker_user  ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    hivesense_user   ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    postgres         haf_admin        ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
 
         # Direct connections for install/uninstall/processing (not pooled)\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-balance-tracker-install-1.${NETWORK_NAME}             trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-balance-tracker-uninstall-1.${NETWORK_NAME}           trust\n
         host    haf_block_log    btracker_owner   ${COMPOSE_PROJECT_NAME}-balance-tracker-block-processing-1.${NETWORK_NAME}    trust\n
 
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-reputation-tracker-install-1.${NETWORK_NAME}          trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-reputation-tracker-uninstall-1.${NETWORK_NAME}        trust\n
         host    haf_block_log    reptracker_owner ${COMPOSE_PROJECT_NAME}-reputation-tracker-block-processing-1.${NETWORK_NAME} trust\n
 
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-nft-tracker-install-1.${NETWORK_NAME}                 trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-nft-tracker-uninstall-1.${NETWORK_NAME}               trust\n
         host    haf_block_log    nfttracker_owner ${COMPOSE_PROJECT_NAME}-nft-tracker-block-processing-1.${NETWORK_NAME}        trust\n
 
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-uninstall-1.${NETWORK_NAME}                     trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-install-1.${NETWORK_NAME}                       trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-benchmarks-1.${NETWORK_NAME}                    trust\n
-
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-schema-1.${NETWORK_NAME}       trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-install-schema-1.${NETWORK_NAME}       trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-1.${NETWORK_NAME}            trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-balance-tracker-1.${NETWORK_NAME}           trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-balance-tracker-1.${NETWORK_NAME}             trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-uninstall-reputation-tracker-1.${NETWORK_NAME}        trust\n
 
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-block-processing-1.${NETWORK_NAME}     trust\n
 
         # hivemind install needs to change the join_collapse_limit setting on the whole database, which\n
         # requires superuser privileges\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-install-1.${NETWORK_NAME}                    trust\n
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-install-1.${NETWORK_NAME}                    trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-block-processing-1.${NETWORK_NAME}           trust\n
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-block-processing-1.${NETWORK_NAME}           trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-server-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-server-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    hivemind         ${COMPOSE_PROJECT_NAME}-hivemind-postgrest-server-1.${NETWORK_NAME}           trust\n
 
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivemind-uninstall-1.${NETWORK_NAME}                  trust\n
-
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
         host    postgres         haf_admin        ${COMPOSE_PROJECT_NAME}-pgadmin-1.${NETWORK_NAME}                             trust\n
 
         host    haf_block_log    pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                              trust\n
@@ -79,17 +57,17 @@ services:
 
         host    postgres         postgres         ${COMPOSE_PROJECT_NAME}-postgresexporter-1.${NETWORK_NAME}                    trust\n
 
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivesense-install-schema-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-install-schema-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-block-processing-1.${NETWORK_NAME}          trust\n
         host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-sync-1.${NETWORK_NAME}                      trust\n
         host    haf_block_log    hivesense_user   ${COMPOSE_PROJECT_NAME}-hivesense-pca-1.${NETWORK_NAME}                       trust\n
         host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-pca-1.${NETWORK_NAME}                       trust\n
 
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafsql-1.${NETWORK_NAME}                              trust\n
         host    haf_block_log    hafsql_owner     ${COMPOSE_PROJECT_NAME}-hafsql-1.${NETWORK_NAME}                              trust\n
         host    haf_block_log    hafsql_user      ${COMPOSE_PROJECT_NAME}-hafsql-1.${NETWORK_NAME}                              trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafsql-uninstall-1.${NETWORK_NAME}                    trust\n
+
+        # Allow connections coming from localhost and all the containers on this compose stack\n
+        host    haf_block_log    haf_admin        samenet                                                                       trust\n
         "
       SHM_DIR: /home/hived/shm_dir
       ROCKSDB_DIR: /home/hived/rocksdb_dir
