@@ -146,11 +146,11 @@ services:
       retries: 10
       start_period: 1m
     labels:
-      - "io.hive.swagger.url=/hived-api/"
-      - "io.hive.swagger.name=Legacy Hive JSON-RPC API"
-      - "io.hive.swagger.interceptor=jsonrpc"
-      - "io.hive.swagger.order=99"
-      - "io.hive.healthcheck.port=7003"
+      - "io.hive.swagger.url=/hived-api/,/wallet-api/"
+      - "io.hive.swagger.name=Legacy Hive JSON-RPC API,Wallet API"
+      - "io.hive.swagger.interceptor=jsonrpc,jsonrpc"
+      - "io.hive.swagger.order=98,99"
+      - "io.hive.healthcheck.port=7003,7003"
   logrotate:
     image: ${LOGROTATE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/logrotate}:${LOGROTATE_VERSION:-latest}
     profiles:

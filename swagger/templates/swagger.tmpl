@@ -5,16 +5,25 @@ window.onload = function () {
   {{- $projectName := env "PROJECT_NAME" }}
   const PROJECT_NAME = "{{ $projectName }}";
   const ALL_SPECS = [
-    {{- $svcs := whereLabelExists . "io.hive.swagger.url" }}
-    {{- range $i, $c := $svcs }}
-    {
-      url: "{{ index $c.Labels "io.hive.swagger.url" }}",
-      name: "{{ index $c.Labels "io.hive.swagger.name" }}",
-      interceptor: "{{ index $c.Labels "io.hive.swagger.interceptor" }}",
-      order: Number("{{ index $c.Labels "io.hive.swagger.order" }}") || 0,
-      composeProject: "{{ index $c.Labels "com.docker.compose.project" }}"
-    }{{ if lt (add $i 1) (len $svcs) }},{{ end }}
-    {{- end }}
+    {{ range $c := . }}
+      {{ $composeProject := index $c.Labels "com.docker.compose.project" }}
+      {{ $urlLabel := index $c.Labels "io.hive.swagger.url" }}
+      {{ if $urlLabel }}
+    ...(function() {
+      const urls = "{{ $urlLabel }}".split(',').map(s => s.trim());
+      const names = "{{ index $c.Labels "io.hive.swagger.name" }}".split(',').map(s => s.trim());
+      const interceptors = "{{ index $c.Labels "io.hive.swagger.interceptor" }}".split(',').map(s => s.trim());
+      const orders = "{{ index $c.Labels "io.hive.swagger.order" }}".split(',').map(s => s.trim());
+      return urls.map((url, i) => ({
+        url: url,
+        name: names[i] || '',
+        interceptor: interceptors[i] || '',
+        order: Number(orders[i]) || 0,
+        composeProject: "{{ $composeProject }}"
+      }));
+    })(),
+      {{ end }}
+    {{ end }}
   ];
 
   // Filter specs to only show containers from the same stack if PROJECT_NAME is set

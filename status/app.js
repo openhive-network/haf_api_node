@@ -230,39 +230,78 @@ class StatusMonitor {
 
   async updateStatus() {
     try {
-      // Build filter labels - always include swagger URL
-      const labelFilters = ['io.hive.swagger.url'];
-
-      // If PROJECT_NAME is set, only show containers from this stack
+      // Get all containers (we'll filter by project if needed)
+      const filterOptions = {};
       if (PROJECT_NAME) {
-        labelFilters.push(`com.docker.compose.project=${PROJECT_NAME}`);
+        filterOptions.label = [`com.docker.compose.project=${PROJECT_NAME}`];
       }
 
-      // Get containers with swagger labels (optionally filtered by project)
       const containers = await docker.listContainers({
-        filters: { label: labelFilters }
+        filters: filterOptions
       });
 
       // Extract app info and check health in parallel
-      const appPromises = containers.map(async (container) => {
+      const appPromises = [];
+
+      for (const container of containers) {
         const labels = container.Labels;
-        const healthPort = labels['io.hive.healthcheck.port'];
-        const healthTimeout = parseInt(labels['io.hive.healthcheck.timeout']) || HEALTHCHECK_TIMEOUT;
-        const order = parseInt(labels['io.hive.swagger.order']) || 999;
 
-        let status = 'unknown';
-        if (healthPort) {
-          const isHealthy = await checkHealth(parseInt(healthPort), healthTimeout);
-          status = isHealthy ? 'healthy' : 'unhealthy';
+        // Check if container has swagger labels
+        const swaggerUrl = labels['io.hive.swagger.url'];
+        if (!swaggerUrl) continue;
+
+        // Check if labels contain comma-separated values (multiple specs)
+        if (swaggerUrl.includes(',')) {
+          // Split all comma-separated values
+          const urls = swaggerUrl.split(',').map(s => s.trim());
+          const names = (labels['io.hive.swagger.name'] || '').split(',').map(s => s.trim());
+          const orders = (labels['io.hive.swagger.order'] || '').split(',').map(s => s.trim());
+          const healthPorts = (labels['io.hive.healthcheck.port'] || '').split(',').map(s => s.trim());
+          const healthTimeouts = (labels['io.hive.healthcheck.timeout'] || '').split(',').map(s => s.trim());
+
+          // Create an app entry for each spec
+          urls.forEach((url, i) => {
+            const order = parseInt(orders[i]) || 999;
+            const healthPort = healthPorts[i] || healthPorts[0]; // Fall back to first port if not enough ports
+            const healthTimeout = parseInt(healthTimeouts[i] || healthTimeouts[0]) || HEALTHCHECK_TIMEOUT;
+
+            appPromises.push((async () => {
+              let status = 'unknown';
+              if (healthPort) {
+                const isHealthy = await checkHealth(parseInt(healthPort), healthTimeout);
+                status = isHealthy ? 'healthy' : 'unhealthy';
+              }
+
+              return {
+                name: names[i] || 'Unknown',
+                url_path: url,
+                status,
+                order
+              };
+            })());
+          });
+        } else {
+          // Single spec (backward compatibility)
+          const order = parseInt(labels['io.hive.swagger.order']) || 999;
+          const healthPort = labels['io.hive.healthcheck.port'];
+          const healthTimeout = parseInt(labels['io.hive.healthcheck.timeout']) || HEALTHCHECK_TIMEOUT;
+          
+          appPromises.push((async () => {
+            let status = 'unknown';
+            if (healthPort) {
+              const isHealthy = await checkHealth(parseInt(healthPort), healthTimeout);
+              status = isHealthy ? 'healthy' : 'unhealthy';
+            }
+
+            return {
+              name: labels['io.hive.swagger.name'] || 'Unknown',
+              url_path: swaggerUrl,
+              status,
+              order
+            };
+          })());
         }
-
-        return {
-          name: labels['io.hive.swagger.name'] || 'Unknown',
-          url_path: labels['io.hive.swagger.url'] || '/',
-          status,
-          order
-        };
-      });
+      }
 
       const apps = await Promise.all(appPromises);
 
