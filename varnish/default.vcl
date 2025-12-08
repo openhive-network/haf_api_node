@@ -77,7 +77,7 @@ backend hived_openapi_spec {
 #     .port = "81";
 #}
 
-# backend haf_block_explorer_swagger { 
+# backend haf_block_explorer_swagger {
 #     .host = "block-explorer-swagger";
 #     .port = "80";
 # }
@@ -174,6 +174,9 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url == "/wallet-api/") {
+        set req.url = "/walletapi.json";
+        set req.backend_hint = hived_openapi_spec;
     } elseif (req.url == "/hived-api/") {
         set req.url = "/openapi.json";
         set req.backend_hint = hived_openapi_spec;
