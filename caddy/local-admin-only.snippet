@@ -3,4 +3,6 @@
   not remote_ip 127.0.0.1
   path /admin/*
 }
-respond @admin_restrict_ip "Access denied" 403
+handle @admin_restrict_ip {
+  respond "Access denied" 403
+}
