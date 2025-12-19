@@ -73,7 +73,6 @@ docker-build:
       echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
   tags:
     - public-runner-docker
-    - hived-for-tests
 
 ######## End build ########
 
