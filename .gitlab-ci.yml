@@ -108,6 +108,7 @@ find_common_ci_image:
     UPSTREAM_REGISTRY: "registry.gitlab.syncad.com/hive/common-ci-configuration"
     UPSTREAM_BRANCH: "develop"
     UPSTREAM_IMAGE: "docker-dind"
+    UPSTREAM_PATTERNS: "Dockerfile.docker-dind,Dockerfile.docker-builder,Dockerfile.python-scripts"
     UPSTREAM_DEPTH: "100"
     UPSTREAM_OUTPUT: "common-ci-image.env"
   script:
