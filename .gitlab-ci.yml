@@ -1,4 +1,5 @@
 stages:
+  - detect
   - build
   - replay
   - test
@@ -6,11 +7,11 @@ stages:
   - cleanup
 
 variables:
-  # Variables required by Common CI jobs
-  CI_COMMON_JOB_VERSION: "53c7826ef0f74b9896fa39aa7eb43140e53ddb0d"
-  DOCKER_BUILDER_TAG: "$CI_COMMON_JOB_VERSION"
-  DOCKER_DIND_TAG: "$CI_COMMON_JOB_VERSION"
-  IMAGE_REMOVER_TAG: "$CI_COMMON_JOB_VERSION"
+  # CI helper image tags - set dynamically by find_common_ci_image job
+  # These default to "latest" in the template but will be overridden by dotenv artifact
+  DOCKER_BUILDER_TAG: "latest"
+  DOCKER_DIND_TAG: "latest"
+  IMAGE_REMOVER_TAG: "latest"
 
   # Git configuration
   # Fetch strategy reuses workspace between jobs, reducing GitLab server load.
@@ -41,6 +42,7 @@ include:
     file:
       - /templates/docker_image_jobs.gitlab-ci.yml
       - /templates/cache_cleanup.gitlab-ci.yml
+      - /templates/source_change_detection.gitlab-ci.yml
   - local: ci/node-replay.gitlab-ci.yml
 
 default:
@@ -93,12 +95,53 @@ default:
         fi
         )
 
+######## Detect ########
+
+# Find the latest common-ci-configuration commit that has built Docker images
+# This avoids hard-coding commit hashes and automatically uses the most recent
+# available docker-builder/docker-dind/image-remover images
+find_common_ci_image:
+  extends: .find_upstream_image
+  stage: detect
+  variables:
+    UPSTREAM_REPO_URL: "https://gitlab.syncad.com/hive/common-ci-configuration.git"
+    UPSTREAM_REGISTRY: "registry.gitlab.syncad.com/hive/common-ci-configuration"
+    UPSTREAM_BRANCH: "develop"
+    UPSTREAM_IMAGE: "docker-dind"
+    UPSTREAM_DEPTH: "100"
+    UPSTREAM_OUTPUT: "common-ci-image.env"
+  script:
+    - !reference [.find_upstream_image, script]
+    # Map UPSTREAM_* variables to the expected CI helper image tag variables
+    - |
+      if [ -f "$UPSTREAM_OUTPUT" ]; then
+        # Source the upstream output to get UPSTREAM_COMMIT
+        . "$UPSTREAM_OUTPUT"
+        # Create new env file with the expected variable names
+        cat > "$UPSTREAM_OUTPUT" << EOF
+      DOCKER_BUILDER_TAG=${UPSTREAM_COMMIT}
+      DOCKER_DIND_TAG=${UPSTREAM_COMMIT}
+      IMAGE_REMOVER_TAG=${UPSTREAM_COMMIT}
+      EOF
+        # Remove leading whitespace from each line
+        sed -i 's/^[[:space:]]*//' "$UPSTREAM_OUTPUT"
+        echo "Common CI image tags:"
+        cat "$UPSTREAM_OUTPUT"
+      fi
+  tags:
+    - public-runner-docker
+
+######## End detect ########
+
 ######## Build ########
 
 docker-build:
-  extends: 
+  extends:
     - .docker_image_builder_job_template
   stage: build
+  needs:
+    - job: find_common_ci_image
+      artifacts: true
   variables:
     TAG: "${CI_COMMIT_SHORT_SHA}"
   before_script:
@@ -186,6 +229,9 @@ publish-images-release:
   stage: publish
   extends:
     - .docker_image_builder_job_template
+  needs:
+    - job: find_common_ci_image
+      artifacts: true
   variables:
     # Use CI_COMMIT_TAG if available, otherwise use CI_COMMIT_REF_NAME (for tags pushed with commits)
     TAG: "${CI_COMMIT_TAG:-$CI_COMMIT_REF_NAME}"
@@ -222,8 +268,11 @@ publish-images-release:
 # Tag images as 'develop' when on develop branch
 publish-images-develop:
   stage: publish
-  extends: 
+  extends:
     - .docker_image_builder_job_template
+  needs:
+    - job: find_common_ci_image
+      artifacts: true
   variables:
     TAG: "develop"
   before_script:
