@@ -21,6 +21,9 @@ services:
     # TODO: needs work:
     environment:
       PG_ACCESS: "
+        # haf_maintainer for background vacuum/index operations (hived connects via Unix socket)\n
+        local   haf_block_log    haf_maintainer                                                                trust\n
+        \n
         # PgBouncer connection pooler - connects as various users for PostgREST and healthchecks\n
         host    haf_block_log    hafah_user       ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    hivemind_user    ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
