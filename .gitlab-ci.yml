@@ -123,9 +123,12 @@ docker-build:
       echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
     - |
       # Add 'latest' tags on develop branch
+      # Note: docker buildx bake pushes directly to registry without loading locally,
+      # so we must pull each image before we can tag it
       if [[ "$CI_COMMIT_BRANCH" == "${CI_DEFAULT_BRANCH:-develop}" ]]; then
         echo -e "\e[0Ksection_start:$(date +%s):latest_tags[collapsed=true]\r\e[0KTagging images with 'latest'..."
         for IMAGE in compose dind haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status; do
+          docker pull "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}"
           docker tag "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}" "${CI_REGISTRY_IMAGE}/${IMAGE}:latest"
           docker push "${CI_REGISTRY_IMAGE}/${IMAGE}:latest"
         done
@@ -136,6 +139,7 @@ docker-build:
       if [[ -n "${CI_COMMIT_TAG}" && "${CI_COMMIT_REF_PROTECTED}" == "true" ]]; then
         echo -e "\e[0Ksection_start:$(date +%s):version_tags[collapsed=true]\r\e[0KTagging images with version '${CI_COMMIT_TAG}'..."
         for IMAGE in compose dind haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status; do
+          docker pull "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}"
           docker tag "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}" "${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_TAG}"
           docker push "${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_TAG}"
         done
