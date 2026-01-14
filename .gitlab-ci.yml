@@ -121,6 +121,26 @@ docker-build:
       export CI_COMMIT_TAG="${CI_COMMIT_TAG}"
       docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "pipeline-images"
       echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
+    - |
+      # Add 'latest' tags on develop branch
+      if [[ "$CI_COMMIT_BRANCH" == "${CI_DEFAULT_BRANCH:-develop}" ]]; then
+        echo -e "\e[0Ksection_start:$(date +%s):latest_tags[collapsed=true]\r\e[0KTagging images with 'latest'..."
+        for IMAGE in compose dind haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status; do
+          docker tag "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}" "${CI_REGISTRY_IMAGE}/${IMAGE}:latest"
+          docker push "${CI_REGISTRY_IMAGE}/${IMAGE}:latest"
+        done
+        echo -e "\e[0Ksection_end:$(date +%s):latest_tags\r\e[0K"
+      fi
+    - |
+      # Add version tags on protected tags
+      if [[ -n "${CI_COMMIT_TAG}" && "${CI_COMMIT_REF_PROTECTED}" == "true" ]]; then
+        echo -e "\e[0Ksection_start:$(date +%s):version_tags[collapsed=true]\r\e[0KTagging images with version '${CI_COMMIT_TAG}'..."
+        for IMAGE in compose dind haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status; do
+          docker tag "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}" "${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_TAG}"
+          docker push "${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_TAG}"
+        done
+        echo -e "\e[0Ksection_end:$(date +%s):version_tags\r\e[0K"
+      fi
   tags:
     - public-runner-docker
 
@@ -181,74 +201,21 @@ haf_api_node_test:
 
 ######## Publish ########
 
-# Publish all release images to blog registry on release tags
-publish-images-release:
-  stage: publish
-  extends:
-    - .docker_image_builder_job_template
+# Publish to registry.hive.blog on protected tags only
+# Uses pull/retag/push pattern - no rebuild
+publish_images:
+  extends: .docker_publish_job_template
   variables:
-    # Use CI_COMMIT_TAG if available, otherwise use CI_COMMIT_REF_NAME (for tags pushed with commits)
-    TAG: "${CI_COMMIT_TAG:-$CI_COMMIT_REF_NAME}"
-    CI_COMMIT_TAG: "${CI_COMMIT_TAG:-$CI_COMMIT_REF_NAME}"
-  before_script:
-    - !reference [.docker_image_builder_job_template, before_script]
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
-    - docker login -u "$BLOG_REGISTRY_USER" -p "$BLOG_REGISTRY_PASSWORD" registry-upload.hive.blog
-  script:
-    - |
-      # Export build arguments for images that need them
-      export BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-      export GIT_COMMIT_SHA="${CI_COMMIT_SHA}"
-      export GIT_CURRENT_BRANCH="${CI_COMMIT_BRANCH}"
-      export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
-      export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
-      export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
-      export CI_COMMIT_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_REF_NAME}"
-      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "release-images"
-  tags:
-    - public-runner-docker
+    # 8 publishable images (compose and dind are CI-only, not published to hive.blog)
+    PUBLISH_IMAGES: "haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status"
   rules:
     - if: $CI_PIPELINE_TRIGGERED
       when: never
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
-    # Handle tags pushed separately (source: tag)
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^[v01].*/
-      when: always
-    # Handle tags pushed with commits (source: push) - check if ref looks like a release tag
-    - if: $CI_COMMIT_REF_NAME =~ /^[v01].*/ && $CI_COMMIT_REF_PROTECTED == "true"
-      when: always
-
-# Tag images as 'develop' when on develop branch
-publish-images-develop:
-  stage: publish
-  extends:
-    - .docker_image_builder_job_template
-  variables:
-    TAG: "develop"
-  before_script:
-    - !reference [.docker_image_builder_job_template, before_script]
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
-  script:
-    - |
-      # Export build arguments for images that need them
-      export BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-      export GIT_COMMIT_SHA="${CI_COMMIT_SHA}"
-      export GIT_CURRENT_BRANCH="${CI_COMMIT_BRANCH}"
-      export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
-      export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
-      export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
-      export TAG="${TAG:-develop}"
-      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "develop-images"
-  tags:
-    - public-runner-docker
-  rules:
-    - if: $CI_PIPELINE_TRIGGERED
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_COMMIT_BRANCH == "develop"
-      when: always
+    - if: '$CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: on_success
+    - when: never
 
 ######## End publish ########
 
