@@ -1,9 +1,9 @@
 stages:
-  - build
-  - replay
-  - test
-  - publish
-  - cleanup
+- build
+- replay
+- test
+- publish
+- cleanup
 
 variables:
   # CI helper image tags from common-ci-configuration
@@ -35,118 +35,118 @@ variables:
   TEST_IMAGE_TAG: ":ubuntu22.04-12"
 
 include:
-  - template: Workflows/Branch-Pipelines.gitlab-ci.yml
-  - project: hive/common-ci-configuration
-    ref: develop
-    file:
-      - /templates/docker_image_jobs.gitlab-ci.yml
-      - /templates/cache_cleanup.gitlab-ci.yml
-  - local: ci/node-replay.gitlab-ci.yml
+- template: Workflows/Branch-Pipelines.gitlab-ci.yml
+- project: hive/common-ci-configuration
+  ref: 4e60cec43a1c72b5faebf5d34e8b5b6caa9fa159
+  file:
+  - /templates/docker_image_jobs.gitlab-ci.yml
+  - /templates/cache_cleanup.gitlab-ci.yml
+- local: ci/node-replay.gitlab-ci.yml
 
 default:
   hooks:
     pre_get_sources_script:
       # Clean corrupt git state left by cancelled pipelines (see GitLab #296638, #4600)
       # Wrapped in subshell to avoid changing working directory for subsequent git operations
-      - |
-        (
-        cd "${CI_PROJECT_DIR:-/builds}" 2>/dev/null || exit 0
-        echo "pre_get_sources: checking $(pwd) for corrupt git state"
-        if [ -d ".git" ]; then
-          # Remove stale lock files that block git operations
-          find .git -name "*.lock" -delete 2>/dev/null || true
+    - |
+      (
+      cd "${CI_PROJECT_DIR:-/builds}" 2>/dev/null || exit 0
+      echo "pre_get_sources: checking $(pwd) for corrupt git state"
+      if [ -d ".git" ]; then
+        # Remove stale lock files that block git operations
+        find .git -name "*.lock" -delete 2>/dev/null || true
 
-          # Check if main repo is corrupt - if so, remove .git to force fresh clone
-          if ! git rev-parse HEAD >/dev/null 2>&1; then
-            echo "pre_get_sources: main repository corrupt, forcing fresh clone"
-            rm -rf .git
-          else
-            # Main repo OK - check and clean corrupt submodules
-            # Check both the working dir and .git/modules/ since either can be corrupt
-            if [ -f ".gitmodules" ]; then
-              git config --file .gitmodules --get-regexp path 2>/dev/null | awk '{print $2}' | while read submod; do
-                needs_clean=false
-                [ -z "$submod" ] && continue
-                # Check if submodule working directory exists but is corrupt
-                if [ -d "$submod" ] && [ -f "$submod/.git" ]; then
-                  if ! git -C "$submod" rev-parse HEAD >/dev/null 2>&1; then
-                    needs_clean=true
-                  fi
-                fi
-                # Check if .git/modules exists but is corrupt (even if working dir is gone)
-                if [ -d ".git/modules/$submod" ]; then
-                  if ! git --git-dir=".git/modules/$submod" rev-parse HEAD >/dev/null 2>&1; then
-                    echo "pre_get_sources: $submod corrupt (rev-parse failed)"
-                    needs_clean=true
-                  fi
-                fi
-                if [ "$needs_clean" = true ]; then
-                  echo "pre_get_sources: cleaning corrupt submodule: $submod"
-                  rm -rf "$submod" ".git/modules/$submod"
-                fi
-              done
-            fi
-            echo "pre_get_sources: existing repo OK"
-          fi
+        # Check if main repo is corrupt - if so, remove .git to force fresh clone
+        if ! git rev-parse HEAD >/dev/null 2>&1; then
+          echo "pre_get_sources: main repository corrupt, forcing fresh clone"
+          rm -rf .git
         else
-          echo "pre_get_sources: no .git directory (fresh workspace)"
+          # Main repo OK - check and clean corrupt submodules
+          # Check both the working dir and .git/modules/ since either can be corrupt
+          if [ -f ".gitmodules" ]; then
+            git config --file .gitmodules --get-regexp path 2>/dev/null | awk '{print $2}' | while read submod; do
+              needs_clean=false
+              [ -z "$submod" ] && continue
+              # Check if submodule working directory exists but is corrupt
+              if [ -d "$submod" ] && [ -f "$submod/.git" ]; then
+                if ! git -C "$submod" rev-parse HEAD >/dev/null 2>&1; then
+                  needs_clean=true
+                fi
+              fi
+              # Check if .git/modules exists but is corrupt (even if working dir is gone)
+              if [ -d ".git/modules/$submod" ]; then
+                if ! git --git-dir=".git/modules/$submod" rev-parse HEAD >/dev/null 2>&1; then
+                  echo "pre_get_sources: $submod corrupt (rev-parse failed)"
+                  needs_clean=true
+                fi
+              fi
+              if [ "$needs_clean" = true ]; then
+                echo "pre_get_sources: cleaning corrupt submodule: $submod"
+                rm -rf "$submod" ".git/modules/$submod"
+              fi
+            done
+          fi
+          echo "pre_get_sources: existing repo OK"
         fi
-        )
+      else
+        echo "pre_get_sources: no .git directory (fresh workspace)"
+      fi
+      )
 
 ######## Build ########
 
 docker-build:
   extends:
-    - .docker_image_builder_job_template
+  - .docker_image_builder_job_template
   stage: build
   variables:
     TAG: "${CI_COMMIT_SHORT_SHA}"
   before_script:
-    - !reference [.docker_image_builder_job_template, before_script]
-    - |
-      echo -e "\e[0Ksection_start:$(date +%s):login[collapsed=true]\r\e[0KLogging to Docker registry..."
-      docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
-      echo -e "\e[0Ksection_end:$(date +%s):login\r\e[0K"
+  - !reference [.docker_image_builder_job_template, before_script]
+  - |
+    echo -e "\e[0Ksection_start:$(date +%s):login[collapsed=true]\r\e[0KLogging to Docker registry..."
+    docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    echo -e "\e[0Ksection_end:$(date +%s):login\r\e[0K"
   script:
-    - |
-      echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking Docker images..."
-      # Export build arguments for version-display image
-      export BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-      export GIT_COMMIT_SHA="${CI_COMMIT_SHA}"
-      export GIT_CURRENT_BRANCH="${CI_COMMIT_BRANCH}"
-      export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
-      export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
-      export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
-      export TAG="${TAG:-${CI_COMMIT_SHORT_SHA}}"
-      export CI_COMMIT_TAG="${CI_COMMIT_TAG}"
-      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "pipeline-images"
-      echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
-    - |
-      # Add 'latest' tags on develop branch
-      # Note: docker buildx bake pushes directly to registry without loading locally,
-      # so we must pull each image before we can tag it
-      if [[ "$CI_COMMIT_BRANCH" == "${CI_DEFAULT_BRANCH:-develop}" ]]; then
-        echo -e "\e[0Ksection_start:$(date +%s):latest_tags[collapsed=true]\r\e[0KTagging images with 'latest'..."
-        for IMAGE in compose dind haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status; do
-          docker pull "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}"
-          docker tag "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}" "${CI_REGISTRY_IMAGE}/${IMAGE}:latest"
-          docker push "${CI_REGISTRY_IMAGE}/${IMAGE}:latest"
-        done
-        echo -e "\e[0Ksection_end:$(date +%s):latest_tags\r\e[0K"
-      fi
-    - |
-      # Add version tags on protected tags
-      if [[ -n "${CI_COMMIT_TAG}" && "${CI_COMMIT_REF_PROTECTED}" == "true" ]]; then
-        echo -e "\e[0Ksection_start:$(date +%s):version_tags[collapsed=true]\r\e[0KTagging images with version '${CI_COMMIT_TAG}'..."
-        for IMAGE in compose dind haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status; do
-          docker pull "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}"
-          docker tag "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}" "${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_TAG}"
-          docker push "${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_TAG}"
-        done
-        echo -e "\e[0Ksection_end:$(date +%s):version_tags\r\e[0K"
-      fi
+  - |
+    echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking Docker images..."
+    # Export build arguments for version-display image
+    export BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    export GIT_COMMIT_SHA="${CI_COMMIT_SHA}"
+    export GIT_CURRENT_BRANCH="${CI_COMMIT_BRANCH}"
+    export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
+    export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
+    export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
+    export TAG="${TAG:-${CI_COMMIT_SHORT_SHA}}"
+    export CI_COMMIT_TAG="${CI_COMMIT_TAG}"
+    docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "pipeline-images"
+    echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
+  - |
+    # Add 'latest' tags on develop branch
+    # Note: docker buildx bake pushes directly to registry without loading locally,
+    # so we must pull each image before we can tag it
+    if [[ "$CI_COMMIT_BRANCH" == "${CI_DEFAULT_BRANCH:-develop}" ]]; then
+      echo -e "\e[0Ksection_start:$(date +%s):latest_tags[collapsed=true]\r\e[0KTagging images with 'latest'..."
+      for IMAGE in compose dind haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status; do
+        docker pull "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}"
+        docker tag "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}" "${CI_REGISTRY_IMAGE}/${IMAGE}:latest"
+        docker push "${CI_REGISTRY_IMAGE}/${IMAGE}:latest"
+      done
+      echo -e "\e[0Ksection_end:$(date +%s):latest_tags\r\e[0K"
+    fi
+  - |
+    # Add version tags on protected tags
+    if [[ -n "${CI_COMMIT_TAG}" && "${CI_COMMIT_REF_PROTECTED}" == "true" ]]; then
+      echo -e "\e[0Ksection_start:$(date +%s):version_tags[collapsed=true]\r\e[0KTagging images with version '${CI_COMMIT_TAG}'..."
+      for IMAGE in compose dind haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status; do
+        docker pull "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}"
+        docker tag "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}" "${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_TAG}"
+        docker push "${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_TAG}"
+      done
+      echo -e "\e[0Ksection_end:$(date +%s):version_tags\r\e[0K"
+    fi
   tags:
-    - public-runner-docker
+  - public-runner-docker
 
 ######## End build ########
 
@@ -154,18 +154,18 @@ docker-build:
 
 haf-node-replay:
   extends:
-    - .haf-node-replay
+  - .haf-node-replay
   stage: replay
   needs:
-    - docker-build
+  - docker-build
   tags:
-    - data-cache-storage
-    - fast
+  - data-cache-storage
+  - fast
   # Temporarily disabled - missing Docker image tags (hivemind:1.28.6-rc1 etc)
   # Re-enable when upstream images are available
   rules:
-    - when: manual
-      allow_failure: true
+  - when: manual
+    allow_failure: true
 
 ######## End replay ########
 
@@ -174,32 +174,32 @@ haf-node-replay:
 # Creates a copy of replay data to be used in the tests
 haf_api_node_replay_data_copy:
   extends:
-    - .haf_api_node_replay_data_copy
+  - .haf_api_node_replay_data_copy
   stage: test
   needs:
-    - haf-node-replay
+  - haf-node-replay
   tags:
-    - data-cache-storage
-    - fast
+  - data-cache-storage
+  - fast
   # Temporarily disabled - depends on haf-node-replay which is disabled
   rules:
-    - when: manual
-      allow_failure: true
+  - when: manual
+    allow_failure: true
 
 # Tests if HAF API node is working properly
 haf_api_node_test:
   extends:
-    - .haf_api_node_test
+  - .haf_api_node_test
   stage: test
   needs:
-    - haf_api_node_replay_data_copy
+  - haf_api_node_replay_data_copy
   tags:
-    - data-cache-storage
-    - fast
+  - data-cache-storage
+  - fast
   # Temporarily disabled - depends on haf_api_node_replay_data_copy which is disabled
   rules:
-    - when: manual
-      allow_failure: true
+  - when: manual
+    allow_failure: true
 
 ######## End test ########
 
@@ -211,15 +211,16 @@ publish_images:
   extends: .docker_publish_job_template
   variables:
     # 8 publishable images (compose and dind are CI-only, not published to hive.blog)
-    PUBLISH_IMAGES: "haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status"
+    PUBLISH_IMAGES: "haproxy haproxy-healthchecks caddy postgrest swagger version-display\
+      \ pgbouncer status"
   rules:
-    - if: $CI_PIPELINE_TRIGGERED
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: '$CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED == "true"'
-      when: on_success
-    - when: never
+  - if: $CI_PIPELINE_TRIGGERED
+    when: never
+  - if: $CI_PIPELINE_SOURCE == "pipeline"
+    when: never
+  - if: '$CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED == "true"'
+    when: on_success
+  - when: never
 
 ######## End publish ########
 
@@ -228,52 +229,52 @@ publish_images:
 # Deletes replay data used by the tests and created by haf_api_node_replay_data_copy
 cleanup_haf_api_node_pipeline_cache:
   needs:
-    - job: haf_api_node_replay_data_copy
-      optional: true
-    - job: haf_api_node_test
-      optional: true
+  - job: haf_api_node_replay_data_copy
+    optional: true
+  - job: haf_api_node_test
+    optional: true
   extends:
-    - .cleanup_cache_manual_template
+  - .cleanup_cache_manual_template
   stage: cleanup
   variables:
     CLEANUP_PATH_PATTERN: "${REPLAY_PIPELINE_DIRECTORY}*"
   rules:
-    - if: $CI_PIPELINE_TRIGGERED
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - when: always
+  - if: $CI_PIPELINE_TRIGGERED
+    when: never
+  - if: $CI_PIPELINE_SOURCE == "pipeline"
+    when: never
+  - when: always
   tags:
-    - data-cache-storage
-    - fast
+  - data-cache-storage
+  - fast
 
 # Deletes all HAF API node replay data
 cleanup_haf_api_node_cache_manual:
-  extends: 
-    - .cleanup_cache_manual_template
+  extends:
+  - .cleanup_cache_manual_template
   stage: cleanup
   variables:
     CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
   rules:
-    - if: $CI_PIPELINE_TRIGGERED
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - when: manual
-      allow_failure: true
+  - if: $CI_PIPELINE_TRIGGERED
+    when: never
+  - if: $CI_PIPELINE_SOURCE == "pipeline"
+    when: never
+  - when: manual
+    allow_failure: true
   tags:
-    - data-cache-storage
-    - fast
+  - data-cache-storage
+  - fast
 
 # Deletes HAF API node replay data older than 7 days
 cleanup_old_haf_api_node_cache:
   extends:
-    - .cleanup_old_cache_template
+  - .cleanup_old_cache_template
   stage: cleanup
   variables:
     CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
   tags:
-    - data-cache-storage
-    - fast
+  - data-cache-storage
+  - fast
 
 ######## End cleanup ########
