@@ -159,6 +159,7 @@ haf-node-replay:
   needs:
     - docker-build
   tags:
+    - public-runner-docker
     - data-cache-storage
     - fast
   # Temporarily disabled - missing Docker image tags (hivemind:1.28.6-rc1 etc)
@@ -179,6 +180,7 @@ haf_api_node_replay_data_copy:
   needs:
     - haf-node-replay
   tags:
+    - public-runner-docker
     - data-cache-storage
     - fast
   # Temporarily disabled - depends on haf-node-replay which is disabled
@@ -194,6 +196,7 @@ haf_api_node_test:
   needs:
     - haf_api_node_replay_data_copy
   tags:
+    - public-runner-docker
     - data-cache-storage
     - fast
   # Temporarily disabled - depends on haf_api_node_replay_data_copy which is disabled
@@ -244,6 +247,7 @@ cleanup_haf_api_node_pipeline_cache:
       when: never
     - when: always
   tags:
+    - public-runner-docker
     - data-cache-storage
     - fast
 
@@ -262,6 +266,7 @@ cleanup_haf_api_node_cache_manual:
     - when: manual
       allow_failure: true
   tags:
+    - public-runner-docker
     - data-cache-storage
     - fast
 
@@ -273,6 +278,7 @@ cleanup_old_haf_api_node_cache:
   variables:
     CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
   tags:
+    - public-runner-docker
     - data-cache-storage
     - fast
 
