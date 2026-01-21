@@ -8,9 +8,9 @@ stages:
 variables:
   # CI helper image tags from common-ci-configuration
   # Using "latest" since docker-dind, docker-builder, and python-scripts are built independently
-  DOCKER_BUILDER_TAG: "latest"
-  DOCKER_DIND_TAG: "latest"
-  IMAGE_REMOVER_TAG: "latest"
+  DOCKER_BUILDER_TAG: "a9ddde802ce8b1b2d4011167226ead0e92d438dc@sha256:51dab6c77fc355db22d45c236eb5787886046983428a52de965ab0d35efa3050"
+  DOCKER_DIND_TAG: "53c7826ef0f74b9896fa39aa7eb43140e53ddb0d@sha256:cbee79e9c8fcdc4b2fc9aa99e9c132461698ea7fa7b49d8e6515c01b9bd53691"
+  IMAGE_REMOVER_TAG: "a2506cb6a7745a233ab5c56e1ff39db4ab7f510e@sha256:51f05430cb364228345248151d1ac487685293f3b457817522e8de4239e7200a"
 
   # Git configuration
   # Fetch strategy reuses workspace between jobs, reducing GitLab server load.
