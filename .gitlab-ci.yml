@@ -37,7 +37,7 @@ variables:
 include:
   - template: Workflows/Branch-Pipelines.gitlab-ci.yml
   - project: hive/common-ci-configuration
-    ref: develop
+    ref: vault-secrets-integration
     file:
       - /templates/docker_image_jobs.gitlab-ci.yml
       - /templates/cache_cleanup.gitlab-ci.yml
