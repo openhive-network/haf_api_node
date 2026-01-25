@@ -157,22 +157,8 @@ echo "All datasets appear unmountable"
 
 if [ "$SNAPSHOT_NAME" != "empty" ]; then
   if [ ! -e "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/shared_memory.bin" ]; then
-    echo "Warning: No shared memory file found in the shared_memory directory"
-    exit 1
-  fi
-
-  last_shared_memory_write=$(stat -c %Y "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/shared_memory.bin")
-  last_blockchain_write=$(find "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain" -type f -printf '%T@\n' | sort -n | tail -1 | cut -d. -f1)
-
-  if [ -z "$last_blockchain_write" ]; then
-    echo "Warning: No files found in the blockchain directory"
-    exit 1
-  fi
-
-  time_diff=$((last_blockchain_write - last_shared_memory_write))
-
-  if [ $time_diff -gt 300 ] || [ $time_diff -lt -300 ]; then
-    echo "Warning: The shared_memory.bin file was not written to within 5 minutes of the last write to a file in the blockchain directory."
+    echo "Warning: No shared memory file found in the shared_memory directory."
+    echo "This is expected for snapshots taken before hived has run (e.g., block_log_only)."
     if [ "$FORCE" -eq 1 ]; then
       echo "Continuing due to --force option."
     else
@@ -182,6 +168,31 @@ if [ "$SNAPSHOT_NAME" != "empty" ]; then
         n|N ) echo "Aborting."; exit 1;;
         * ) echo "Invalid input. Aborting."; exit 1;;
       esac
+    fi
+  else
+    # Only do timestamp validation if shared_memory.bin exists
+    last_shared_memory_write=$(stat -c %Y "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/shared_memory.bin")
+    last_blockchain_write=$(find "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain" -type f -printf '%T@\n' | sort -n | tail -1 | cut -d. -f1)
+
+    if [ -z "$last_blockchain_write" ]; then
+      echo "Warning: No files found in the blockchain directory"
+      exit 1
+    fi
+
+    time_diff=$((last_blockchain_write - last_shared_memory_write))
+
+    if [ $time_diff -gt 300 ] || [ $time_diff -lt -300 ]; then
+      echo "Warning: The shared_memory.bin file was not written to within 5 minutes of the last write to a file in the blockchain directory."
+      if [ "$FORCE" -eq 1 ]; then
+        echo "Continuing due to --force option."
+      else
+        read -p "Do you want to continue? (y/n): " choice
+        case "$choice" in
+          y|Y ) echo "Continuing...";;
+          n|N ) echo "Aborting."; exit 1;;
+          * ) echo "Invalid input. Aborting."; exit 1;;
+        esac
+      fi
     fi
   fi
 fi
