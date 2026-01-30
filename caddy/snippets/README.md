@@ -67,3 +67,28 @@ encode {
   minimum_length 1024
 }
 ```
+
+## Enable HSTS (HTTP Strict Transport Security)
+
+If you're running with a valid TLS certificate and want to prevent
+downgrade attacks, you can enable HSTS. This tells browsers to always
+use HTTPS when connecting to your server.
+
+**Warning:** Only enable this if:
+- You have a valid (not self-signed) TLS certificate
+- You're not running behind another SSL terminator that handles HSTS
+- All subdomains also support HTTPS (if using includeSubDomains)
+
+Once enabled, browsers will refuse HTTP connections for the specified
+duration, even if you later disable HSTS. Start with a short max-age
+for testing.
+
+Create a file called `hsts.snippet` with:
+```
+header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+```
+
+Options:
+- `max-age=31536000` - Remember for 1 year (in seconds)
+- `includeSubDomains` - Apply to all subdomains (remove if not all subdomains support HTTPS)
+- `preload` - Add if you want to submit to browser preload lists (permanent commitment)
