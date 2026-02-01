@@ -24,7 +24,7 @@ services:
   nodeexporter:
     image: prom/node-exporter:${NODE_EXPORTER_VERSION:-v1.7.0}
     profiles:
-      - monitoring
+      - monitoring-system
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -45,7 +45,7 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:${CADVISOR_VERSION:-v0.47.2}
     profiles:
-      - monitoring
+      - monitoring-system
     privileged: true
     devices:
       - /dev/kmsg:/dev/kmsg
@@ -70,8 +70,6 @@ services:
     depends_on:
       - prometheus
       - loki
-      - nodeexporter
-      - cadvisor
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
@@ -80,9 +78,11 @@ services:
       - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=/admin/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
     restart: unless-stopped
-    ports:
-      - "3003:3000"
+    expose:
+      - 3000
     networks:
       - haf-network
     labels:
@@ -163,7 +163,7 @@ services:
   blackboxexporter:
     image: prom/blackbox-exporter:${BLACKBOX_VERSION:-v0.24.0}
     profiles:
-      - monitoring
+      - monitoring-system
     restart: unless-stopped
     expose:
       - 9115

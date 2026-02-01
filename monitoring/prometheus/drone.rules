@@ -1,0 +1,96 @@
+groups:
+  - name: drone_alerts
+    rules:
+      # Alert when Drone is unreachable
+      - alert: DroneDown
+        expr: up{job="drone"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Drone is down"
+          description: "Drone JSON-RPC proxy has been unreachable for more than 1 minute."
+
+      # Alert when error rate exceeds 5%
+      - alert: DroneHighErrorRate
+        expr: |
+          (
+            sum(rate(drone_requests_total{status="error"}[5m]))
+            /
+            sum(rate(drone_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drone high error rate"
+          description: "Drone error rate is above 5% for the last 5 minutes. Current rate: {{ $value | humanizePercentage }}"
+
+      # Alert when p95 latency exceeds 2 seconds
+      - alert: DroneHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(drone_request_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drone high latency"
+          description: "Drone p95 latency is above 2 seconds for the last 5 minutes. Current p95: {{ $value | humanizeDuration }}"
+
+      # Alert when cache hit rate drops below 50%
+      - alert: DroneLowCacheHitRate
+        expr: |
+          (
+            sum(rate(drone_requests_cached_total[15m]))
+            /
+            sum(rate(drone_requests_total{status="success"}[15m]))
+          ) < 0.50
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drone low cache hit rate"
+          description: "Drone cache hit rate is below 50% for the last 15 minutes. Current rate: {{ $value | humanizePercentage }}"
+
+      # Alert when traffic deviates significantly from 24h ago
+      - alert: DroneTrafficAnomaly
+        expr: |
+          abs(
+            sum(rate(drone_requests_total[30m]))
+            -
+            sum(rate(drone_requests_total[30m] offset 24h))
+          )
+          /
+          sum(rate(drone_requests_total[30m] offset 24h))
+          > 0.50
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "Drone traffic anomaly detected"
+          description: "Drone traffic has deviated more than 50% from the same time yesterday for the last 30 minutes."
+
+      # Alert when backend latency is high
+      - alert: DroneBackendHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(drone_backend_duration_seconds_bucket[5m])) by (le, backend)
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drone backend high latency"
+          description: "Backend {{ $labels.backend }} p95 latency is above 5 seconds. Current p95: {{ $value | humanizeDuration }}"
+
+      # Alert when there are too many active requests (potential overload)
+      - alert: DroneHighActiveRequests
+        expr: drone_active_requests > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drone high number of active requests"
+          description: "Drone has {{ $value }} active in-flight requests, which may indicate overload."
