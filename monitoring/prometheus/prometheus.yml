@@ -10,6 +10,7 @@ global:
 # Load and evaluate rules in this file every 'evaluation_interval' seconds.
 rule_files:
   - "alert.rules"
+  - "drone.rules"
 
 # A scrape configuration containing exactly one endpoint to scrape.
 scrape_configs:
@@ -37,3 +38,17 @@ scrape_configs:
     scrape_interval: 1s
     static_configs:
       - targets: ["postgresexporter:9187"]
+
+  # Drone JSON-RPC caching proxy
+  - job_name: "drone"
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["drone:9000"]
+    metrics_path: /metrics
+
+  # HAProxy load balancer (built-in Prometheus exporter)
+  - job_name: "haproxy"
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["haproxy:8000"]
+    metrics_path: /metrics
