@@ -3,6 +3,18 @@ set -eu
 
 CFGDIR="/usr/local/etc/haproxy"
 OVERLAY="$CFGDIR/20-email-alerts.cfg"
+LOGFILE="/var/log/haproxy/haproxy.log"
+
+# Start syslogd if log directory is mounted (enables file logging)
+# syslogd requires root to create /dev/log socket
+if [ -d "$(dirname "$LOGFILE")" ] && [ "$(id -u)" = "0" ]; then
+  touch "$LOGFILE" 2>/dev/null || true
+  chown haproxy:haproxy "$LOGFILE" 2>/dev/null || true
+  # -n = don't daemonize (but we background it)
+  # -O = output to file
+  # -S = smaller (no remote logging)
+  syslogd -n -O "$LOGFILE" -S &
+fi
 
 # nuke any stale overlay from previous runs
 rm -f "$OVERLAY"
@@ -12,7 +24,6 @@ if [ -n "${HAPROXY_EMAIL_TO:-}" ]; then
   FROM="${HAPROXY_EMAIL_FROM:-noreply@${PUBLIC_HOSTNAME:-localhost}}"
   LEVEL="${HAPROXY_EMAIL_LEVEL:-notice}"
 
-  # Optional: ensure runtime dir exists; ignore errors if readonly/already present
   mkdir -p /run/haproxy 2>/dev/null || true
 
   cat > "$OVERLAY" <<EOF
@@ -29,9 +40,18 @@ defaults
 EOF
 fi
 
-# Run HAProxy. If args were provided, use them; otherwise use your normal defaults.
-if [ "$#" -gt 0 ]; then
-  exec haproxy "$@"
+# Drop privileges and run HAProxy as haproxy user
+if [ "$(id -u)" = "0" ]; then
+  if [ "$#" -gt 0 ]; then
+    exec su-exec haproxy haproxy "$@"
+  else
+    exec su-exec haproxy haproxy -W -db -f "$CFGDIR"
+  fi
 else
-  exec haproxy -W -db -f "$CFGDIR"
+  # Already running as haproxy user
+  if [ "$#" -gt 0 ]; then
+    exec haproxy "$@"
+  else
+    exec haproxy -W -db -f "$CFGDIR"
+  fi
 fi

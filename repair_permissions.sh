@@ -120,6 +120,10 @@ if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/logs" ]; then
   if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger" ]; then
     chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
   fi
+
+  if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/haproxy" ]; then
+    chown -R 99:99 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/haproxy"
+  fi
 fi
 
 # Hivesense directories (if they exist)

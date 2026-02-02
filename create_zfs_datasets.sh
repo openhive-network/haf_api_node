@@ -140,6 +140,7 @@ cp logging.conf "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_postgresql_conf.d"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/caddy"
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/haproxy"
 
 # Use repair_permissions.sh to set all permissions correctly
 echo "Setting permissions..."

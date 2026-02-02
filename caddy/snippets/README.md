@@ -92,3 +92,40 @@ Options:
 - `max-age=31536000` - Remember for 1 year (in seconds)
 - `includeSubDomains` - Apply to all subdomains (remove if not all subdomains support HTTPS)
 - `preload` - Add if you want to submit to browser preload lists (permanent commitment)
+
+## Enable Access Logging
+
+By default, Caddy does not log HTTP requests. To enable JSON access logging:
+
+1. Create a file named `json-logging.snippet` in this directory:
+
+```
+log {
+    output file /var/log/caddy/access.json
+    format json
+}
+```
+
+2. Restart Caddy:
+```bash
+docker compose restart caddy
+```
+
+3. Logs will be written to `${HAF_DATA_DIRECTORY}/logs/caddy/access.json`
+
+### Log Format
+
+Each line is a JSON object:
+```json
+{"level":"info","ts":1706886400.123,"logger":"http.log.access","msg":"handled request","request":{"remote_ip":"192.168.1.1","method":"POST","uri":"/","host":"api.example.com"},"status":200,"size":1234,"duration":0.001234}
+```
+
+### Log Rotation
+
+If you enable the `logrotate` profile, Caddy logs are automatically rotated daily
+with 30 days retention. See `logrotate/logrotate.d/caddy`.
+
+### Disabling Logging
+
+To disable logging, simply remove or rename the `json-logging.snippet` file and
+restart Caddy.
