@@ -98,6 +98,7 @@ mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/caddy"
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/haproxy"
 
 # Create configuration directory and copy config files
 echo "Creating configuration directory..."

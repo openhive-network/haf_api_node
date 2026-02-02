@@ -1,0 +1,9 @@
+/var/log/caddy/*.json {
+       daily
+       rotate 30
+       copytruncate
+       delaycompress
+       compress
+       notifempty
+       missingok
+}
