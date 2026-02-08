@@ -5,8 +5,31 @@ drone:
   cache_max_capacity: 1073741824
   operator_message: "Drone by Deathwing"
   middleware_connection_threads: 8
+
+  # Add CORS headers.  By default, the haf_api_node stack adds them at the Caddy level so
+  # they're not needed here
   add_cors_headers: false
+
+  # Access log format for console: "simple" (human-readable, default) or "json" (detailed)
+  # Use with RUST_LOG=warn,access_log=info to enable console access logging
+  access_log_format: simple
+  # Optional file path for JSON access logs (empty = disabled)
+  # When set, JSON access logs are written to this file regardless of access_log_format
+  # access_log_file: /var/log/drone/access.json
+  access_log_file: ""
+  # Flush access log file after every line (default: false, uses 5-second periodic flushes)
+  access_log_flush_every_line: false
+
+  # Prometheus metrics configuration
+  metrics_enabled: false       # Enable/disable the /metrics endpoint
+  metrics_path: "/metrics"     # Path for Prometheus scraping
+  metrics_namespace: "drone"   # Prefix for all metric names (e.g., drone_requests_total)
+
+  # Add headers for performance analysis compatible with Jussi's headers.  Now deprecated,
+  # use access_log_format:json for new analysis tools
   add_jussi_headers: false
+
+
 # a list of backends Jussi will send calls to, these are referenced 
 # in the 'urls' section
 backends:

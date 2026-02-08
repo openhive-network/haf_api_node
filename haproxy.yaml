@@ -3,6 +3,7 @@ services:
     image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/haproxy:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - servers
+      - haproxy
     environment:
       SYNC_BROADCAST_BACKEND_SERVER: "${SYNC_BROADCAST_BACKEND_SERVER:-api.hive.blog}"
       SYNC_BROADCAST_BACKEND_PORT: "${SYNC_BROADCAST_BACKEND_PORT:-443}"
