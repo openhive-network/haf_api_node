@@ -175,6 +175,9 @@ services:
         source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/logs/haproxy
         target: /var/log/haproxy
       - type: bind
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/drone
+        target: /var/log/drone
+      - type: bind
         source: ./logrotate/logrotate.d
         target: /etc/logrotate.d.sources
         read_only: true
