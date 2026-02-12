@@ -1,31 +1,52 @@
 {
   order rate_limit before basicauth
 
+{{ $trustedProxies := getenv "CADDY_TRUSTED_PROXIES" "private_ranges" -}}
+{{ if ne $trustedProxies "" }}
+  servers {
+    trusted_proxies static {{ $trustedProxies }}
+  }
+{{ end }}
+
   # Import Layer4 configuration for PostgreSQL TCP proxy (if postgres-public compose yaml files are included)
   import layer4-postgres-snippets/*.snippet
 }
 
 # Simple caddy config, handles SSL and forwards everything to varnish
 {$CADDY_SITES} {
-  # Import a snippet that will generate a self-signed certificate by default.
-  # To generate a real certificate, bind-mount an empty file here and then
-  # put your real TLS config in a file in the snippets directory
-  import tls-self-signed-snippets/*.snippet
+{{/* TLS self-signed logic with backwards compatibility */}}
+{{- $newTlsVar := getenv "CADDY_TLS_SELF_SIGNED" -}}
+{{- $oldTlsVar := getenv "TLS_SELF_SIGNED_SNIPPET" -}}
+{{- $useSelfSigned := true -}}
+{{- if ne $newTlsVar "" -}}
+  {{- $useSelfSigned = eq $newTlsVar "true" -}}
+{{- else if ne $oldTlsVar "" -}}
+  {{- $useSelfSigned = strings.Contains $oldTlsVar "self-signed.snippet" -}}
+{{- end -}}
+{{ if $useSelfSigned }}
+  # Use self-signed certificate (default for development)
+  tls internal
+{{ end }}
 
+  # User-provided snippets (from gitignored caddy/snippets/ directory)
   import snippets/*.snippet
 
-  # Block API abusers outright
+  # Block known abusers
   @blacklisted_ips remote_ip 185.238.72.170 185.130.44.60 24.209.251.17
   respond @blacklisted_ips 403
 
-  # rate limit users by IP to 600 requests per minute
+{{/* Rate limiting logic */}}
+{{- $rateLimitEnabled := getenv "CADDY_RATE_LIMIT_ENABLED" "true" -}}
+{{ if ne $rateLimitEnabled "false" }}
+  # Rate limit by client IP
   rate_limit {
     zone apilimit {
-      key {remote_host}
-      events 600
-      window 1m
+      key {client_ip}
+      events {{ getenv "CADDY_RATE_LIMIT_EVENTS" "600" }}
+      window {{ getenv "CADDY_RATE_LIMIT_WINDOW" "1m" }}
     }
   }
+{{ end }}
 
   # Handle CORS pre-flight checks here, instead of passing them through
   @cors_preflight method OPTIONS
@@ -50,9 +71,26 @@ Disallow: /wallet/
   # reverse-proxy to the admin tools
   redir /admin /admin/
 
-  # Import a snippet that will restrict connections to the admin endpoint
-  # to the localhost - must come before the handle @admin block
-  import local-admin-only-snippets/*.snippet
+{{/* Admin local-only restriction with backwards compatibility */}}
+{{- $newAdminVar := getenv "CADDY_ADMIN_LOCAL_ONLY" -}}
+{{- $oldAdminVar := getenv "LOCAL_ADMIN_ONLY_SNIPPET" -}}
+{{- $adminLocalOnly := true -}}
+{{- if ne $newAdminVar "" -}}
+  {{- $adminLocalOnly = eq $newAdminVar "true" -}}
+{{- else if ne $oldAdminVar "" -}}
+  {{- $adminLocalOnly = strings.Contains $oldAdminVar "local-admin-only.snippet" -}}
+{{- end -}}
+{{ if $adminLocalOnly }}
+  # Restrict admin to localhost and Docker host
+  @admin_restrict_ip {
+    protocol {$ADMIN_ENDPOINT_PROTOCOL}
+    not remote_ip 127.0.0.1 {{ getenv "DOCKER_GATEWAY_IP" }}{{ if getenv "CADDY_ADMIN_ALLOWED_IPS" }} {{ getenv "CADDY_ADMIN_ALLOWED_IPS" }}{{ end }}
+    path /admin/*
+  }
+  handle @admin_restrict_ip {
+    respond "Access denied" 403
+  }
+{{ end }}
 
   # restrict the /admin endpoints to the specified protocol.  This is for the
   # usual case where you use basicauth to protect the endpoint, and want to prevent
@@ -102,14 +140,6 @@ Disallow: /wallet/
       rewrite * /admin/haproxy{uri}
       reverse_proxy http://haproxy:8000
     }
-
-    # # Route /admin/graphite to graphite's UI
-    # # (graphite) is commented-out in jussi's yaml file
-    # redir /graphite /admin/graphite/
-    # handle_path /graphite/* {
-    #   rewrite * /admin/graphite{uri}
-    #   reverse_proxy http://graphite:8080
-    # }
 
     redir /pgbadger /admin/pgbadger/
     handle_path /pgbadger/* {

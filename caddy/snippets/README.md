@@ -4,9 +4,9 @@ will likely want to do by adding snippets:
 
 ## Configure TLS
 By default, this config will use a self-signed SSL certificate.  To disable
-the self-signed certificate, change the `TLS_SELF_SIGNED_SNIPPET` variable
-in your `.env` file.  By default, it will attempt to get a certificate using
-the ACME HTTP-01 challenge.
+the self-signed certificate, set `CADDY_TLS_SELF_SIGNED=false` in your `.env`
+file.  By default, Caddy will then attempt to get a certificate using the
+ACME HTTP-01 challenge.
 
 If you need to use a different challenge type like DNS challenges, or use
 static certificates, put the necessary statements in a `.snippet` file.
@@ -21,19 +21,20 @@ tls my@email.address {
 
 ## Restrict access to the admin endpoints
 
-You can restrict access to the admin pages and helper apps by adding 
-snippets in this directory.  For example, to restrict access only to
-the localhost, create a file named, say, `local_admin_only.snippet`
-in this directory, with the contents:
+By default, admin endpoints are restricted to localhost and the Docker host.
+This is controlled by `CADDY_ADMIN_LOCAL_ONLY=true` (the default).
+
+To allow additional IPs, set `CADDY_ADMIN_ALLOWED_IPS` (space-separated):
 ```
-@admin_restrict_ip {
-  protocol {$ADMIN_ENDPOINT_PROTOCOL}
-  not remote_ip 127.0.0.1
-  path /admin/*
-}
-respond @admin_restrict_ip "Access denied" 403
+CADDY_ADMIN_ALLOWED_IPS=192.168.1.0/24 10.0.0.0/8
 ```
-(or restrict to the local network with `192.168.1.0/24`, etc)
+
+To disable IP restriction entirely (e.g., when using basicauth instead):
+```
+CADDY_ADMIN_LOCAL_ONLY=false
+```
+
+You can also add custom restrictions via snippets. For example, to require a password:
 
 or to require a password:
 ```

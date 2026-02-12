@@ -13,10 +13,23 @@ services:
       CADDY_SITES: ${CADDY_SITES:-${PUBLIC_HOSTNAME}}
       JSONRPC_API_SERVER_NAME: ${JSONRPC_API_SERVER_NAME:-drone}
       ADMIN_ENDPOINT_PROTOCOL: ${ADMIN_ENDPOINT_PROTOCOL:-https}
+      # TLS configuration (new vars with backwards compatibility for old vars)
+      CADDY_TLS_SELF_SIGNED: ${CADDY_TLS_SELF_SIGNED:-}
+      TLS_SELF_SIGNED_SNIPPET: ${TLS_SELF_SIGNED_SNIPPET:-}
+      # Admin access restriction (new vars with backwards compatibility for old vars)
+      CADDY_ADMIN_LOCAL_ONLY: ${CADDY_ADMIN_LOCAL_ONLY:-}
+      LOCAL_ADMIN_ONLY_SNIPPET: ${LOCAL_ADMIN_ONLY_SNIPPET:-}
+      CADDY_ADMIN_ALLOWED_IPS: ${CADDY_ADMIN_ALLOWED_IPS:-}
+      # Trusted proxies for X-Forwarded-For
+      CADDY_TRUSTED_PROXIES: ${CADDY_TRUSTED_PROXIES:-private_ranges}
+      # Rate limiting
+      CADDY_RATE_LIMIT_ENABLED: ${CADDY_RATE_LIMIT_ENABLED:-true}
+      CADDY_RATE_LIMIT_EVENTS: ${CADDY_RATE_LIMIT_EVENTS:-600}
+      CADDY_RATE_LIMIT_WINDOW: ${CADDY_RATE_LIMIT_WINDOW:-1m}
     volumes:
       - type: bind
-        source: ./caddy/Caddyfile
-        target: /etc/caddy/Caddyfile
+        source: ./caddy/Caddyfile.tmpl
+        target: /etc/caddy/Caddyfile.tmpl
         read_only: true
       - type: bind
         source: ./caddy/snippets
@@ -34,14 +47,6 @@ services:
         source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/logs/caddy
         target: /var/log/caddy
         read_only: false
-      - type: bind
-        source: ${TLS_SELF_SIGNED_SNIPPET}
-        target: /etc/caddy/tls-self-signed-snippets/self-signed.snippet
-        read_only: true
-      - type: bind
-        source: ${LOCAL_ADMIN_ONLY_SNIPPET}
-        target: /etc/caddy/local-admin-only-snippets/local-admin-only.snippet
-        read_only: true
       - type: volume
         source: caddy_data
         target: /data
