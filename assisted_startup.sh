@@ -216,8 +216,14 @@ if [ ! -f .env ]; then
         read -p "Automate SSL for $PUBLIC_HOSTNAME? (Y or N)" choice
         if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
             echo "Automating SSL with Caddy..."
-            sed -i "s:TLS_SELF_SIGNED_SNIPPET=caddy/self-signed.snippet:#TLS_SELF_SIGNED_SNIPPET=caddy/self-signed.snippet:g" .env
-            sed -i "s:#TLS_SELF_SIGNED_SNIPPET=/dev/null:TLS_SELF_SIGNED_SNIPPET=/dev/null:g" .env
+            # Add CADDY_TLS_SELF_SIGNED=false to enable LetsEncrypt
+            if grep -q "^CADDY_TLS_SELF_SIGNED=" .env; then
+                sed -i "s:^CADDY_TLS_SELF_SIGNED=.*:CADDY_TLS_SELF_SIGNED=false:g" .env
+            elif grep -q "^# CADDY_TLS_SELF_SIGNED=" .env; then
+                sed -i "s:^# CADDY_TLS_SELF_SIGNED=.*:CADDY_TLS_SELF_SIGNED=false:g" .env
+            else
+                echo "CADDY_TLS_SELF_SIGNED=false" >> .env
+            fi
             source .env
         fi
     fi
