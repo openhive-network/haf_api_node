@@ -93,6 +93,40 @@ default:
         fi
         )
 
+######## Lint ########
+
+lint-docker-compose:
+  stage: build  # Run parallel with docker-build
+  image:
+    name: registry.gitlab.syncad.com/hive/haf_api_node/dclint:alpine
+    entrypoint: [""]
+  script:
+    # Check all compose files - need explicit glob since they use non-standard names
+    # First run: show human-readable output in job log
+    - |
+      DCLINT_ARGS="*.yaml ci/compose.yml **/compose*.yml \
+        --disable-rule service-keys-order \
+        --disable-rule top-level-properties-order \
+        --disable-rule services-alphabetical-order \
+        --disable-rule require-project-name-field"
+      /bin/dclint $DCLINT_ARGS || LINT_FAILED=1
+      # Second run: generate codeclimate artifact for GitLab
+      /bin/dclint $DCLINT_ARGS -f codeclimate -o gl-codequality.json || true
+      # Exit with original status
+      if [ "$LINT_FAILED" = "1" ]; then
+        echo "Docker Compose lint failed - see errors above"
+        exit 1
+      fi
+  artifacts:
+    reports:
+      codequality: gl-codequality.json
+    when: always
+  allow_failure: true  # Start permissive, can make strict later
+  tags:
+    - public-runner-docker
+
+######## End lint ########
+
 ######## Build ########
 
 docker-build:

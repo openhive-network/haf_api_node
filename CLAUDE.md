@@ -76,6 +76,15 @@ docker compose down              # Stop all services
 docker buildx bake --file=docker-bake.hcl --progress="plain" "pipeline-images"
 ```
 
+### Linting Docker Compose Files
+```bash
+# Validate all compose files with dclint
+docker run -t --rm -v ${PWD}:/app zavoloklom/dclint *.yaml
+
+# Quick validation (requires Docker daemon)
+docker compose config --quiet
+```
+
 ### ZFS Management
 ```bash
 sudo ./snapshot_zfs_datasets.sh <name>   # Create snapshot
