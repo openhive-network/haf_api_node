@@ -1,6 +1,6 @@
 services:
   pghero:
-    image: ankane/pghero:v3.6.2
+    image: ankane/pghero:v3.7.0
     profiles:
       - admin
       - database-admin
@@ -21,7 +21,7 @@ services:
         condition: service_healthy
 
   pgadmin:
-    image: dpage/pgadmin4:${PGADMIN_VERSION:-9.8.0}
+    image: dpage/pgadmin4:${PGADMIN_VERSION:-9.12.0}
     profiles:
       - admin
       - database-admin
