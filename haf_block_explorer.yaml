@@ -97,6 +97,12 @@ services:
     profiles:
       - apps
       - hafbe
+    labels:
+      # for Swagger UI
+      - "io.hive.swagger.url=/hafbe-api/"
+      - "io.hive.swagger.name=HAF Block Explorer"
+      - "io.hive.swagger.order=2"
+      - "io.hive.healthcheck.port=7005"
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
       interval: 10s
@@ -125,12 +131,6 @@ services:
       PGRST_DB_EXTRA_SEARCH_PATH: hafbe_bal, reptracker_app
       # PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/hafbe_api/
       PGRST_LOG_LEVEL: ${BLOCK_EXPLORER_SERVER_LOG_LEVEL:-error}
-    labels:
-      # for Swagger UI
-      - "io.hive.swagger.url=/hafbe-api/"
-      - "io.hive.swagger.name=HAF Block Explorer"
-      - "io.hive.swagger.order=2"
-      - "io.hive.healthcheck.port=7005"
     networks:
       haf-network:
     healthcheck:

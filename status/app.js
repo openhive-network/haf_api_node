@@ -50,13 +50,17 @@ const openApiSpec = {
                             type: 'string',
                             description: 'URL path for the API'
                           },
+                          version: {
+                            type: 'string',
+                            description: 'Version of the application'
+                          },
                           status: {
                             type: 'string',
                             enum: ['healthy', 'unhealthy', 'unknown'],
                             description: 'Health status of the service'
                           }
                         },
-                        required: ['name', 'url_path', 'status']
+                        required: ['name', 'url_path', 'version', 'status']
                       }
                     }
                   }
@@ -113,13 +117,17 @@ const openApiSpec = {
                       type: 'string',
                       description: 'URL path for the API'
                     },
+                    version: {
+                      type: 'string',
+                      description: 'Version of the application'
+                    },
                     status: {
                       type: 'string',
                       enum: ['healthy', 'unhealthy', 'unknown'],
                       description: 'Health status of the service'
                     }
                   },
-                  required: ['name', 'url_path', 'status']
+                  required: ['name', 'url_path', 'version', 'status']
                 }
               }
             }
@@ -144,6 +152,19 @@ const openApiSpec = {
     }
   }
 };
+
+// Extract version from container: prefer OCI label, fall back to image tag
+function getContainerVersion(container) {
+  const ociVersion = container.Labels['org.opencontainers.image.version'];
+  if (ociVersion) return ociVersion;
+
+  // Fall back to image tag (everything after the last ':')
+  const image = container.Image || '';
+  const colonIndex = image.lastIndexOf(':');
+  if (colonIndex !== -1) return image.substring(colonIndex + 1);
+
+  return 'unknown';
+}
 
 // Health check function that properly reads HAProxy agent check responses
 async function checkHealth(port, timeout) {
@@ -258,6 +279,7 @@ class StatusMonitor {
           const orders = (labels['io.hive.swagger.order'] || '').split(',').map(s => s.trim());
           const healthPorts = (labels['io.hive.healthcheck.port'] || '').split(',').map(s => s.trim());
           const healthTimeouts = (labels['io.hive.healthcheck.timeout'] || '').split(',').map(s => s.trim());
+          const version = getContainerVersion(container);
 
           // Create an app entry for each spec
           urls.forEach((url, i) => {
@@ -275,6 +297,7 @@ class StatusMonitor {
               return {
                 name: names[i] || 'Unknown',
                 url_path: url,
+                version,
                 status,
                 order
               };
@@ -285,7 +308,8 @@ class StatusMonitor {
           const order = parseInt(labels['io.hive.swagger.order']) || 999;
           const healthPort = labels['io.hive.healthcheck.port'];
           const healthTimeout = parseInt(labels['io.hive.healthcheck.timeout']) || HEALTHCHECK_TIMEOUT;
-          
+          const version = getContainerVersion(container);
+
           appPromises.push((async () => {
             let status = 'unknown';
             if (healthPort) {
@@ -296,6 +320,7 @@ class StatusMonitor {
             return {
               name: labels['io.hive.swagger.name'] || 'Unknown',
               url_path: swaggerUrl,
+              version,
               status,
               order
             };
