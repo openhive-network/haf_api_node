@@ -33,7 +33,9 @@
 
   # Block known abusers
   @blacklisted_ips remote_ip 185.238.72.170 185.130.44.60 24.209.251.17
-  respond @blacklisted_ips 403
+  handle @blacklisted_ips {
+    respond 403
+  }
 
 {{/* Rate limiting logic */}}
 {{- $rateLimitEnabled := getenv "CADDY_RATE_LIMIT_ENABLED" "true" -}}
@@ -81,13 +83,14 @@ Disallow: /wallet/
   {{- $adminLocalOnly = strings.Contains $oldAdminVar "local-admin-only.snippet" -}}
 {{- end -}}
 {{ if $adminLocalOnly }}
-  # Restrict admin to localhost and Docker host
-  @admin_restrict_ip {
-    protocol {$ADMIN_ENDPOINT_PROTOCOL}
-    not remote_ip 127.0.0.1 {{ getenv "DOCKER_GATEWAY_IP" }}{{ if getenv "CADDY_ADMIN_ALLOWED_IPS" }} {{ getenv "CADDY_ADMIN_ALLOWED_IPS" }}{{ end }}
-    path /admin/*
+  # Restrict admin to localhost and Docker host (IPv4 and IPv6)
+  @admin_blocked {
+    path /admin /admin/*
+    not {
+      remote_ip 127.0.0.1 ::1 {{ getenv "DOCKER_GATEWAY_IP" }}{{ if getenv "DOCKER_GATEWAY_IP6" }} {{ getenv "DOCKER_GATEWAY_IP6" }}{{ end }}{{ if getenv "CADDY_ADMIN_ALLOWED_IPS" }} {{ getenv "CADDY_ADMIN_ALLOWED_IPS" }}{{ end }}
+    }
   }
-  handle @admin_restrict_ip {
+  handle @admin_blocked {
     respond "Access denied" 403
   }
 {{ end }}
@@ -99,7 +102,9 @@ Disallow: /wallet/
     not protocol {$ADMIN_ENDPOINT_PROTOCOL}
     path /admin/*
   }
-  respond @admin_wrong_protocol "Admin endpoints are only accessible via {$ADMIN_ENDPOINT_PROTOCOL}" 403
+  handle @admin_wrong_protocol {
+    respond "Admin endpoints are only accessible via {$ADMIN_ENDPOINT_PROTOCOL}" 403
+  }
 
   # Route /admin/grafana to Grafana (handled separately to preserve full path)
   @admin_grafana {

@@ -26,3 +26,4 @@ include:
 networks:
   haf-network:
     name: ${NETWORK_NAME}
+    enable_ipv6: true
