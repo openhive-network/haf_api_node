@@ -66,6 +66,7 @@ services:
       - balance-tracker-standalone
       - hafbe
     environment:
+      PGRST_SERVER_HOST: "::"
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_DB_URI: postgresql://btracker_user@pgbouncer:6432/haf_block_log?application_name=balance_tracker_postgrest
       PGRST_DB_SCHEMA: btracker_endpoints

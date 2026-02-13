@@ -22,8 +22,8 @@ variables:
     LAST_BLOCK_NUMBER: "10000"
     ARGUMENTS: "--replay-blockchain --stop-at-block ${LAST_BLOCK_NUMBER}"
     HIVEMIND_SYNC_ARGS: "--community-start-block=4998000"
-    # Block 10000 was created on 2016-03-24T16:05:21
-    EXPECTED_BLOCK_TIME: "2016-03-24T16:05:21"
+    # Block 10000 was created on 2016-03-24 16:05:21
+    EXPECTED_BLOCK_TIME: "2016-03-24 16:05:21"
     PUBLIC_HOSTNAME: "dind"
     DOCKER_DRIVER: "overlay2"
     DOCKER_HOST: "tcp://${PUBLIC_HOSTNAME}:2376"

@@ -28,6 +28,10 @@ services:
       CADDY_RATE_LIMIT_WINDOW: ${CADDY_RATE_LIMIT_WINDOW:-1m}
     volumes:
       - type: bind
+        source: ./caddy/entrypoint.sh
+        target: /usr/local/bin/entrypoint.sh
+        read_only: true
+      - type: bind
         source: ./caddy/Caddyfile.tmpl
         target: /etc/caddy/Caddyfile.tmpl
         read_only: true
