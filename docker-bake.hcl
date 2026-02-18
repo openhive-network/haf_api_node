@@ -286,6 +286,7 @@ target "version-display" {
     GIT_LAST_LOG_MESSAGE = "${GIT_LAST_LOG_MESSAGE}"
     GIT_LAST_COMMITTER = "${GIT_LAST_COMMITTER}"
     GIT_LAST_COMMIT_DATE = "${GIT_LAST_COMMIT_DATE}"
+    CI_COMMIT_TAG = "${CI_COMMIT_TAG}"
   }
   cache-to = [
     "type=registry,ref=${registry-name("version-display", "")}:buildcache,mode=max"
@@ -356,6 +357,7 @@ target "status" {
     GIT_LAST_LOG_MESSAGE = "${GIT_LAST_LOG_MESSAGE}"
     GIT_LAST_COMMITTER = "${GIT_LAST_COMMITTER}"
     GIT_LAST_COMMIT_DATE = "${GIT_LAST_COMMIT_DATE}"
+    CI_COMMIT_TAG = "${CI_COMMIT_TAG}"
   }
   cache-to = [
     "type=registry,ref=${registry-name("status", "")}:buildcache,mode=max"
