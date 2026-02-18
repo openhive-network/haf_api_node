@@ -29,6 +29,16 @@ services:
     depends_on:
       haf:
         condition: service_healthy
+      hivemind-install:
+        condition: service_completed_successfully
+      block-explorer-install-balance-tracker:
+        condition: service_completed_successfully
+        required: false
+      balance-tracker-install:
+        condition: service_completed_successfully
+        required: false
+      reputation-tracker-install:
+        condition: service_completed_successfully
     labels:
       # for Swagger UI
       - "io.hive.swagger.url=/hafsql/openapi.json"
