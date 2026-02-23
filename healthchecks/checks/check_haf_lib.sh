@@ -32,7 +32,7 @@ check_haf_lib() {
     echo "down #HAF not in sync"
     exit 1
   fi
-  LAST_IRREVERSIBLE_BLOCK_AGE=$(psql "$POSTGRES_URL" --quiet --no-align --tuples-only --command="select extract('epoch' from now() - created_at)::integer from hafd.blocks where num = (select consistent_block from hafd.hive_state)")
+  LAST_IRREVERSIBLE_BLOCK_AGE=$(psql "$POSTGRES_URL" --quiet --no-align --tuples-only --command="select extract('epoch' from now() - created_at)::integer from hafd.blocks where hafd.block_id_to_num(block_id) = (select hafd.block_id_to_num(consistent_block) from hafd.hive_state)")
   
   # Adjust age for CI environments
   ADJUSTED_AGE=$(adjust_age_for_ci "$LAST_IRREVERSIBLE_BLOCK_AGE")
