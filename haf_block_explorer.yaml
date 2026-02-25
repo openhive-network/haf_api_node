@@ -139,7 +139,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
-      start_period: 1m
+      start_period: 15m
     depends_on:
       block-explorer-install-schema:
         condition: service_completed_successfully
