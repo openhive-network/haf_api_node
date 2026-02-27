@@ -332,7 +332,7 @@ if [[ $? == 1 ]]; then
     ./create_zfs_datasets.sh
 fi
 
-zfs list -t snapshot | grep $SNAPSHOT_NAME &> /dev/null
+zfs list -t snapshot "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}" &> /dev/null
 if [[ $? == 0 ]]; then
     echo "Snapshot found. Nothing to do. Use --snapshot-name to specify a different snapshot."
     exit 0
