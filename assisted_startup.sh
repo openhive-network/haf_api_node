@@ -723,7 +723,29 @@ else
     chown -R $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/ 2>/dev/null
     chmod -R u+rw /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/ 2>/dev/null
 
-    # Restart Docker Compose
+    # Stage 1: Start just HAF and wait for it to enter LIVE sync.
+    # By starting HAF before apps, no app indexes get registered, so HAF
+    # skips the REINDEX phase and enters LIVE quickly.
+    echo "Starting HAF and waiting for it to enter live sync..."
+    docker compose up -d haf
+
+    echo "Waiting for HAF to become healthy..."
+    while ! docker compose ps haf --format '{{.Health}}' 2>/dev/null | grep -q "healthy"; do
+        sleep 5
+    done
+
+    echo "HAF is healthy. Waiting for LIVE sync state..."
+    while true; do
+        sync_state=$(docker compose exec -T haf psql -U haf_admin -d haf_block_log -t -A -c "SELECT hive.get_sync_state();" 2>/dev/null)
+        if [ "$sync_state" = "LIVE" ]; then
+            break
+        fi
+        echo "  HAF sync state: $sync_state"
+        sleep 10
+    done
+    echo "HAF has entered LIVE sync."
+
+    # Stage 2: Bring up the rest of the stack
     docker compose up -d
     rm startup.temp
     echo "Startup Complete"
