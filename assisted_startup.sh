@@ -609,6 +609,8 @@ while read -r line; do
             grep "max_mem=" startup.temp >> haf.log
             grep "max_swap=" startup.temp >> haf.log
         fi
+        echo "Checkpointing the database before shutdown..."
+        docker compose exec haf psql -U haf_admin -d haf_block_log -c "CHECKPOINT;"
         docker compose down
         break
     fi
