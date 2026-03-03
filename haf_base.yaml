@@ -89,6 +89,10 @@ services:
         host    haf_block_log    hivesense_user   ${COMPOSE_PROJECT_NAME}-hivesense-pca-1.${NETWORK_NAME}                       trust\n
         host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-pca-1.${NETWORK_NAME}                       trust\n
 
+        host    haf_block_log    haf_admin                 ${COMPOSE_PROJECT_NAME}-proxy-whitelist-install-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    proxy_whitelist_owner     ${COMPOSE_PROJECT_NAME}-proxy-whitelist-install-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    proxy_whitelist_owner     ${COMPOSE_PROJECT_NAME}-proxy-whitelist-block-processing-1.${NETWORK_NAME}   trust\n
+
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafsql-1.${NETWORK_NAME}                              trust\n
         host    haf_block_log    hafsql_owner     ${COMPOSE_PROJECT_NAME}-hafsql-1.${NETWORK_NAME}                              trust\n
         host    haf_block_log    hafsql_user      ${COMPOSE_PROJECT_NAME}-hafsql-1.${NETWORK_NAME}                              trust\n

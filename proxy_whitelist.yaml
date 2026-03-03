@@ -1,0 +1,44 @@
+services:
+  proxy-whitelist-install:
+    image: ${PROXY_WHITELIST_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/proxy-whitelist}:${PROXY_WHITELIST_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - proxy-whitelist
+    environment:
+      POSTGRES_HOST: haf
+    command:
+      - install_app
+      - "--redis-url=${PROXY_WHITELIST_REDIS_URL:-redis://localhost:6379}"
+      - "--redis-password=${PROXY_WHITELIST_REDIS_PASSWORD:-}"
+      - "--start_block=${PROXY_WHITELIST_START_BLOCK:-1}"
+      - "--parallel_workers=${PROXY_WHITELIST_WORKERS:-4}"
+      - "--poll-profile-every=${PROXY_WHITELIST_POLL_PROFILE_EVERY:-20}"
+      - "--advisory-lock-namespace=${PROXY_WHITELIST_ADVISORY_LOCK_NAMESPACE:-20000}"
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+      hivemind-install:
+        condition: service_completed_successfully
+  proxy-whitelist-block-processing:
+    image: ${PROXY_WHITELIST_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/proxy-whitelist}:${PROXY_WHITELIST_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - proxy-whitelist
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: proxy_whitelist_owner
+    command: >
+      process_blocks ${PROXY_WHITELIST_SYNC_ARGS:-}
+    networks:
+      haf-network:
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/proxy_whitelist_startup_time.txt"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 48h
+    depends_on:
+      proxy-whitelist-install:
+        condition: service_completed_successfully
+      haf:
+        condition: service_healthy
