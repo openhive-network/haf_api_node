@@ -32,15 +32,19 @@ echo "Target:  ${BASE_URL}"
 echo "Profile: ${TEST_PROFILE}"
 echo ""
 
+# Output directory for results
+RESULTS_DIR="${CI_PROJECT_DIR:-${REPO_DIR}}/perf-results"
+mkdir -p "${RESULTS_DIR}"
+
 # Check if k6 is available, fall back to Docker
+USE_DOCKER=false
 K6_CMD=""
 if command -v k6 &>/dev/null; then
   K6_CMD="k6"
 elif command -v docker &>/dev/null; then
   echo "k6 not found locally, using Docker..."
-  K6_CMD="docker run --rm --network host -v ${TEST_DIR}:/tests -w /tests grafana/k6:latest"
-  # Adjust test path for Docker volume mount
-  TEST_DIR="/tests"
+  USE_DOCKER=true
+  K6_CMD="docker run --rm --user $(id -u):$(id -g) --network host -v ${TEST_DIR}:/tests -v ${RESULTS_DIR}:/results grafana/k6:latest"
 fi
 
 if [[ -z "${K6_CMD}" ]]; then
@@ -51,10 +55,6 @@ fi
 # Common k6 arguments
 K6_ARGS="-e BASE_URL=${BASE_URL} -e TEST_PROFILE=${TEST_PROFILE} -e TLS_SKIP_VERIFY=${TLS_SKIP_VERIFY:-true}"
 
-# Output directory for results
-RESULTS_DIR="${CI_PROJECT_DIR:-${REPO_DIR}}/perf-results"
-mkdir -p "${RESULTS_DIR}"
-
 run_test() {
   local test_file="$1"
   local test_name
@@ -62,10 +62,17 @@ run_test() {
   echo ""
   echo "--- Running: ${test_name} ---"
 
+  local test_path="${TEST_DIR}/${test_file}"
+  local summary_path="${RESULTS_DIR}/${test_name}-summary.json"
+  if [[ "${USE_DOCKER}" == "true" ]]; then
+    test_path="/tests/${test_file}"
+    summary_path="/results/${test_name}-summary.json"
+  fi
+
   # shellcheck disable=SC2086
   ${K6_CMD} run ${K6_ARGS} \
-    --summary-export="${RESULTS_DIR}/${test_name}-summary.json" \
-    "${TEST_DIR}/${test_file}" 2>&1 | tee "${RESULTS_DIR}/${test_name}.log"
+    --summary-export="${summary_path}" \
+    "${test_path}" 2>&1 | tee "${RESULTS_DIR}/${test_name}.log"
 
   echo "--- Done: ${test_name} ---"
 }
