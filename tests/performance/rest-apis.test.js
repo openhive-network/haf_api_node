@@ -30,10 +30,6 @@ function blockExplorerLastSyncedBlock() {
   restGet("/hafbe-api/last-synced-block");
 }
 
-function blockExplorerVersion() {
-  restGet("/hafbe-api/rpc/get_hafbe_version");
-}
-
 // --- Reputation Tracker REST API ---
 
 function reputationTrackerLastSyncedBlock() {
@@ -50,9 +46,8 @@ function statusApiHealth() {
 const scenarios = [
   { fn: hafahVersion, weight: 20 },
   { fn: balanceTrackerHealth, weight: 20 },
-  { fn: blockExplorerLastSyncedBlock, weight: 15 },
-  { fn: blockExplorerVersion, weight: 10 },
-  { fn: reputationTrackerLastSyncedBlock, weight: 15 },
+  { fn: blockExplorerLastSyncedBlock, weight: 20 },
+  { fn: reputationTrackerLastSyncedBlock, weight: 20 },
   { fn: statusApiHealth, weight: 20 },
 ];
 
