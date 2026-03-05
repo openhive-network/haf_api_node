@@ -90,4 +90,4 @@ services:
       proxy-whitelist-postgrest:
         condition: service_healthy
     networks:
-      - haf-network
+      haf-network:
