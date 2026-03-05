@@ -93,3 +93,64 @@ Default pass/fail thresholds:
 
 The mixed workload test has stricter thresholds for specific endpoints (e.g., block
 queries < 3s at p95, status health < 1s at p95).
+
+## Running Against a Live Stack
+
+The HAF API node is a large multi-service stack that requires replayed blockchain data.
+You cannot spin it up from scratch just for performance testing. Instead, run the tests
+against an already-running stack.
+
+### Using the convenience script
+
+The `ci/scripts/perf-test-api-node.sh` script handles k6 detection (local binary or
+Docker fallback), runs all three test suites, and saves results:
+
+```bash
+# Against a remote/local running stack
+BASE_URL=https://api.hive.blog ci/scripts/perf-test-api-node.sh
+
+# Load test profile
+BASE_URL=https://api.hive.blog TEST_PROFILE=load ci/scripts/perf-test-api-node.sh
+```
+
+Results are saved to `perf-results/` as JSON summaries and logs.
+
+## CI Integration
+
+The performance tests integrate with the existing GitLab CI pipeline. The stack is
+already built and replayed in CI (see `ci/node-replay.gitlab-ci.yml`). To run perf
+tests in CI, add a job to `.gitlab-ci.yml`:
+
+```yaml
+haf_api_node_perf_test:
+  extends: .haf_api_node_test
+  stage: test
+  needs:
+    - haf_api_node_replay_data_copy
+  script:
+    - docker-entrypoint.sh /haf-api-node/ci/scripts/test-api-node.sh
+    - docker-entrypoint.sh /haf-api-node/ci/scripts/perf-test-api-node.sh
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - "*.txt"
+      - "*.log"
+      - "logs/"
+      - "*.json"
+      - "perf-results/"
+  rules:
+    - when: manual
+      allow_failure: true
+  tags:
+    - public-runner-docker
+    - data-cache-storage
+    - fast
+```
+
+This reuses the same DinD environment and replayed data as the functional tests,
+then runs k6 (via Docker) against the stack. The `perf-results/` directory is
+saved as a CI artifact for analysis.
+
+**Note:** The CI `compose` image does not include k6. The `perf-test-api-node.sh`
+script automatically falls back to running k6 via Docker (`grafana/k6`).
