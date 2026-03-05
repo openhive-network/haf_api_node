@@ -3,15 +3,13 @@ services:
     image: ${PROXY_WHITELIST_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/proxy-whitelist}:${PROXY_WHITELIST_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - proxy-whitelist
+      - apps
     environment:
       POSTGRES_HOST: haf
     command:
       - install_app
-      - "--redis-url=${PROXY_WHITELIST_REDIS_URL:-redis://localhost:6379}"
-      - "--redis-password=${PROXY_WHITELIST_REDIS_PASSWORD:-}"
       - "--start_block=${PROXY_WHITELIST_START_BLOCK:-1}"
       - "--parallel_workers=${PROXY_WHITELIST_WORKERS:-4}"
-      - "--poll-profile-every=${PROXY_WHITELIST_POLL_PROFILE_EVERY:-20}"
       - "--advisory-lock-namespace=${PROXY_WHITELIST_ADVISORY_LOCK_NAMESPACE:-20000}"
     networks:
       haf-network:
@@ -24,6 +22,7 @@ services:
     image: ${PROXY_WHITELIST_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/proxy-whitelist}:${PROXY_WHITELIST_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - proxy-whitelist
+      - apps
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: proxy_whitelist_owner
@@ -42,3 +41,53 @@ services:
         condition: service_completed_successfully
       haf:
         condition: service_healthy
+  proxy-whitelist-postgrest:
+    image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/postgrest:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - proxy-whitelist
+      - apps
+    environment:
+      PGRST_SERVER_HOST: "::"
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_DB_URI: postgresql://proxy_whitelist_user@pgbouncer:6432/haf_block_log?application_name=proxy_whitelist_postgrest
+      PGRST_DB_SCHEMA: proxy_whitelist_endpoints
+      PGRST_DB_ANON_ROLE: proxy_whitelist_user
+      PGRST_DB_POOL: 6
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+      PGRST_DB_ROOT_SPEC: root
+      PGRST_DB_EXTRA_SEARCH_PATH: proxy_whitelist_app
+    networks:
+      haf-network:
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15m
+    depends_on:
+      proxy-whitelist-install:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
+  proxy-whitelist-postgrest-rewriter:
+    image: ${PROXY_WHITELIST_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/proxy-whitelist/postgrest-rewriter}:${PROXY_WHITELIST_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - proxy-whitelist
+      - apps
+    labels:
+      - "io.hive.swagger.url=/proxy-whitelist-api/"
+      - "io.hive.swagger.name=ProxyWhitelist"
+      - "io.hive.swagger.order=8"
+      - "io.hive.healthcheck.port=7015"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
+    init: true
+    depends_on:
+      proxy-whitelist-postgrest:
+        condition: service_healthy
+    networks:
+      - haf-network
