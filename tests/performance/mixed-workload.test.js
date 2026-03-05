@@ -17,30 +17,45 @@ export const options = {
   },
 };
 
+// Real account names and block range with transaction data
+const ACCOUNTS = ["blocktrades", "gtg", "hiveio"];
+
+function randomAccount() {
+  return ACCOUNTS[Math.floor(Math.random() * ACCOUNTS.length)];
+}
+
+function randomBlockNum() {
+  return Math.floor(Math.random() * 80000000) + 1000000;
+}
+
 // JSON-RPC scenarios (70% of traffic)
 function jsonRpcWorkload() {
   const r = Math.random();
-  const blockNum = Math.floor(Math.random() * 1000) + 1;
+  const blockNum = randomBlockNum();
 
-  if (r < 0.25) {
+  if (r < 0.20) {
     jsonRpc("condenser_api.get_block", [blockNum]);
-  } else if (r < 0.40) {
+  } else if (r < 0.35) {
     jsonRpc("condenser_api.get_dynamic_global_properties", []);
-  } else if (r < 0.55) {
+  } else if (r < 0.50) {
     jsonRpc("block_api.get_block", { block_num: blockNum });
-  } else if (r < 0.65) {
+  } else if (r < 0.60) {
     jsonRpc("condenser_api.get_block_header", [blockNum]);
-  } else if (r < 0.75) {
+  } else if (r < 0.70) {
     jsonRpc("account_history_api.get_ops_in_block", {
       block_num: blockNum,
       only_virtual: false,
     });
-  } else if (r < 0.85) {
-    jsonRpc("condenser_api.get_blog", ["steem", 0, 1]);
-  } else if (r < 0.95) {
-    jsonRpc("condenser_api.get_discussions_by_trending", [{ limit: 5 }]);
+  } else if (r < 0.80) {
+    jsonRpc("condenser_api.get_accounts", [[randomAccount()]]);
+  } else if (r < 0.90) {
+    jsonRpc("account_history_api.get_account_history", {
+      account: randomAccount(),
+      start: -1,
+      limit: 5,
+    });
   } else {
-    jsonRpc("condenser_api.get_followers", ["steem", "", "blog", 10]);
+    jsonRpc("database_api.get_dynamic_global_properties", {});
   }
 }
 
@@ -48,18 +63,16 @@ function jsonRpcWorkload() {
 function restWorkload() {
   const r = Math.random();
 
-  if (r < 0.25) {
+  if (r < 0.20) {
     restGet("/hafah-api/version");
-  } else if (r < 0.45) {
+  } else if (r < 0.40) {
     restGet("/status-api/health");
   } else if (r < 0.60) {
     restGet("/balance-api/");
-  } else if (r < 0.75) {
+  } else if (r < 0.80) {
     restGet("/hafbe-api/last-synced-block");
-  } else if (r < 0.90) {
-    restGet("/reputation-api/last-synced-block");
   } else {
-    restGet("/hafbe-api/rpc/get_hafbe_version");
+    restGet("/reputation-api/last-synced-block");
   }
 }
 
