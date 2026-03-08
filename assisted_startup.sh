@@ -664,6 +664,14 @@ else
         cp --sparse=always /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/
         chown $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
         umount /mnt/haf_shared_mem
+
+        # Safety: if HAF_SHM_DIRECTORY still points to the ramdisk after restore,
+        # comment it out since the ramdisk has been unmounted
+        if grep -q '^HAF_SHM_DIRECTORY=.*/mnt/haf_shared_mem' .env; then
+            sed -i 's/^HAF_SHM_DIRECTORY=/#HAF_SHM_DIRECTORY=/' .env
+            echo "Commented out HAF_SHM_DIRECTORY (ramdisk no longer available)"
+        fi
+
         echo "Ramdisk optimization cleanup completed"
     elif [[ $OPTIMIZATION_METHOD == "reduce_writebacks" ]]; then
         echo "Restoring original kernel parameters..."
