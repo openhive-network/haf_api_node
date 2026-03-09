@@ -689,9 +689,11 @@ else
     # something that can easily happen when copying the shared memory file)
     ./snapshot_zfs_datasets.sh --force $SNAPSHOT_NAME
 
-    # Fix data directory ownership for hived (block_log may have been copied in as root)
+    # Fix data directory ownership and permissions for hived (block_log may have been copied in as root)
     chown -R $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/blockchain/ 2>/dev/null
+    chmod -R u+rw /$ZPOOL/$TOP_LEVEL_DATASET/blockchain/ 2>/dev/null
     chown -R $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/ 2>/dev/null
+    chmod -R u+rw /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/ 2>/dev/null
 
     # Restart Docker Compose
     docker compose up -d
