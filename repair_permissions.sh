@@ -142,10 +142,10 @@ if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense" ]; then
     chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/pca"
   fi
   
-  if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config" ]; then
-    echo "  Setting config directory to hived user..."
-    chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config"
-  fi
+  # Pre-create config directory if missing (hivesense install downloads files here)
+  mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config"
+  echo "  Setting config directory to hived user..."
+  chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config"
   
   # Set the parent directory
   chown 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense"
