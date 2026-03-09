@@ -3,15 +3,26 @@
 # HAF App Processing Speed Comparison
 #
 # Compares block processing speeds for HAF applications across two servers.
-# Extracts timing data from docker logs and compares at overlapping block ranges.
+# Extracts timing data from docker logs or saved log files and compares
+# at overlapping block ranges.
 #
 # Apps compared: hafbe (block explorer), hivemind, reptracker, nfttracker, hivesense
 #
 # Usage:
+#   # Compare two live servers
 #   ./scripts/app_speed_compare.sh \
 #     --server1 steem-19.syncad.com --prefix1 haf10 --label1 "steem-19" \
-#     --server2 steem-20.syncad.com --prefix2 haf-irrev --label2 "steem-20" \
-#     [--bucket 5000000] [--apps "hafbe hivemind reptracker nfttracker hivesense"]
+#     --server2 steem-20.syncad.com --prefix2 haf-irrev --label2 "steem-20"
+#
+#   # Compare live server against saved logs
+#   ./scripts/app_speed_compare.sh \
+#     --server1 steem-19.syncad.com --prefix1 haf10 --label1 "steem-19" \
+#     --logs2 /path/to/saved/logs --label2 "rc8"
+#
+#   # Compare two sets of saved logs (remote directories)
+#   ./scripts/app_speed_compare.sh \
+#     --logs1 steem-20:/haf-pool/syncad/haf_api_node_rc8/logs/20260304T001146Z --label1 "rc8" \
+#     --logs2 steem-20:/haf-pool/syncad/haf_api_node_irrev/logs/20260309T000000Z --label2 "irrev"
 
 set -euo pipefail
 
@@ -20,44 +31,54 @@ BUCKET_SIZE=5000000
 APPS="hafbe hivemind reptracker nfttracker hivesense"
 COMPACT=false
 
-# Server 1
+# Server 1 (live docker mode)
 SERVER1=""
 PREFIX1=""
 LABEL1="server1"
+LOGS1=""
 
-# Server 2
+# Server 2 (live docker mode)
 SERVER2=""
 PREFIX2=""
 LABEL2="server2"
+LOGS2=""
 
 usage() {
     cat <<'EOF'
 Usage:
-  app_speed_compare.sh \
-    --server1 <host> --prefix1 <prefix> --label1 <label> \
-    --server2 <host> --prefix2 <prefix> --label2 <label> \
-    [--bucket N] [--apps "app1 app2 ..."] [--compact]
+  Live docker mode:
+    app_speed_compare.sh \
+      --server1 <host> --prefix1 <prefix> --label1 <label> \
+      --server2 <host> --prefix2 <prefix> --label2 <label> \
+      [--bucket N] [--apps "app1 app2 ..."] [--compact]
+
+  Saved log files mode:
+    app_speed_compare.sh \
+      --logs1 <path> --label1 <label> \
+      --logs2 <path> --label2 <label>
+
+  Mixed mode (live vs saved):
+    app_speed_compare.sh \
+      --server1 <host> --prefix1 <prefix> --label1 <label> \
+      --logs2 <path> --label2 <label>
 
 Options:
-  --server1/2 <host>    SSH hostname for each server
+  --server1/2 <host>    SSH hostname for each server (live docker mode)
   --prefix1/2 <prefix>  Docker container name prefix (e.g., haf10, haf-irrev)
+  --logs1/2 <path>      Path to saved log files. Can be:
+                         - Local directory containing *.log or *.log.zst files
+                         - Remote directory: host:/path/to/logs
+                         - A .tar.zst archive (local or remote host:/path/to.tar.zst)
   --label1/2 <label>    Display label (default: server1/server2)
   --bucket <N>          Block range bucket size (default: 5000000)
   --apps <list>         Space-separated app list (default: all)
                         Available: hafbe hivemind reptracker nfttracker hivesense
   --compact             Machine-readable TSV output
 
-Examples:
-  # Compare steem-19 vs steem-20
-  app_speed_compare.sh \
-    --server1 steem-19.syncad.com --prefix1 haf10 --label1 "steem-19" \
-    --server2 steem-20.syncad.com --prefix2 haf-irrev --label2 "steem-20"
-
-  # Only compare hivemind and hafbe with 10M buckets
-  app_speed_compare.sh \
-    --server1 steem-19.syncad.com --prefix1 haf10 --label1 "steem-19" \
-    --server2 steem-20.syncad.com --prefix2 haf-irrev --label2 "steem-20" \
-    --bucket 10000000 --apps "hafbe hivemind"
+Log file naming:
+  Log files should be named: block-explorer-block-processing.log[.zst]
+  hivemind-block-processing.log[.zst], reputation-tracker-block-processing.log[.zst]
+  nft-tracker-block-processing.log[.zst], hivesense-sync.log[.zst]
 EOF
     exit 1
 }
@@ -70,6 +91,8 @@ while [[ $# -gt 0 ]]; do
         --server2)  SERVER2="$2"; shift 2 ;;
         --prefix2)  PREFIX2="$2"; shift 2 ;;
         --label2)   LABEL2="$2"; shift 2 ;;
+        --logs1)    LOGS1="$2"; shift 2 ;;
+        --logs2)    LOGS2="$2"; shift 2 ;;
         --bucket)   BUCKET_SIZE="$2"; shift 2 ;;
         --apps)     APPS="$2"; shift 2 ;;
         --compact)  COMPACT=true; shift ;;
@@ -78,8 +101,25 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$SERVER1" || -z "$PREFIX1" || -z "$SERVER2" || -z "$PREFIX2" ]]; then
-    echo "Error: --server1, --prefix1, --server2, and --prefix2 are required" >&2
+# Validate: each side needs either (server + prefix) or logs
+side1_live=false
+side2_live=false
+
+if [[ -n "$SERVER1" && -n "$PREFIX1" ]]; then
+    side1_live=true
+elif [[ -n "$LOGS1" ]]; then
+    side1_live=false
+else
+    echo "Error: side 1 needs --server1 + --prefix1, or --logs1" >&2
+    usage
+fi
+
+if [[ -n "$SERVER2" && -n "$PREFIX2" ]]; then
+    side2_live=true
+elif [[ -n "$LOGS2" ]]; then
+    side2_live=false
+else
+    echo "Error: side 2 needs --server2 + --prefix2, or --logs2" >&2
     usage
 fi
 
@@ -94,6 +134,18 @@ container_name() {
         nfttracker) echo "${prefix}-nft-tracker-block-processing-1" ;;
         hivesense)  echo "${prefix}-hivesense-sync-1" ;;
         *)          echo "Unknown app: $app" >&2; return 1 ;;
+    esac
+}
+
+# Log file base name per app (without .log or .log.zst extension)
+log_basename() {
+    case "$1" in
+        hafbe)      echo "block-explorer-block-processing" ;;
+        hivemind)   echo "hivemind-block-processing" ;;
+        reptracker) echo "reputation-tracker-block-processing" ;;
+        nfttracker) echo "nft-tracker-block-processing" ;;
+        hivesense)  echo "hivesense-sync" ;;
+        *)          echo "Unknown app: $1" >&2; return 1 ;;
     esac
 }
 
@@ -126,10 +178,88 @@ app_rate_label() {
 ########## Log fetching ##########
 
 # Fetch filtered docker logs from a remote server
-# Usage: fetch_logs <server> <container> <grep_pattern>
-fetch_logs() {
+# Usage: fetch_docker_logs <server> <container> <grep_pattern>
+fetch_docker_logs() {
     local server="$1" container="$2" pattern="$3"
     ssh "$server" "docker logs '$container' 2>&1 | grep -E '$pattern'" 2>/dev/null || true
+}
+
+# Read a log file (local or remote), handling .zst compression
+# Usage: read_log_file <path>
+# <path> can be local or host:/remote/path
+read_log_file() {
+    local path="$1"
+    local remote_host="" remote_path=""
+
+    # Check for host:/path pattern
+    if [[ "$path" == *:/* ]]; then
+        remote_host="${path%%:*}"
+        remote_path="${path#*:}"
+        if [[ "$remote_path" == *.zst ]]; then
+            ssh "$remote_host" "zstdcat '$remote_path'" 2>/dev/null || true
+        else
+            ssh "$remote_host" "cat '$remote_path'" 2>/dev/null || true
+        fi
+    else
+        if [[ "$path" == *.zst ]]; then
+            zstdcat "$path" 2>/dev/null || true
+        else
+            cat "$path" 2>/dev/null || true
+        fi
+    fi
+}
+
+# Find and read the log file for a given app from a logs path
+# Usage: fetch_file_logs <logs_path> <app> <grep_pattern>
+fetch_file_logs() {
+    local logs_path="$1" app="$2" pattern="$3"
+    local basename
+    basename=$(log_basename "$app")
+
+    local remote_host="" dir_path=""
+
+    # Parse host:/path
+    if [[ "$logs_path" == *:/* ]]; then
+        remote_host="${logs_path%%:*}"
+        dir_path="${logs_path#*:}"
+    else
+        dir_path="$logs_path"
+    fi
+
+    # Check if it's an archive (.tar.zst) - decompress to temp dir
+    if [[ "$dir_path" == *.tar.zst ]]; then
+        local extract_dir="$TMPDIR/logs_${app}_$$"
+        mkdir -p "$extract_dir"
+        if [[ -n "$remote_host" ]]; then
+            ssh "$remote_host" "cat '$dir_path'" 2>/dev/null | zstd -d | tar xf - -C "$extract_dir" 2>/dev/null
+        else
+            zstdcat "$dir_path" 2>/dev/null | tar xf - -C "$extract_dir" 2>/dev/null
+        fi
+        # Find the log file in extracted content
+        local found
+        found=$(find "$extract_dir" -name "${basename}.log*" -print -quit 2>/dev/null)
+        if [[ -n "$found" ]]; then
+            read_log_file "$found" | grep -E "$pattern" || true
+        fi
+        return
+    fi
+
+    # Directory mode: try .log.zst first, then .log
+    if [[ -n "$remote_host" ]]; then
+        # Remote directory
+        local file
+        file=$(ssh "$remote_host" "ls '$dir_path/${basename}.log.zst' '$dir_path/${basename}.log' 2>/dev/null | head -1" 2>/dev/null)
+        if [[ -n "$file" ]]; then
+            read_log_file "${remote_host}:${file}" | grep -E "$pattern" || true
+        fi
+    else
+        # Local directory
+        if [[ -f "$dir_path/${basename}.log.zst" ]]; then
+            read_log_file "$dir_path/${basename}.log.zst" | grep -E "$pattern" || true
+        elif [[ -f "$dir_path/${basename}.log" ]]; then
+            read_log_file "$dir_path/${basename}.log" | grep -E "$pattern" || true
+        fi
+    fi
 }
 
 ########## Per-app log parsers ##########
@@ -311,16 +441,52 @@ format_elapsed() {
     fi
 }
 
-########## Extract & bucket data for one server+app ##########
+########## Extract & bucket data for one side+app ##########
 
+# Unified extraction: works with live docker or log files
+# Usage: extract_app_data <side> <app> <bucket_size>
+# <side> is 1 or 2
 extract_app_data() {
-    local server="$1" prefix="$2" app="$3" bucket_size="$4"
-    local container pattern
-
-    container=$(container_name "$prefix" "$app")
+    local side="$1" app="$2" bucket_size="$3"
+    local pattern
     pattern=$(grep_pattern "$app")
 
-    fetch_logs "$server" "$container" "$pattern" | "parse_${app}" | compute_buckets "$bucket_size"
+    if [[ "$side" == "1" ]]; then
+        if [[ "$side1_live" == "true" ]]; then
+            local container
+            container=$(container_name "$PREFIX1" "$app")
+            fetch_docker_logs "$SERVER1" "$container" "$pattern"
+        else
+            fetch_file_logs "$LOGS1" "$app" "$pattern"
+        fi
+    else
+        if [[ "$side2_live" == "true" ]]; then
+            local container
+            container=$(container_name "$PREFIX2" "$app")
+            fetch_docker_logs "$SERVER2" "$container" "$pattern"
+        else
+            fetch_file_logs "$LOGS2" "$app" "$pattern"
+        fi
+    fi | "parse_${app}" | compute_buckets "$bucket_size"
+}
+
+########## Format source description ##########
+
+source_desc() {
+    local side="$1"
+    if [[ "$side" == "1" ]]; then
+        if [[ "$side1_live" == "true" ]]; then
+            echo "$SERVER1 (prefix: $PREFIX1)"
+        else
+            echo "logs: $LOGS1"
+        fi
+    else
+        if [[ "$side2_live" == "true" ]]; then
+            echo "$SERVER2 (prefix: $PREFIX2)"
+        else
+            echo "logs: $LOGS2"
+        fi
+    fi
 }
 
 ########## Main ##########
@@ -330,8 +496,8 @@ trap 'rm -rf "$TMPDIR"' EXIT
 
 if [[ "$COMPACT" != "true" ]]; then
     echo "HAF App Processing Speed Comparison"
-    echo "  $LABEL1: $SERVER1 (prefix: $PREFIX1)"
-    echo "  $LABEL2: $SERVER2 (prefix: $PREFIX2)"
+    echo "  $LABEL1: $(source_desc 1)"
+    echo "  $LABEL2: $(source_desc 2)"
     echo "  Bucket size: $(format_bucket "$BUCKET_SIZE") blocks"
     echo ""
 fi
@@ -345,12 +511,12 @@ for app in $APPS; do
         echo "Extracting $display_name logs..." >&2
     fi
 
-    # Extract data from both servers in parallel
-    extract_app_data "$SERVER1" "$PREFIX1" "$app" "$BUCKET_SIZE" > "$TMPDIR/${app}_1.tsv" &
-    extract_app_data "$SERVER2" "$PREFIX2" "$app" "$BUCKET_SIZE" > "$TMPDIR/${app}_2.tsv" &
+    # Extract data from both sides in parallel
+    extract_app_data 1 "$app" "$BUCKET_SIZE" > "$TMPDIR/${app}_1.tsv" &
+    extract_app_data 2 "$app" "$BUCKET_SIZE" > "$TMPDIR/${app}_2.tsv" &
     wait
 
-    # Skip if no data from either server
+    # Skip if no data from either side
     if [[ ! -s "$TMPDIR/${app}_1.tsv" && ! -s "$TMPDIR/${app}_2.tsv" ]]; then
         if [[ "$COMPACT" != "true" ]]; then
             echo "  No data found, skipping."
