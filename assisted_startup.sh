@@ -3,6 +3,10 @@
 # After installing zfs and docker prequisites, run this script to configure the rest of the system
 # This script will aid in the .env setup, and will automatically create a zpool and zfs datasets if needed
 
+# Container UID/GID for hived process (2001 on modern builds, was 1000 on older)
+HIVED_UID=2001
+HIVED_GID=2001
+
 # Ramdisk size configuration
 RAMDISK_SIZE_GB=7  # Default ramdisk size in GB (for shared_memory.bin only)
 
@@ -398,11 +402,11 @@ else
                 mkdir /mnt/haf_shared_mem
             fi
             mount -t tmpfs -o size=${RAMDISK_SIZE_GB}g tmpfs /mnt/haf_shared_mem
-            chown 1000:100 /mnt/haf_shared_mem
+            chown $HIVED_UID:$HIVED_GID /mnt/haf_shared_mem
 
             # Ensure RocksDB directories exist on disk
             mkdir -p /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/comments-rocksdb-storage
-            chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/comments-rocksdb-storage
+            chown $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/comments-rocksdb-storage
 
             remove_shared_mem=$RAMDISK_SIZE_GB
         elif [[ $OPTIMIZATION_METHOD == "reduce_writebacks" ]]; then
@@ -658,7 +662,7 @@ else
 
         # Copy shared_memory.bin back to disk
         cp --sparse=always /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/
-        chown 1000:100 /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
+        chown $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
         umount /mnt/haf_shared_mem
         echo "Ramdisk optimization cleanup completed"
     elif [[ $OPTIMIZATION_METHOD == "reduce_writebacks" ]]; then
@@ -684,6 +688,10 @@ else
     # if the blockchain and shared_memory write times are too far apart,
     # something that can easily happen when copying the shared memory file)
     ./snapshot_zfs_datasets.sh --force $SNAPSHOT_NAME
+
+    # Fix data directory ownership for hived (block_log may have been copied in as root)
+    chown -R $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/blockchain/ 2>/dev/null
+    chown -R $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/ 2>/dev/null
 
     # Restart Docker Compose
     docker compose up -d
