@@ -401,6 +401,11 @@ else
             if [ ! -d "/mnt/haf_shared_mem" ]; then
                 mkdir /mnt/haf_shared_mem
             fi
+            # Unmount any leftover ramdisk from a previous interrupted run
+            if mountpoint -q /mnt/haf_shared_mem; then
+                echo "WARNING: /mnt/haf_shared_mem is already mounted (leftover from previous run), unmounting..."
+                umount /mnt/haf_shared_mem
+            fi
             mount -t tmpfs -o size=${RAMDISK_SIZE_GB}g tmpfs /mnt/haf_shared_mem
             chown $HIVED_UID:$HIVED_GID /mnt/haf_shared_mem
 
@@ -660,9 +665,22 @@ else
             echo "Restored original ARGUMENTS (removed rocksdb path)"
         fi
 
-        # Copy shared_memory.bin back to disk
+        # Copy shared_memory data back to disk before unmounting ramdisk.
+        # RocksDB (comments-rocksdb-storage) may end up on the ramdisk alongside
+        # shared_memory.bin. Both must be copied back so the ZFS snapshot is
+        # internally consistent (shared_memory.bin and RocksDB must agree on LIB).
+        echo "Copying shared_memory.bin from ramdisk to ZFS..."
         cp --sparse=always /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/
         chown $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
+        # Copy RocksDB if it has actual data (SST files) on the ramdisk.
+        # Replace the ZFS copy entirely to ensure it matches the shared_memory.bin
+        # we just copied (both must be from the same replay run).
+        if ls /mnt/haf_shared_mem/comments-rocksdb-storage/*.sst >/dev/null 2>&1; then
+            echo "Copying comments-rocksdb-storage from ramdisk to ZFS..."
+            rm -rf /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/comments-rocksdb-storage
+            cp -a /mnt/haf_shared_mem/comments-rocksdb-storage /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/
+            chown -R $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/comments-rocksdb-storage
+        fi
         umount /mnt/haf_shared_mem
 
         # Safety: if HAF_SHM_DIRECTORY still points to the ramdisk after restore,
