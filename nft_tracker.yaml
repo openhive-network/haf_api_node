@@ -37,6 +37,7 @@ services:
       POSTGRES_USER: nfttracker_owner
     networks:
       haf-network:
+    restart: on-failure
     command:
       - process_blocks
     healthcheck:

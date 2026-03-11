@@ -45,6 +45,7 @@ services:
       POSTGRES_USER: btracker_owner
     networks:
       haf-network:
+    restart: on-failure
     command:
       - process_blocks
       - --schema=btracker_app
