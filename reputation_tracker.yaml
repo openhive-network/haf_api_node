@@ -42,6 +42,7 @@ services:
       POSTGRES_USER: reptracker_owner
     networks:
       haf-network:
+    restart: on-failure
     command:
       - process_blocks
     healthcheck:
