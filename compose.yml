@@ -18,6 +18,7 @@ include:
   - swagger.yaml
   - hivesense.yaml
   - hivesense-${HIVESENSE_CONFIGURATION:-sync}.yaml
+  - proxy_whitelist.yaml
   - hafsql.yaml
   - ui.yaml
   - status.yaml
