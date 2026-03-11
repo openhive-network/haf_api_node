@@ -51,6 +51,11 @@ backend nft_tracker {
     .port = "7013";
 }
 
+backend proxy_whitelist {
+    .host = "haproxy";
+    .port = "7015";
+}
+
 backend status {
     .host = "haproxy";
     .port = "7014";
@@ -159,6 +164,14 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url ~ "^/proxy-whitelist-api/") {
+        # rewrite the URL to where PostgREST expects it
+        set req.url = regsub(req.url, "^/proxy-whitelist-api/(.*)$", "/\1");
+        set req.backend_hint = proxy_whitelist;
+
+        if (req.method == "POST") {
+            call recv_cachable_post;
+        }
     } elseif (req.url ~ "^/status-api/") {
         # rewrite the URL for status API
         set req.url = regsub(req.url, "^/status-api/(.*)$", "/\1");
@@ -197,7 +210,7 @@ sub vcl_backend_fetch {
 }
 
 sub vcl_backend_response {
-    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense || bereq.backend == nft_tracker || bereq.backend == hivemind) {
+    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense || bereq.backend == nft_tracker || bereq.backend == hivemind || bereq.backend == proxy_whitelist) {
         # PostgREST generates invalid content-range headers, and varnish will refuse to cache/proxy calls because of it.
         # Until they fix it, just remove the header.  (see https://github.com/PostgREST/postgrest/issues/1089)
         unset beresp.http.Content-Range;
@@ -232,6 +245,8 @@ sub vcl_hash {
         hash_data("hivesense-api");
     } else if (req.backend_hint == nft_tracker) {
         hash_data("nft-tracker-api");
+    } else if (req.backend_hint == proxy_whitelist) {
+        hash_data("proxy-whitelist-api");
     } else if (req.backend_hint == hivemind) {
         hash_data("hivemind-api");
     }
