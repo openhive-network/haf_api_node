@@ -745,6 +745,11 @@ else
     done
     echo "HAF has entered LIVE sync."
 
+    # Repair ownership/permissions for all app data directories (hivesense config,
+    # ollama, pgdata, etc.) which may be root-owned after ZFS rollback or snapshot restore
+    echo "Repairing data directory permissions..."
+    ./repair_permissions.sh
+
     # Stage 2: Bring up the rest of the stack
     docker compose up -d
     rm startup.temp
