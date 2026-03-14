@@ -77,14 +77,13 @@ while true; do
     DOWN_LOGGED=false
   fi
 
-  # Block progress
-  HIVE_STATE=$(query_pg "$HAF_CONTAINER" "SELECT num, consistent_block FROM hafd.hive_state LIMIT 1")
-  if [[ -z "$HIVE_STATE" ]]; then
+  # Block progress — head block from hafd.blocks, LIB from hafd.hive_state
+  BLOCK_NUM=$(query_pg "$HAF_CONTAINER" "SELECT num FROM hafd.blocks ORDER BY num DESC LIMIT 1")
+  if [[ -z "$BLOCK_NUM" ]]; then
     sleep "$INTERVAL"
     continue
   fi
-  BLOCK_NUM=$(echo "$HIVE_STATE" | cut -d'|' -f1)
-  LIB=$(echo "$HIVE_STATE" | cut -d'|' -f2)
+  LIB=$(query_pg "$HAF_CONTAINER" "SELECT consistent_block FROM hafd.hive_state LIMIT 1")
 
   # Sanity check — skip if we got garbage
   if ! [[ "$BLOCK_NUM" =~ ^[0-9]+$ ]]; then
