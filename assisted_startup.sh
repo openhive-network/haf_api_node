@@ -108,8 +108,13 @@ fi
 
 echo "SNAPSHOT_NAME=$SNAPSHOT_NAME" >> startup.temp
 
-if [[ $REPLAY == 1 && $SNAPSHOT_NAME == "first_sync" ]]; then
-    zfs list -H -o name -t snapshot | xargs -n1 zfs destroy -r first_sync
+if [[ $REPLAY == 1 ]]; then
+    # Destroy existing snapshots with the target name so replay can create fresh ones.
+    # Filter to this stack's dataset and gracefully handle the case where none exist.
+    zfs list -H -o name -t snapshot 2>/dev/null | grep "@${SNAPSHOT_NAME}$" | while read -r snap; do
+        echo "Destroying snapshot: $snap"
+        zfs destroy -r "$snap" || true
+    done
 fi
 
 if [ ! -f .env ]; then
