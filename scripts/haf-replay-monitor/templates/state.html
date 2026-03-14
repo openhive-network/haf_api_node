@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HAF Stack Status</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; background: #0d1117; color: #c9d1d9; padding: 20px; }
+  h1 { margin-bottom: 16px; color: #58a6ff; font-size: 1.4em; }
+  .meta { color: #8b949e; font-size: 0.85em; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+  .card h2 { color: #58a6ff; font-size: 1.1em; margin-bottom: 8px; }
+  .card .info { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 0.9em; margin-bottom: 12px; }
+  .card .info .label { color: #8b949e; }
+  .card .info .value { color: #e6edf3; font-weight: 600; }
+  .bps { color: #3fb950; font-size: 1.3em; }
+  .section-title { color: #8b949e; font-size: 0.8em; text-transform: uppercase; margin: 10px 0 6px; border-top: 1px solid #30363d; padding-top: 8px; }
+  .progress-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 0.85em; }
+  .progress-row .name { width: 180px; color: #c9d1d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .progress-bar { flex: 1; height: 14px; background: #21262d; border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #1f6feb; border-radius: 3px; transition: width 0.5s; }
+  .progress-pct { width: 45px; text-align: right; color: #8b949e; }
+  .app-rate { width: 90px; text-align: right; color: #3fb950; font-size: 0.9em; }
+  .container-row { display: flex; gap: 8px; margin-bottom: 2px; font-size: 0.85em; }
+  .container-row .cname { color: #c9d1d9; width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .healthy { color: #3fb950; }
+  .unhealthy { color: #f85149; }
+  .starting { color: #d29922; }
+  .no-data { color: #8b949e; text-align: center; padding: 40px; }
+</style>
+</head>
+<body>
+<h1>HAF Stack Status</h1>
+<div class="meta" id="updated"></div>
+<div class="grid" id="grid"></div>
+<div class="no-data" id="nodata" style="display:none">No active stacks. Start a sampler to see data here.</div>
+<script>
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+function fmtBps(n) { return n == null ? '—' : Number(n).toFixed(1); }
+function fmtBytes(b) {
+  if (b == null) return '—';
+  if (b > 1e12) return (b/1e12).toFixed(1) + ' TB';
+  if (b > 1e9) return (b/1e9).toFixed(1) + ' GB';
+  if (b > 1e6) return (b/1e6).toFixed(1) + ' MB';
+  return b + ' B';
+}
+function healthClass(h) {
+  if (!h) return '';
+  if (h.includes('healthy') && !h.includes('unhealthy')) return 'healthy';
+  if (h.includes('unhealthy')) return 'unhealthy';
+  if (h.includes('starting')) return 'starting';
+  return '';
+}
+function ago(ts) {
+  if (!ts) return '';
+  const s = (Date.now() - new Date(ts).getTime()) / 1000;
+  if (s < 60) return Math.round(s) + 's ago';
+  if (s < 3600) return Math.round(s/60) + 'm ago';
+  if (s < 86400) return Math.round(s/3600) + 'h ago';
+  return Math.round(s/86400) + 'd ago';
+}
+
+async function refresh() {
+  try {
+    const resp = await fetch('/api/state');
+    const data = await resp.json();
+    const grid = document.getElementById('grid');
+    const nodata = document.getElementById('nodata');
+    if (!data.length) { grid.innerHTML = ''; nodata.style.display = ''; return; }
+    nodata.style.display = 'none';
+    grid.innerHTML = data.map(d => {
+      const r = d.run, s = d.sample || {};
+      const headBlock = s.block_num;
+      const apps = (d.apps || []).map(a => {
+        const pct = headBlock ? Math.min(100, (a.current_block_num / headBlock * 100)).toFixed(1) : 0;
+        const rate = a.blocks_per_sec != null ? fmtBps(a.blocks_per_sec) + ' blk/s' : '';
+        return `<div class="progress-row">
+          <span class="name">${a.app_name}</span>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <span class="progress-pct">${pct}%</span>
+          <span class="app-rate">${rate}</span>
+        </div>`;
+      }).join('');
+      const containers = (d.containers || []).map(c => {
+        const hc = healthClass(c.health);
+        return `<div class="container-row">
+          <span class="cname">${c.container_name}</span>
+          <span class="${hc}">${c.health || c.status || '?'}</span>
+        </div>`;
+      }).join('');
+      return `<div class="card">
+        <h2>${r.server} ${r.config_desc ? '— ' + r.config_desc : ''}</h2>
+        <div class="info">
+          <span class="label">Branch</span><span class="value">${r.branch || '—'}</span>
+          <span class="label">HAF Commit</span><span class="value">${r.haf_commit ? r.haf_commit.slice(0,8) : '—'}</span>
+          <span class="label">Head Block</span><span class="value">${fmt(s.block_num)}</span>
+          <span class="label">LIB</span><span class="value">${fmt(s.lib)}</span>
+          <span class="label">Throughput</span><span class="value bps">${fmtBps(s.blocks_per_sec)} blk/s</span>
+          <span class="label">Memory</span><span class="value">${fmtBytes(s.memory_rss)}</span>
+          <span class="label">DB Size</span><span class="value">${fmtBytes(s.pg_size)}</span>
+          <span class="label">Last Update</span><span class="value">${ago(s.ts)}</span>
+        </div>
+        ${apps ? '<div class="section-title">App Progress</div>' + apps : ''}
+        ${containers ? '<div class="section-title">Containers</div>' + containers : ''}
+      </div>`;
+    }).join('');
+    document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+  } catch(e) { console.error('refresh failed:', e); }
+}
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>
