@@ -3,9 +3,9 @@
 # After installing zfs and docker prequisites, run this script to configure the rest of the system
 # This script will aid in the .env setup, and will automatically create a zpool and zfs datasets if needed
 
-# Container UID/GID for hived process (2001 on modern builds, was 1000 on older)
-HIVED_UID=2001
-HIVED_GID=2001
+# Container UID/GID for hived process
+HIVED_UID=1000
+HIVED_GID=1000
 
 # Ramdisk size configuration
 RAMDISK_SIZE_GB=7  # Default ramdisk size in GB (for shared_memory.bin only)
