@@ -79,6 +79,10 @@ async function loadSelected() {
   const ids = Array.from(sel.selectedOptions).map(o => o.value);
   if (!ids.length) return;
 
+  const btn = document.querySelector('button');
+  btn.textContent = 'Loading...';
+  btn.disabled = true;
+
   const window = parseInt(document.getElementById('smooth').value) || 20;
   const bpsTraces = [];
   const timeTraces = [];
@@ -87,6 +91,7 @@ async function loadSelected() {
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
     const label = sel.querySelector(`option[value="${id}"]`).textContent;
+    btn.textContent = `Loading run ${i+1}/${ids.length}...`;
     const resp = await fetch(`/api/runs/${id}/samples`);
     const samples = await resp.json();
     if (!samples.length) continue;
@@ -150,6 +155,9 @@ async function loadSelected() {
     return `<tr><td>${label}</td>${cells}</tr>`;
   }).join('');
   tbl.innerHTML = `<thead>${hdr}</thead><tbody>${body}</tbody>`;
+
+  btn.textContent = 'Compare';
+  btn.disabled = false;
 }
 
 init();
