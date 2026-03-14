@@ -37,6 +37,7 @@
 </div>
 <div class="charts">
   <div class="chart-box"><div id="bps-chart" class="plotly-chart"></div></div>
+  <div class="chart-box"><div id="app-chart" class="plotly-chart"></div></div>
   <div class="chart-box"><div id="time-chart" class="plotly-chart"></div></div>
   <div class="chart-box"><h3 style="color:#8b949e;margin-bottom:8px">Time to Milestone</h3><table id="milestones"><thead><tr><th>Run</th></tr></thead><tbody></tbody></table></div>
 </div>
@@ -124,6 +125,57 @@ async function loadSelected() {
     }
   }
 
+  // Fetch app progress for all selected runs
+  const APP_COLORS = {
+    'hivemind_app': '#58a6ff',
+    'reptracker_app': '#3fb950',
+    'hafbe_app': '#f0883e',
+    'hafbe_bal': '#d29922',
+    'nfttracker_app': '#a371f7',
+    'hivesense_app': '#79c0ff',
+  };
+  const DASH_STYLES = ['solid', 'dash', 'dot', 'dashdot', 'longdash', 'longdashdot'];
+  const appTraces = [];
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    const label = sel.querySelector(`option[value="${id}"]`).textContent;
+    const shortLabel = label.split('—')[0].trim();
+    btn.textContent = `Loading apps ${i+1}/${ids.length}...`;
+    const resp = await fetch(`/api/runs/${id}/app_progress`);
+    const progress = await resp.json();
+    if (!progress.length) continue;
+
+    // Group by app_name
+    const byApp = {};
+    for (const row of progress) {
+      if (!byApp[row.app_name]) byApp[row.app_name] = [];
+      byApp[row.app_name].push(row);
+    }
+
+    for (const [appName, rows] of Object.entries(byApp)) {
+      if (rows.length < 2) continue;
+      // Compute blocks/sec between consecutive samples
+      const blocks = [];
+      const bps = [];
+      for (let j = 1; j < rows.length; j++) {
+        const dt = (new Date(rows[j].ts).getTime() - new Date(rows[j-1].ts).getTime()) / 1000;
+        const db = rows[j].current_block_num - rows[j-1].current_block_num;
+        if (dt > 0 && db > 0) {
+          blocks.push(rows[j].current_block_num);
+          bps.push(db / dt);
+        }
+      }
+      const smoothBps = smooth(bps, window);
+      const color = APP_COLORS[appName] || COLORS[Object.keys(byApp).indexOf(appName) % COLORS.length];
+      appTraces.push({
+        x: blocks, y: smoothBps,
+        name: `${shortLabel} / ${appName}`,
+        type: 'scatter', mode: 'lines',
+        line: { color: color, width: 1.5, dash: DASH_STYLES[i % DASH_STYLES.length] },
+      });
+    }
+  }
+
   const darkLayout = {
     paper_bgcolor: '#161b22', plot_bgcolor: '#161b22',
     font: { color: '#c9d1d9', size: 11 },
@@ -142,6 +194,15 @@ async function loadSelected() {
     ...darkLayout, yaxis: { ...darkLayout.yaxis, title: 'Hours' },
     title: { text: 'Cumulative Time vs Block Number', font: { size: 13, color: '#8b949e' } },
   }, { responsive: true });
+
+  if (appTraces.length) {
+    Plotly.newPlot('app-chart', appTraces, {
+      ...darkLayout, yaxis: { ...darkLayout.yaxis, title: 'Blocks/sec' },
+      title: { text: 'App Throughput vs Block Number', font: { size: 13, color: '#8b949e' } },
+    }, { responsive: true });
+  } else {
+    document.getElementById('app-chart').innerHTML = '<div style="color:#8b949e;text-align:center;padding:40px">No app progress data</div>';
+  }
 
   // Milestones table
   const tbl = document.getElementById('milestones');
