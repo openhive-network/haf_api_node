@@ -21,7 +21,9 @@
   .progress-bar { flex: 1; height: 14px; background: #21262d; border-radius: 3px; overflow: hidden; }
   .progress-fill { height: 100%; background: #1f6feb; border-radius: 3px; transition: width 0.5s; }
   .progress-pct { width: 45px; text-align: right; color: #8b949e; }
-  .app-rate { width: 90px; text-align: right; color: #3fb950; font-size: 0.9em; }
+  .app-rate { width: 120px; text-align: right; color: #3fb950; font-size: 0.9em; }
+  .app-rate.stale { color: #d29922; }
+  .stale-bar { background: #d29922 !important; opacity: 0.5; }
   .container-row { display: flex; gap: 8px; margin-bottom: 2px; font-size: 0.85em; }
   .container-row .cname { color: #c9d1d9; width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .healthy { color: #3fb950; }
@@ -72,14 +74,25 @@ async function refresh() {
     grid.innerHTML = data.map(d => {
       const r = d.run, s = d.sample || {};
       const headBlock = s.block_num;
+      const sampleTs = s.ts ? new Date(s.ts).getTime() : 0;
       const apps = (d.apps || []).map(a => {
         const pct = headBlock ? Math.min(100, (a.current_block_num / headBlock * 100)).toFixed(1) : 0;
-        const rate = a.blocks_per_sec != null ? fmtBps(a.blocks_per_sec) + ' blk/s' : '';
+        const appTs = a.ts ? new Date(a.ts).getTime() : 0;
+        const stale = sampleTs && appTs && (sampleTs - appTs > 120000); // >2 min older than latest sample
+        let rateText = '';
+        if (stale) {
+          rateText = `<span class="app-rate stale">stale (${ago(a.ts)})</span>`;
+        } else if (a.blocks_per_sec != null) {
+          rateText = `<span class="app-rate">${fmtBps(a.blocks_per_sec)} blk/s</span>`;
+        } else {
+          rateText = `<span class="app-rate"></span>`;
+        }
+        const barClass = stale ? 'progress-fill stale-bar' : 'progress-fill';
         return `<div class="progress-row">
           <span class="name">${a.app_name}</span>
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <div class="progress-bar"><div class="${barClass}" style="width:${pct}%"></div></div>
           <span class="progress-pct">${pct}%</span>
-          <span class="app-rate">${rate}</span>
+          ${rateText}
         </div>`;
       }).join('');
       const containers = (d.containers || []).map(c => {
