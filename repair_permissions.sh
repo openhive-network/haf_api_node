@@ -91,9 +91,9 @@ echo "Data directory:    $TOP_LEVEL_DATASET_MOUNTPOINT"
 echo ""
 
 # Default ownership for most directories
-# 1000:100 is hived:users inside the container
+# 2001:100 is hived:users inside the container
 echo "Setting ownership for general HAF directories..."
-chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT"
+chown -R 2001:100 "$TOP_LEVEL_DATASET_MOUNTPOINT"
 
 # PostgreSQL-specific ownership
 # 105:109 is postgres:postgres inside the container
@@ -111,7 +111,7 @@ fi
 # Log directories with specific ownership
 if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/logs" ]; then
   echo "Setting ownership for log directories..."
-  chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs"
+  chown -R 2001:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs"
   
   if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql" ]; then
     chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql"
@@ -139,16 +139,16 @@ if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense" ]; then
   # PCA and config directories use standard hived user
   if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/pca" ]; then
     echo "  Setting pca directory to hived user..."
-    chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/pca"
+    chown -R 2001:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/pca"
   fi
   
   # Pre-create config directory if missing (hivesense install downloads files here)
   mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config"
   echo "  Setting config directory to hived user..."
-  chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config"
-  
+  chown -R 2001:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config"
+
   # Set the parent directory
-  chown 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense"
+  chown 2001:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense"
 fi
 
 echo "Permission repair complete!"

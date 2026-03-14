@@ -12,7 +12,7 @@ fi
 # Create log file and make it readable for anyone
 touch "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/haf-api-node.log"
 chmod 666 "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/haf-api-node.log"
-chown 1000:100 "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/haf-api-node.log"
+chown 2001:100 "${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/haf-api-node.log"
 
 {
   /haf-api-node/ci/scripts/set-up-stack.sh
