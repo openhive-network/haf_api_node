@@ -26,9 +26,13 @@
 </head>
 <body>
 <h1>HAF Replay Comparison</h1>
+<div style="margin-bottom:8px"><a href="/state" style="color:#58a6ff;font-size:0.85em">Live status</a></div>
 <div class="controls">
   <select id="runs" multiple></select>
-  <button onclick="loadSelected()">Compare</button>
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <button onclick="loadSelected()">Compare</button>
+    <button onclick="deleteSelected()" style="background:#da3633">Delete Selected</button>
+  </div>
   <div class="smoothing">
     <label>Smoothing window:</label>
     <input type="number" id="smooth" value="20" min="1" max="200">
@@ -219,6 +223,20 @@ async function loadSelected() {
 
   btn.textContent = 'Compare';
   btn.disabled = false;
+}
+
+async function deleteSelected() {
+  const sel = document.getElementById('runs');
+  const selected = Array.from(sel.selectedOptions);
+  if (!selected.length) return;
+  const names = selected.map(o => o.textContent).join('\n');
+  if (!confirm(`Delete ${selected.length} run(s) and all their data?\n\n${names}`)) return;
+  for (const opt of selected) {
+    await fetch(`/api/runs/${opt.value}`, { method: 'DELETE' });
+  }
+  // Reload run list
+  sel.innerHTML = '';
+  await init();
 }
 
 init();

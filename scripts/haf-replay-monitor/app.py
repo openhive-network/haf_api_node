@@ -48,6 +48,14 @@ def create_run():
         return jsonify({"id": cur.fetchone()[0]}), 201
 
 
+@app.route("/api/runs/<int:rid>", methods=["DELETE"])
+def delete_run(rid):
+    with get_db() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM runs WHERE id = %s", (rid,))
+        conn.commit()
+        return jsonify({"deleted": cur.rowcount})
+
+
 @app.route("/api/runs/<int:rid>", methods=["PUT"])
 def update_run(rid):
     d = request.json
