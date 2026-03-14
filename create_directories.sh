@@ -137,8 +137,8 @@ elif [ -f ./repair_permissions.sh ]; then
 else
   echo "Warning: repair_permissions.sh not found. Setting basic permissions..."
   # Basic permission setting if repair_permissions.sh doesn't exist
-  # 1000:100 is hived:users inside the container
-  chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT"
+  # 2001:100 is hived:users inside the container
+  chown -R 2001:100 "$TOP_LEVEL_DATASET_MOUNTPOINT"
   
   # 105:109 is postgres:postgres inside the container
   chown -R 105:109 "$TOP_LEVEL_DATASET_MOUNTPOINT/haf_db_store"
@@ -153,10 +153,10 @@ else
   
   # PCA and config use hived user
   if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/pca" ]; then
-    chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/pca"
+    chown -R 2001:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/pca"
   fi
   if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config" ]; then
-    chown -R 1000:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config"
+    chown -R 2001:100 "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/config"
   fi
 fi
 
