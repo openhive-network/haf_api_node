@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HAF Replay Comparison</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; background: #0d1117; color: #c9d1d9; padding: 20px; }
+  h1 { margin-bottom: 8px; color: #58a6ff; font-size: 1.4em; }
+  .controls { margin-bottom: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  select { background: #161b22; color: #c9d1d9; border: 1px solid #30363d; border-radius: 4px; padding: 6px 8px; font-size: 0.9em; min-width: 300px; }
+  select[multiple] { height: 120px; }
+  button { background: #1f6feb; color: #fff; border: none; border-radius: 4px; padding: 8px 16px; cursor: pointer; font-size: 0.9em; }
+  button:hover { background: #388bfd; }
+  .charts { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .chart-box { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 0.85em; }
+  th, td { padding: 6px 10px; text-align: right; border-bottom: 1px solid #30363d; }
+  th { color: #8b949e; text-transform: uppercase; font-size: 0.8em; }
+  th:first-child, td:first-child { text-align: left; }
+  .plotly-chart { width: 100%; height: 400px; }
+  .smoothing { display: flex; align-items: center; gap: 8px; font-size: 0.85em; color: #8b949e; }
+  .smoothing input { width: 60px; background: #161b22; color: #c9d1d9; border: 1px solid #30363d; border-radius: 4px; padding: 4px; }
+</style>
+</head>
+<body>
+<h1>HAF Replay Comparison</h1>
+<div class="controls">
+  <select id="runs" multiple></select>
+  <button onclick="loadSelected()">Compare</button>
+  <div class="smoothing">
+    <label>Smoothing window:</label>
+    <input type="number" id="smooth" value="20" min="1" max="200">
+    <span>samples</span>
+  </div>
+</div>
+<div class="charts">
+  <div class="chart-box"><div id="bps-chart" class="plotly-chart"></div></div>
+  <div class="chart-box"><div id="time-chart" class="plotly-chart"></div></div>
+  <div class="chart-box"><h3 style="color:#8b949e;margin-bottom:8px">Time to Milestone</h3><table id="milestones"><thead><tr><th>Run</th></tr></thead><tbody></tbody></table></div>
+</div>
+<script>
+const MILESTONES = [1e6, 5e6, 10e6, 20e6, 40e6, 60e6, 80e6, 96e6];
+const COLORS = ['#58a6ff','#3fb950','#f0883e','#f85149','#a371f7','#d29922','#79c0ff','#56d364'];
+let runsData = {};
+
+async function init() {
+  const resp = await fetch('/api/runs');
+  const runs = await resp.json();
+  const sel = document.getElementById('runs');
+  runs.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.id;
+    const status = r.is_active ? ' [ACTIVE]' : '';
+    const date = new Date(r.start_time).toLocaleDateString();
+    opt.textContent = `${r.server} — ${r.branch || '?'} — ${r.config_desc || ''} (${date})${status}`;
+    sel.appendChild(opt);
+  });
+}
+
+function smooth(arr, window) {
+  if (window <= 1) return arr;
+  const out = [];
+  for (let i = 0; i < arr.length; i++) {
+    const start = Math.max(0, i - Math.floor(window/2));
+    const end = Math.min(arr.length, i + Math.ceil(window/2));
+    let sum = 0, count = 0;
+    for (let j = start; j < end; j++) {
+      if (arr[j] != null) { sum += arr[j]; count++; }
+    }
+    out.push(count > 0 ? sum / count : null);
+  }
+  return out;
+}
+
+async function loadSelected() {
+  const sel = document.getElementById('runs');
+  const ids = Array.from(sel.selectedOptions).map(o => o.value);
+  if (!ids.length) return;
+
+  const window = parseInt(document.getElementById('smooth').value) || 20;
+  const bpsTraces = [];
+  const timeTraces = [];
+  const milestoneRows = {};
+
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    const label = sel.querySelector(`option[value="${id}"]`).textContent;
+    const resp = await fetch(`/api/runs/${id}/samples`);
+    const samples = await resp.json();
+    if (!samples.length) continue;
+
+    const blocks = samples.map(s => s.block_num);
+    const bps = samples.map(s => s.blocks_per_sec);
+    const smoothBps = smooth(bps, window);
+
+    // Cumulative time from first sample
+    const t0 = new Date(samples[0].ts).getTime();
+    const cumTime = samples.map(s => (new Date(s.ts).getTime() - t0) / 3600000); // hours
+
+    bpsTraces.push({
+      x: blocks, y: smoothBps, name: label, type: 'scatter', mode: 'lines',
+      line: { color: COLORS[i % COLORS.length], width: 1.5 },
+    });
+    timeTraces.push({
+      x: blocks, y: cumTime, name: label, type: 'scatter', mode: 'lines',
+      line: { color: COLORS[i % COLORS.length], width: 1.5 },
+    });
+
+    // Milestones
+    milestoneRows[label] = {};
+    for (const m of MILESTONES) {
+      const s = samples.find(s => s.block_num >= m);
+      if (s) {
+        const hours = (new Date(s.ts).getTime() - t0) / 3600000;
+        milestoneRows[label][m] = hours;
+      }
+    }
+  }
+
+  const darkLayout = {
+    paper_bgcolor: '#161b22', plot_bgcolor: '#161b22',
+    font: { color: '#c9d1d9', size: 11 },
+    xaxis: { gridcolor: '#30363d', title: 'Block Number' },
+    yaxis: { gridcolor: '#30363d' },
+    legend: { orientation: 'h', y: -0.15 },
+    margin: { t: 30, b: 60 },
+  };
+
+  Plotly.newPlot('bps-chart', bpsTraces, {
+    ...darkLayout, yaxis: { ...darkLayout.yaxis, title: 'Blocks/sec' },
+    title: { text: 'Throughput vs Block Number', font: { size: 13, color: '#8b949e' } },
+  }, { responsive: true });
+
+  Plotly.newPlot('time-chart', timeTraces, {
+    ...darkLayout, yaxis: { ...darkLayout.yaxis, title: 'Hours' },
+    title: { text: 'Cumulative Time vs Block Number', font: { size: 13, color: '#8b949e' } },
+  }, { responsive: true });
+
+  // Milestones table
+  const tbl = document.getElementById('milestones');
+  const labels = Object.keys(milestoneRows);
+  let hdr = '<tr><th>Run</th>' + MILESTONES.map(m => `<th>${(m/1e6).toFixed(0)}M</th>`).join('') + '</tr>';
+  let body = labels.map(label => {
+    const cells = MILESTONES.map(m => {
+      const h = milestoneRows[label][m];
+      return `<td>${h != null ? h.toFixed(2) + 'h' : '—'}</td>`;
+    }).join('');
+    return `<tr><td>${label}</td>${cells}</tr>`;
+  }).join('');
+  tbl.innerHTML = `<thead>${hdr}</thead><tbody>${body}</tbody>`;
+}
+
+init();
+</script>
+</body>
+</html>

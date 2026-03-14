@@ -1,0 +1,26 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: benchdb
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+    ports:
+      - "5433:5432"
+    volumes:
+      - benchdb_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    restart: unless-stopped
+
+  web:
+    build: .
+    ports:
+      - "8082:8082"
+    environment:
+      DATABASE_URL: "postgresql://bench:bench@db:5432/benchdb"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  benchdb_data:
