@@ -716,12 +716,6 @@ else
         mv .env.tmp .env
     fi
 
-    # Create a snapshot of the ZFS pool
-    # (specify --force to prevent snapshot_zfs_datasets from erroring out
-    # if the blockchain and shared_memory write times are too far apart,
-    # something that can easily happen when copying the shared memory file)
-    ./snapshot_zfs_datasets.sh --force $SNAPSHOT_NAME
-
     # Fix data directory ownership and permissions for hived (block_log may have been copied in as root)
     chown -R $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/blockchain/ 2>/dev/null
     chmod -R u+rw /$ZPOOL/$TOP_LEVEL_DATASET/blockchain/ 2>/dev/null
@@ -731,6 +725,7 @@ else
     # Stage 1: Start just HAF and wait for it to enter LIVE sync.
     # By starting HAF before apps, no app indexes get registered, so HAF
     # skips the REINDEX phase and enters LIVE quickly.
+    # Once in LIVE sync, HAF core indexes have been restored.
     echo "Starting HAF and waiting for it to enter live sync..."
     docker compose up -d haf
 
@@ -750,12 +745,28 @@ else
     done
     echo "HAF has entered LIVE sync."
 
+    # Stage 2: Stop HAF cleanly and create ZFS snapshot.
+    # Taking the snapshot after LIVE sync means HAF core indexes are already
+    # restored, so rollbacks to this snapshot won't need to rebuild them
+    # (which takes 30+ minutes on the large hafd.operations/transactions/
+    # account_operations tables).
+    echo "Stopping HAF for snapshot (indexes are now built)..."
+    echo "Checkpointing the database before shutdown..."
+    docker compose exec -T haf psql -U haf_admin -d haf_block_log -c "CHECKPOINT;"
+    docker compose down
+
+    # Create a snapshot of the ZFS pool
+    # (specify --force to prevent snapshot_zfs_datasets from erroring out
+    # if the blockchain and shared_memory write times are too far apart,
+    # something that can easily happen when copying the shared memory file)
+    ./snapshot_zfs_datasets.sh --force $SNAPSHOT_NAME
+
     # Repair ownership/permissions for all app data directories (hivesense config,
     # ollama, pgdata, etc.) which may be root-owned after ZFS rollback or snapshot restore
     echo "Repairing data directory permissions..."
     ./repair_permissions.sh
 
-    # Stage 2: Bring up the rest of the stack
+    # Stage 3: Bring up the full stack
     docker compose up -d
     rm startup.temp
     echo "Startup Complete"
