@@ -47,7 +47,7 @@ echo -e "\e[0Ksection_end:$(date +%s):check\r\e[0K"
 echo -e "\e[0Ksection_start:$(date +%s):prepare[collapsed=true]\r\e[0KPreparing replay directory and configuring stack..."
 echo "Hardlinking the block_log..."
 mkdir -p "${REPLAY_DIRECTORY:?}/..${BLOCK_LOG_SOURCE_DIR:?}/"
-chown 1000:1000 "${REPLAY_DIRECTORY:?}/..${BLOCK_LOG_SOURCE_DIR:?}/"
+chown ${HIVED_UID:-1000}:${HIVED_UID:-1000} "${REPLAY_DIRECTORY:?}/..${BLOCK_LOG_SOURCE_DIR:?}/"
 mkdir -p "${REPLAY_DIRECTORY:?}/blockchain"
 cp -u "${BLOCK_LOG_SOURCE_DIR:?}/block_log" "${REPLAY_DIRECTORY:?}/..${BLOCK_LOG_SOURCE_DIR:?}/block_log"
 ln -f "${REPLAY_DIRECTORY:?}/..${BLOCK_LOG_SOURCE_DIR:?}/block_log" "${REPLAY_DIRECTORY:?}/blockchain/block_log"
@@ -59,7 +59,7 @@ fi
 cd "${REPLAY_DIRECTORY:?}/blockchain"
 sha256sum block_log > sha256s
 cd -
-chown -R 1000:1000 "${REPLAY_DIRECTORY:?}/blockchain"
+chown -R ${HIVED_UID:-1000}:${HIVED_UID:-1000} "${REPLAY_DIRECTORY:?}/blockchain"
 /haf-api-node/ci/scripts/set-up-stack.sh
 if [[ -x "${ADDITIONAL_CONFIGURATION_SCRIPT}" ]]
 then
