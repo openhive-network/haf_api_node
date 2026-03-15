@@ -41,8 +41,8 @@ services:
   haf:
     environment:
       FAKETIME:
-      LD_PRELOAD: "/home/hived_admin/hive_base_config/faketime/src/libfaketime.so.1"
-      OVERRIDE_LD_PRELOAD: "/home/hived_admin/hive_base_config/faketime/src/libfaketime.so.1"
+      LD_PRELOAD: "/home/hived/hive_base_config/faketime/src/libfaketime.so.1"
+      OVERRIDE_LD_PRELOAD: "/home/hived/hive_base_config/faketime/src/libfaketime.so.1"
       FAKETIME_DONT_FAKE_MONOTONIC: 1
       FAKETIME_DONT_RESET: 1
       TZ: "UTC"
