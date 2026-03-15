@@ -43,6 +43,17 @@ for arg in "$@"; do
         --skip-disk-size-reqt)
             SKIP_DISK_SIZE_REQT=1
             ;;
+        --restore)
+            if [[ -f .env.backup ]]; then
+                cp .env.backup .env
+                echo "Restored .env from .env.backup"
+                rm -f startup.temp
+                exit 0
+            else
+                echo "No .env.backup found. Nothing to restore."
+                exit 1
+            fi
+            ;;
         --help)
             echo "Usage: assisted_startup.sh [OPTIONS]"
             echo ""
@@ -55,6 +66,7 @@ for arg in "$@"; do
             echo "  --no-autoswap: Do not automatically grow swap"
             echo "  --replay: Replay the blockchain, use only on first run, and not rerun if this script exits before snapshot"
             echo "  --skip-disk-size-reqt: Do not stop the script if less than 4T disk partitions found"
+            echo "  --restore: Restore .env from backup (undo changes made by this script)"
             echo "  --snapshot-name NAME: Name of the snapshot to use. default first_sync"
             echo ""
             echo "Memory requirements:"
@@ -75,6 +87,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 touch startup.temp
+cp .env .env.backup
 
 # Get or remove data if rerunning the script after a premature exit
 
