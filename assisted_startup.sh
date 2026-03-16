@@ -356,7 +356,12 @@ if [[ $? == 0 ]]; then
 fi
 
 if [[ $REPLAY == 1 ]]; then
-    sed -i 's/^ARGUMENTS=""/ARGUMENTS="--replay-blockchain"/g' .env
+    current_args=$(grep "^ARGUMENTS=" .env | sed 's/ARGUMENTS=//' | sed 's/^"//' | sed 's/"$//')
+    if [[ -z "$current_args" || "$current_args" == '""' || "$current_args" == "" ]]; then
+        sed -i 's/^ARGUMENTS=""/ARGUMENTS="--replay-blockchain"/g' .env
+    elif ! echo "$current_args" | grep -q -- "--replay-blockchain"; then
+        sed -i "s/^ARGUMENTS=\"/ARGUMENTS=\"--replay-blockchain /" .env
+    fi
 fi
 
 if docker compose ps | grep $SERVICE_NAME | grep Up > /dev/null 2>&1; then
@@ -515,11 +520,14 @@ else
                 added_lines="${added_lines}HAF_ROCKSDB_DIRECTORY\n"
             fi
 
-            # Add rocksdb path to ARGUMENTS
+            # Add rocksdb path to ARGUMENTS (only if not already present)
             current_args=$(grep "^ARGUMENTS=" .env | sed 's/ARGUMENTS=//' | sed 's/^"//' | sed 's/"$//')
             rocksdb_arg="--comments-rocksdb-path=/home/hived/rocksdb_dir/comments-rocksdb-storage"
 
-            if [[ -z "$current_args" || "$current_args" == '""' || "$current_args" == "" ]]; then
+            if echo "$current_args" | grep -q -- "--comments-rocksdb-path"; then
+                # Already has rocksdb path, don't add again
+                new_args="\"${current_args}\""
+            elif [[ -z "$current_args" || "$current_args" == '""' || "$current_args" == "" ]]; then
                 new_args="\"$rocksdb_arg\""
             else
                 new_args="\"${current_args} ${rocksdb_arg}\""
