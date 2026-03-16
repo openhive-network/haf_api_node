@@ -265,7 +265,7 @@ fi
 # Save mode to temp file for reruns
 echo "HIVE_MODE=$HIVE_MODE" >> startup.temp
 echo "SERVICE_NAME=$SERVICE_NAME" >> startup.temp
-echo "SYNC_MESSAGE=\"$SYNC_MESSAGE\"" >> startup.temp
+printf 'SYNC_MESSAGE=%q\n' "$SYNC_MESSAGE" >> startup.temp
 
 zfs list | grep $ZPOOL &> /dev/null
 if [[ $? == 1 ]]; then
@@ -497,8 +497,8 @@ else
                 original_HAF_SHM=$(grep "^HAF_SHM_DIRECTORY=" .env)
                 modified_HAF_SHM="HAF_SHM_DIRECTORY=\"/mnt/haf_shared_mem\""
                 sed -i "s#^$original_HAF_SHM#$modified_HAF_SHM#g" .env
-                echo "original_HAF_SHM=$original_HAF_SHM" >> startup.temp
-                echo "modified_HAF_SHM=$modified_HAF_SHM" >> startup.temp
+                printf 'original_HAF_SHM=%q\n' "$original_HAF_SHM" >> startup.temp
+                printf 'modified_HAF_SHM=%q\n' "$modified_HAF_SHM" >> startup.temp
                 echo "modified_HAF_SHM_EXISTS=1" >> startup.temp
             else
                 # Variable doesn't exist, add it
@@ -511,7 +511,7 @@ else
             if grep -q "^HAF_ROCKSDB_DIRECTORY=" .env; then
                 # Variable exists, save original
                 original_HAF_ROCKSDB=$(grep "^HAF_ROCKSDB_DIRECTORY=" .env)
-                echo "original_HAF_ROCKSDB=$original_HAF_ROCKSDB" >> startup.temp
+                printf 'original_HAF_ROCKSDB=%q\n' "$original_HAF_ROCKSDB" >> startup.temp
                 echo "HAF_ROCKSDB_EXISTS=1" >> startup.temp
             else
                 # Variable doesn't exist, add it
@@ -539,20 +539,20 @@ else
             echo "ARGUMENTS=${new_args}" >> .env.tmp
             mv .env.tmp .env
 
-            echo "original_rocksdb_arguments=$original_rocksdb_arguments" >> startup.temp
+            printf 'original_rocksdb_arguments=%q\n' "$original_rocksdb_arguments" >> startup.temp
             echo "added_rocksdb_arg=1" >> startup.temp
             added_rocksdb_arg="1"
         fi
 
-        echo "original_line=$original_line" >> startup.temp
-        echo "modified_line=$modified_line" >> startup.temp
+        printf 'original_line=%q\n' "$original_line" >> startup.temp
+        printf 'modified_line=%q\n' "$modified_line" >> startup.temp
 
         # Save what lines we added vs modified
         echo "added_lines=$added_lines" >> startup.temp
 
         if [[ $original_arguments != "" ]]; then
-            echo "original_arguments=$original_arguments" >> startup.temp
-            echo "modified_arguments=$modified_arguments" >> startup.temp
+            printf 'original_arguments=%q\n' "$original_arguments" >> startup.temp
+            printf 'modified_arguments=%q\n' "$modified_arguments" >> startup.temp
         fi
 
     fi
