@@ -224,3 +224,8 @@ DATASET_LIST="${DATASET_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 DATASET_LIST="${DATASET_LIST} ${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 
 zfs list ${DATASET_LIST}
+
+# ZFS rollback resets file ownership to snapshot state, which may not match
+# current container UIDs. Repair permissions to ensure containers can start cleanly.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"$SCRIPT_DIR/repair_permissions.sh" --zpool "$ZPOOL" --top-level-dataset "$TOP_LEVEL_DATASET"
