@@ -71,17 +71,41 @@ echo ""
 # --- HAF (hived) ---
 echo "── HAF (hived) ──"
 local HAF="${PROJECT}-haf-1"
-local HAF_PROFILE
-HAF_PROFILE=$(docker logs "$HAF" 2>&1 | grep "PROFILE") || true
+
+# Use persisted hived logs (survive container restarts) — fall back to docker logs
+local HAF_DATA_DIR
+HAF_DATA_DIR=$(docker inspect "$HAF" --format '{{range .Mounts}}{{if eq .Destination "/home/hived/datadir"}}{{.Source}}{{end}}{{end}}' 2>/dev/null) || true
+local HAF_PROFILE=""
+if [[ -n "$HAF_DATA_DIR" ]] && [[ -d "$HAF_DATA_DIR/logs/hived/default" ]]; then
+  # Grep all rotated log files (sorted by name = chronological)
+  HAF_PROFILE=$(grep "PROFILE" "$HAF_DATA_DIR"/logs/hived/default/default.log* 2>/dev/null | sed 's/^[^:]*://' | sort) || true
+fi
+if [[ -z "$HAF_PROFILE" ]]; then
+  # Fallback to docker logs
+  HAF_PROFILE=$(docker logs "$HAF" 2>&1 | grep "PROFILE") || true
+fi
 
 if [[ -z "$HAF_PROFILE" ]]; then
   echo "  No PROFILE lines found"
 else
+  # Find the last full replay cycle: last REINDEX entry marks the start
+  local last_reindex reindex_ts replay_profile
+  last_reindex=$(echo "$HAF_PROFILE" | grep "Entered REINDEX sync from start state" | tail -1) || true
+  if [[ -n "$last_reindex" ]]; then
+    reindex_ts=$(echo "$last_reindex" | grep -oP '^\S+')
+    # Filter to only lines from this replay cycle onwards
+    replay_profile=$(echo "$HAF_PROFILE" | sed -n "/$reindex_ts/,\$p")
+    printf "  %-30s %s\n" "Replay started:" "$reindex_ts"
+  else
+    replay_profile="$HAF_PROFILE"
+  fi
+
   local p2p_line live_line entering_live idx_line ts secs block
-  p2p_line=$(echo "$HAF_PROFILE" | grep "Entered P2P sync" | tail -1) || true
-  live_line=$(echo "$HAF_PROFILE" | grep "Entered LIVE sync" | tail -1) || true
-  entering_live=$(echo "$HAF_PROFILE" | grep "Entering LIVE sync" | tail -1) || true
-  idx_line=$(echo "$HAF_PROFILE" | grep "Restored HAF table indexes" | tail -1) || true
+  # Use first occurrence after REINDEX (the real replay), not restarts
+  p2p_line=$(echo "$replay_profile" | grep "Entered P2P sync" | head -1) || true
+  live_line=$(echo "$replay_profile" | grep "Entered LIVE sync" | head -1) || true
+  entering_live=$(echo "$replay_profile" | grep "Entering LIVE sync" | head -1) || true
+  idx_line=$(echo "$replay_profile" | grep "Restored HAF table indexes" | head -1) || true
 
   if [[ -n "$p2p_line" ]]; then
     ts=$(echo "$p2p_line" | grep -oP '^\S+')
