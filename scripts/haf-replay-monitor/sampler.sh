@@ -127,6 +127,9 @@ while true; do
   # PG database size
   PG_SIZE=$(query_pg "$HAF_CONTAINER" "SELECT pg_database_size('haf_block_log')")
 
+  # HAF container start time
+  HAF_STARTED=$(docker inspect "$HAF_CONTAINER" --format '{{.State.StartedAt}}' 2>/dev/null || true)
+
   # Build payload
   PAYLOAD=$(cat <<ENDJSON
 {
@@ -134,6 +137,7 @@ while true; do
   "lib": ${LIB:-null},
   "memory_rss": ${MEM_BYTES:-null},
   "pg_size": ${PG_SIZE:-null},
+  "haf_started_at": "${HAF_STARTED:-}",
   "app_progress": $APP_JSON,
   "containers": $CTR_JSON
 }

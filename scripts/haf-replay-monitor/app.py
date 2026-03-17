@@ -146,6 +146,14 @@ def push_sample(rid):
                     (rid, cs["name"], cs.get("status"), cs.get("health")),
                 )
 
+        # Update haf_started_at on the run if provided
+        haf_started = d.get("haf_started_at")
+        if haf_started:
+            cur.execute(
+                "UPDATE runs SET haf_started_at = %s WHERE id = %s",
+                (haf_started, rid),
+            )
+
         conn.commit()
         return jsonify({"blocks_per_sec": bps}), 201
 

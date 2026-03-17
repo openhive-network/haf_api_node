@@ -102,8 +102,11 @@ async function refresh() {
           <span class="${hc}">${c.health || c.status || '?'}</span>
         </div>`;
       }).join('');
+      const startedAt = r.start_time ? new Date(r.start_time).toLocaleString() : '—';
+      const hafUp = r.haf_started_at ? ago(r.haf_started_at) : '—';
       return `<div class="card">
         <h2>${r.server} ${r.config_desc ? '— ' + r.config_desc : ''}</h2>
+        <div style="font-size:0.8em;color:#8b949e;margin-bottom:8px">Started ${startedAt} · HAF up since ${hafUp}</div>
         <div class="info">
           <span class="label">Branch</span><span class="value">${r.branch || '—'}</span>
           <span class="label">HAF Commit</span><span class="value">${r.haf_commit ? r.haf_commit.slice(0,8) : '—'}</span>
