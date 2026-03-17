@@ -62,14 +62,9 @@ if [[ -z "$PROJECT" ]]; then
   return 1
 fi
 
-echo "═══════════════════════════════════════════════════════════════"
-echo "  Replay Report: $(hostname -s) / $PROJECT"
-echo "  $(date '+%Y-%m-%d %H:%M:%S %Z')"
-echo "═══════════════════════════════════════════════════════════════"
+echo "Replay Report: $(hostname -s) / $PROJECT  ($(date '+%Y-%m-%d %H:%M:%S %Z'))"
 echo ""
-
-# --- HAF (hived) ---
-echo "── HAF (hived) ──"
+echo "HAF (hived)"
 local HAF="${PROJECT}-haf-1"
 
 # Use persisted hived logs (survive container restarts) — fall back to docker logs
@@ -137,9 +132,7 @@ else
 fi
 
 echo ""
-echo "── Applications ──"
-printf "  %-22s %-10s %-16s %-16s %s\n" "App" "Status" "Replay Time" "Block" "Rate"
-echo "  ──────────────────── ────────── ──────────────── ──────────────── ─────────"
+echo "Applications"
 
 container_elapsed() {
   local started
@@ -160,7 +153,7 @@ report_haf_app() {
   local name=$1 container="${PROJECT}-$2"
 
   if ! docker ps --filter "name=^${container}$" --format '{{.Names}}' 2>/dev/null | grep -q .; then
-    printf "  %-22s %-10s\n" "$name" "stopped"
+    echo "  $name: stopped"
     return
   fi
 
@@ -173,7 +166,7 @@ report_haf_app() {
   fi
 
   if [[ -z "$stage_lines" ]]; then
-    printf "  %-22s %-10s\n" "$name" "no data"
+    echo "  $name: no data"
     return
   fi
 
@@ -184,7 +177,7 @@ report_haf_app() {
     local dur block_num
     dur=$(echo "$live_line" | grep -oP "after \K[\d:]+" | head -1) || true
     block_num=$(echo "$live_line" | grep -oP "block: \K\d+" | head -1) || true
-    printf "  %-22s %-10s %-16s %-16s\n" "$name" "LIVE" "${dur:-?}" "$(fmt_number "${block_num:-0}")"
+    echo "  $name: LIVE in ${dur:-?}, block $(fmt_number "${block_num:-0}")"
     return
   fi
 
@@ -195,7 +188,7 @@ report_haf_app() {
     cur_block=$(echo "$range_line" | grep -oP '\d+>' | tr -dc '0-9')
   fi
 
-  printf "  %-22s %-10s %-16s %-16s\n" "$name" "replaying" "$(container_elapsed "$container")" "$(fmt_number "${cur_block:-?}")"
+  echo "  $name: replaying $(container_elapsed "$container"), block $(fmt_number "${cur_block:-?}")"
 }
 
 # Hivemind
@@ -203,7 +196,7 @@ report_hivemind() {
   local name=$1 container="${PROJECT}-$2"
 
   if ! docker ps --filter "name=^${container}$" --format '{{.Names}}' 2>/dev/null | grep -q .; then
-    printf "  %-22s %-10s\n" "$name" "stopped"
+    echo "  $name: stopped"
     return
   fi
 
@@ -220,7 +213,7 @@ report_hivemind() {
     local dur block_num
     dur=$(echo "$live_line" | grep -oP 'processing time: \K[^|]+' | sed 's/ *$//') || true
     block_num=$(echo "$live_line" | grep -oP 'block: \K\d+' | head -1) || true
-    printf "  %-22s %-10s %-16s %-16s\n" "$name" "LIVE" "${dur:-?}" "$(fmt_number "${block_num:-0}")"
+    echo "  $name: LIVE in ${dur:-?}, block $(fmt_number "${block_num:-0}")"
     return
   fi
 
@@ -231,7 +224,7 @@ report_hivemind() {
     rate=$(echo "$last_got" | grep -oP '\(\K\d+/s') || true
   fi
 
-  printf "  %-22s %-10s %-16s %-16s %s\n" "$name" "replaying" "$(container_elapsed "$container")" "$(fmt_number "${cur_block:-?}")" "${rate:-}"
+  echo "  $name: replaying $(container_elapsed "$container"), block $(fmt_number "${cur_block:-?}")${rate:+ ($rate)}"
 }
 
 report_hivemind  "Hivemind"           "hivemind-block-processing-1"
@@ -240,8 +233,6 @@ report_haf_app   "Reputation Tracker" "reputation-tracker-block-processing-1"
 report_haf_app   "NFT Tracker"        "nft-tracker-block-processing-1"
 report_haf_app   "Hivesense Sync"     "hivesense-sync-1"
 
-echo ""
-echo "═══════════════════════════════════════════════════════════════"
 }
 # END_REPORT
 
