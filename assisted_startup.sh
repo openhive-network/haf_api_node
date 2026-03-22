@@ -19,6 +19,19 @@ SYNC_MESSAGE=""  # Will be set to appropriate sync detection string
 RAMDISK_MIN_MEMORY_GB=$((RAMDISK_SIZE_GB + 33))  # Minimum RAM for ramdisk approach
 REDUCE_WRITEBACKS_MIN_MEMORY_GB=35                # Minimum RAM for reduce_writebacks approach
 
+# Logging
+LOGFILE="${LOGFILE:-/tmp/assisted_startup.log}"
+if [[ -f "$LOGFILE" ]]; then
+    mv "$LOGFILE" "${LOGFILE}.prev"
+fi
+log() {
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+    echo "$msg" >> "$LOGFILE"
+    if [[ $VERBOSE == 1 ]]; then
+        echo "$msg"
+    fi
+}
+
 for arg in "$@"; do
     case $arg in
         --no-ramdisk)
@@ -42,6 +55,9 @@ for arg in "$@"; do
             ;;
         --skip-disk-size-reqt)
             SKIP_DISK_SIZE_REQT=1
+            ;;
+        --verbose)
+            VERBOSE=1
             ;;
         --restore)
             if [[ -f .env.backup ]]; then
@@ -68,6 +84,7 @@ for arg in "$@"; do
             echo "  --skip-disk-size-reqt: Do not stop the script if less than 4T disk partitions found"
             echo "  --restore: Restore .env from backup (undo changes made by this script)"
             echo "  --snapshot-name NAME: Name of the snapshot to use. default first_sync"
+            echo "  --verbose: Print log messages to stdout (log always written to $LOGFILE)"
             echo ""
             echo "Memory requirements:"
             echo "  - Ramdisk optimization: ${RAMDISK_MIN_MEMORY_GB}GB+ RAM"
@@ -86,12 +103,16 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+log "=== assisted_startup.sh starting === args: $*"
+
 touch startup.temp
 cp .env .env.backup
+log "Backed up .env to .env.backup"
 
 # Get or remove data if rerunning the script after a premature exit
 
 if [[ $REPLAY == 1 ]]; then
+    log "Replay mode: removing startup.temp"
     rm -f startup.temp
 else
     # Source startup.temp if it exists, this will restore mode variables
@@ -101,6 +122,7 @@ else
 fi
 
 if command -v zfs >/dev/null 2>&1; then
+    log "Prerequisites: zfs=$(which zfs) docker=$(which docker)"
     echo "Verifying Prerequisites..."
 else
     echo "ZFS is not installed on your system."
@@ -118,11 +140,13 @@ fi
 if [[ $SNAPSHOT_NAME == "" ]]; then
     SNAPSHOT_NAME="first_sync"
 fi
+log "SNAPSHOT_NAME=$SNAPSHOT_NAME"
 
 echo "SNAPSHOT_NAME=$SNAPSHOT_NAME" >> startup.temp
 
 if [[ $REPLAY == 1 && $SNAPSHOT_NAME == "first_sync" ]]; then
-    zfs list -H -o name -t snapshot | xargs -n1 zfs destroy -r first_sync
+    log "Destroying old first_sync snapshots..."
+    zfs list -H -o name -t snapshot | xargs -n1 zfs destroy -r first_sync 2>&1 | while read -r line; do log "  zfs destroy: $line"; done || true
 fi
 
 if [ ! -f .env ]; then
@@ -248,6 +272,11 @@ if [ ! -f .env ]; then
 fi
 
 source .env
+log "Sourced .env: ZPOOL=$ZPOOL TOP_LEVEL_DATASET=$TOP_LEVEL_DATASET"
+log "  COMPOSE_PROFILES=$COMPOSE_PROFILES"
+log "  ARGUMENTS=$(grep '^ARGUMENTS=' .env)"
+log "  HAF_VERSION=$HAF_VERSION HAFAH_VERSION=${HAFAH_VERSION:-default} HIVEMIND_VERSION=${HIVEMIND_VERSION:-default}"
+log "  HAF_SHM_DIRECTORY=${HAF_SHM_DIRECTORY:-<not set>} HAF_ROCKSDB_DIRECTORY=${HAF_ROCKSDB_DIRECTORY:-<not set>}"
 
 # Detect which mode we're in based on COMPOSE_PROFILES
 if [[ "$COMPOSE_PROFILES" == *"hive"* ]]; then
@@ -261,6 +290,7 @@ else
     SYNC_MESSAGE="PROFILE: Entered LIVE sync"
     echo "Detected HAF mode from profiles: $COMPOSE_PROFILES"
 fi
+log "Mode: HIVE_MODE=$HIVE_MODE SERVICE_NAME=$SERVICE_NAME"
 
 # Save mode to temp file for reruns
 echo "HIVE_MODE=$HIVE_MODE" >> startup.temp
@@ -349,26 +379,34 @@ if [[ $? == 1 ]]; then
     ./create_zfs_datasets.sh
 fi
 
+log "Checking for existing snapshot: ${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"
 zfs list -t snapshot "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}" &> /dev/null
 if [[ $? == 0 ]]; then
+    log "Snapshot found — exiting (nothing to do)"
     echo "Snapshot found. Nothing to do. Use --snapshot-name to specify a different snapshot."
     exit 0
 fi
+log "Snapshot not found — proceeding"
 
 if [[ $REPLAY == 1 ]]; then
     current_args=$(grep "^ARGUMENTS=" .env | sed 's/ARGUMENTS=//' | sed 's/^"//' | sed 's/"$//')
+    log "Replay arg injection: current_args=$current_args"
     if [[ -z "$current_args" || "$current_args" == '""' || "$current_args" == "" ]]; then
         sed -i 's/^ARGUMENTS=""/ARGUMENTS="--replay-blockchain"/g' .env
     elif ! echo "$current_args" | grep -q -- "--replay-blockchain"; then
         sed -i "s/^ARGUMENTS=\"/ARGUMENTS=\"--replay-blockchain /" .env
     fi
+    log "After injection: $(grep '^ARGUMENTS=' .env)"
 fi
 
+log "Docker compose status check for $SERVICE_NAME"
 if docker compose ps | grep $SERVICE_NAME | grep Up > /dev/null 2>&1; then
+    log "Docker compose already running — skipping setup"
     echo "Docker Compose is up and running."
 else
     echo "Setting Up Startup..."
     if [[ $original_line == "" ]]; then
+        log "original_line not set — entering fresh setup"
         # Optimize the system for replaying the blockchain
 
         physical_memory=$(free -g | awk '/^Mem:/{print $2}')
@@ -450,6 +488,8 @@ else
         echo "64G of memory is recommended, with at least 8G of swap"
         echo "This script will attempt to allocate aditional swap if needed"
 
+        log "Optimization: method=$OPTIMIZATION_METHOD physical_mem=${physical_memory}G free_mem=${free_memory}G swap=${swap_memory}G"
+
         # write variables to a temp file
         echo "remove_shared_mem=$remove_shared_mem" > startup.temp
         echo "OPTIMIZATION_METHOD=$OPTIMIZATION_METHOD" >> startup.temp
@@ -471,6 +511,7 @@ else
                 # Print the original and modified lines
                 echo "Intended Profiles: $original_line"
                 echo "Startup Profiles: $modified_line"
+                log "Profiles: original=$original_line modified=$modified_line"
             fi
             # We'll handle HAF_SHM_DIRECTORY outside the loop
             # since it might not exist in the file
@@ -481,6 +522,8 @@ else
                 echo "Using: $original_arguments"
                 echo "After Sync will use: $modified_arguments"
                 echo "If this isn't desired, manually change the arguments in .env before the sync is finished"
+                log "Arguments: original=$original_arguments"
+                log "Arguments: modified=$modified_arguments"
             fi
         done < .env
 
@@ -490,6 +533,7 @@ else
         mv .env.tmp .env
 
         # Handle optional HAF_SHM_DIRECTORY and HAF_ROCKSDB_DIRECTORY
+        log "Configuring SHM/RocksDB directories (optimization=$OPTIMIZATION_METHOD)"
         if [[ $OPTIMIZATION_METHOD == "ramdisk" ]]; then
             # Check if HAF_SHM_DIRECTORY exists
             if grep -q "^HAF_SHM_DIRECTORY=" .env; then
@@ -557,7 +601,9 @@ else
 
     fi
 
+    log "Starting docker compose up -d..."
     if ! docker compose up -d; then
+      log "ERROR: docker compose up -d failed"
       echo "Docker containers did not start successfully, aborting..."
       exit 1
     fi
@@ -620,6 +666,7 @@ while read -r line; do
         fi
     fi
     if [[ $line == *"$SYNC_MESSAGE"* ]]; then
+        log "LIVE SYNC DETECTED — entering shutdown and restore phase"
         echo "Detected *$SYNC_MESSAGE* in the output. Bringing down Docker Compose..."
         entered_livesync=1
         # Write Sync time to "haf.log" for tracking, as this log will get wiped on restart
@@ -630,9 +677,12 @@ while read -r line; do
             grep "max_mem=" startup.temp >> haf.log
             grep "max_swap=" startup.temp >> haf.log
         fi
+        log "Checkpointing database..."
         echo "Checkpointing the database before shutdown..."
         docker compose exec haf psql -U haf_admin -d haf_block_log -c "CHECKPOINT;"
+        log "Running docker compose down..."
         docker compose down
+        log "Docker compose down complete"
         break
     fi
 done < <(docker compose logs -f)
@@ -644,13 +694,17 @@ fi
 
 # prevent script completion if interupt sent to above loop
 
+log "Post-down docker check..."
 if docker compose ps | grep $SERVICE_NAME | grep Up >/dev/null 2>&1; then
+    log "WARNING: Docker compose still running after down — skipping restore phase"
     echo "Docker Compose is still running."
 else
+    log "Docker confirmed down — starting restore phase"
     # Load optimization method from startup.temp
     source startup.temp
 
     # Restore the original COMPOSE_PROFILES line
+    log "Restoring COMPOSE_PROFILES: $original_line"
     # Use grep -v and echo to avoid sed quoting issues
     grep -v "^COMPOSE_PROFILES=" .env > .env.tmp
     echo "${original_line}" >> .env.tmp
@@ -692,6 +746,7 @@ else
         # RocksDB (comments-rocksdb-storage) may end up on the ramdisk alongside
         # shared_memory.bin. Both must be copied back so the ZFS snapshot is
         # internally consistent (shared_memory.bin and RocksDB must agree on LIB).
+        log "Ramdisk cleanup: copying shared_memory.bin from ramdisk to ZFS..."
         echo "Copying shared_memory.bin from ramdisk to ZFS..."
         cp --sparse=always /mnt/haf_shared_mem/shared_memory.bin /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/
         chown $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/shared_memory.bin
@@ -726,17 +781,24 @@ else
 
     # Remove replay arguments
     if [[ $original_arguments != "" ]]; then
+        log "Restoring ARGUMENTS: $modified_arguments"
         # Use grep -v and echo to avoid sed quoting issues
         grep -v "^ARGUMENTS=" .env > .env.tmp
         echo "${modified_arguments}" >> .env.tmp
         mv .env.tmp .env
     fi
+    log "Restored .env: $(grep '^ARGUMENTS=' .env) | $(grep '^COMPOSE_PROFILES=' .env)"
 
     # Create a snapshot of the ZFS pool
     # (specify --force to prevent snapshot_zfs_datasets from erroring out
     # if the blockchain and shared_memory write times are too far apart,
     # something that can easily happen when copying the shared memory file)
-    ./snapshot_zfs_datasets.sh --force $SNAPSHOT_NAME
+    log "Creating snapshot: ./snapshot_zfs_datasets.sh --force $SNAPSHOT_NAME"
+    if ./snapshot_zfs_datasets.sh --force $SNAPSHOT_NAME 2>&1 | tee -a "$LOGFILE"; then
+        log "Snapshot created successfully"
+    else
+        log "ERROR: snapshot_zfs_datasets.sh failed with exit code $?"
+    fi
 
     # Fix data directory ownership and permissions for hived (block_log may have been copied in as root)
     chown -R $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/blockchain/ 2>/dev/null
@@ -747,6 +809,7 @@ else
     # Stage 1: Start just HAF and wait for it to enter LIVE sync.
     # By starting HAF before apps, no app indexes get registered, so HAF
     # skips the REINDEX phase and enters LIVE quickly.
+    log "Stage 1: starting HAF only..."
     echo "Starting HAF and waiting for it to enter live sync..."
     docker compose up -d haf
 
@@ -764,16 +827,20 @@ else
         echo "  HAF sync state: $sync_state"
         sleep 10
     done
+    log "Stage 1 complete: HAF in LIVE sync"
     echo "HAF has entered LIVE sync."
 
     # Repair ownership/permissions for all app data directories (hivesense config,
     # ollama, pgdata, etc.) which may be root-owned after ZFS rollback or snapshot restore
+    log "Running repair_permissions.sh..."
     echo "Repairing data directory permissions..."
     ./repair_permissions.sh
 
     # Stage 2: Bring up the rest of the stack
+    log "Stage 2: docker compose up -d (full stack with COMPOSE_PROFILES=$(grep '^COMPOSE_PROFILES=' .env))"
     docker compose up -d
     rm startup.temp
+    log "=== assisted_startup.sh COMPLETE ==="
     echo "Startup Complete"
     echo "Sync Complete"
 
