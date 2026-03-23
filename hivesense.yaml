@@ -85,6 +85,7 @@ services:
       - "--reduced-matrix-source=${HIVESENSE_MATRIX_SOURCE:-https://gitlab.syncad.com/hive/hivesense/-/wikis/uploads/0eebabf30d7cceb5776cb62c41abb2c9/projection_matrix_768_128_20250722.json.gz}"
       - "--config-dir=/hivesense/config"
       - "--reduced-dim=${HIVESENSE_REDUCED_DIMENSION:-128}"
+      - "--reduction-mode=${HIVESENSE_REDUCTION_MODE:-pca}"
       - "--hnsw-m=${HIVESENSE_HNSW_M:-16}"
       - "--hnsw-ef-construction=${HIVESENSE_HNSW_EF_CONSTRUCTION:-200}"
       - "--maintenance-work-mem=${HIVESENSE_MAINTENANCE_WORK_MEM:-28}"
