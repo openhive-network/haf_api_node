@@ -157,9 +157,9 @@ report_haf_app() {
     return
   fi
 
-  # STAGE_CHANGED lines are near the start and end — check both
+  # Get all STAGE_CHANGED lines (apps can bounce between MASSIVE and live)
   local stage_lines range_tail
-  stage_lines=$(docker logs "$container" 2>&1 | grep "STAGE_CHANGED" | tail -5) || true
+  stage_lines=$(docker logs "$container" 2>&1 | grep "STAGE_CHANGED") || true
   range_tail=$(docker logs "$container" --tail 100 2>&1 | grep -E "processed block range|Attempting to process a block range" | tail -1) || true
   if [[ -n "$range_tail" ]]; then
     stage_lines="${stage_lines}"$'\n'"${range_tail}"
@@ -170,9 +170,11 @@ report_haf_app() {
     return
   fi
 
-  # LIVE?
+  # LIVE? Use the FIRST transition to live (the initial replay completion),
+  # not the last — apps can bounce back to MASSIVE_PROCESSING briefly and
+  # re-enter live with a misleadingly short duration.
   local live_line
-  live_line=$(echo "$stage_lines" | grep -i "STAGE_CHANGED.*to 'live'" | tail -1) || true
+  live_line=$(echo "$stage_lines" | grep -i "STAGE_CHANGED.*to 'live'" | head -1) || true
   if [[ -n "$live_line" ]]; then
     local dur block_num
     dur=$(echo "$live_line" | grep -oP "after \K[\d:]+" | head -1) || true
