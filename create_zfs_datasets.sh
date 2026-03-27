@@ -141,6 +141,9 @@ mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/postgresql"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/pgbadger"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/caddy"
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/haproxy"
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/monitoring/prometheus"
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/monitoring/grafana"
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/monitoring/loki"
 
 # Use repair_permissions.sh to set all permissions correctly
 echo "Setting permissions..."

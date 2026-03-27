@@ -124,6 +124,11 @@ if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/logs" ]; then
   if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/haproxy" ]; then
     chown -R 99:99 "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/haproxy"
   fi
+
+  # Monitoring directories (Prometheus, Grafana, Loki)
+  if [ -d "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/monitoring" ]; then
+    chown -R ${HAF_UID:-1000}:${HAF_GID:-1000} "$TOP_LEVEL_DATASET_MOUNTPOINT/logs/monitoring"
+  fi
 fi
 
 # Hivesense directories (if they exist)

@@ -3,9 +3,12 @@ services:
     image: prom/prometheus:${PROMETHEUS_VERSION:-v2.49.1}
     profiles:
       - monitoring
+    user: "${HAF_UID:-1000}:${HAF_GID:-1000}"
     volumes:
       - ./monitoring/prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
+      - type: bind
+        source: ${HAF_MONITORING_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/monitoring}/prometheus
+        target: /prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -67,11 +70,14 @@ services:
     image: grafana/grafana:${GRAFANA_VERSION:-10.3.3}
     profiles:
       - monitoring
+    user: "${HAF_UID:-1000}:${HAF_GID:-1000}"
     depends_on:
       - prometheus
       - loki
     volumes:
-      - grafana_data:/var/lib/grafana
+      - type: bind
+        source: ${HAF_MONITORING_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/monitoring}/grafana
+        target: /var/lib/grafana
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
     environment:
@@ -92,8 +98,11 @@ services:
     image: grafana/loki:${LOKI_VERSION:-2.9.4}
     profiles:
       - monitoring
+    user: "${HAF_UID:-1000}:${HAF_GID:-1000}"
     volumes:
-      - loki_data:/loki
+      - type: bind
+        source: ${HAF_MONITORING_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/monitoring}/loki
+        target: /loki
       - ./monitoring/loki:/etc/loki
     restart: unless-stopped
     expose:
@@ -177,7 +186,3 @@ services:
     labels:
       org.label-schema.group: "monitoring"
 
-volumes:
-  prometheus_data: {}
-  grafana_data: {}
-  loki_data: {}
