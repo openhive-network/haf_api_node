@@ -3,7 +3,6 @@ services:
     image: ${PROXY_WHITELIST_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/proxy-whitelist}:${PROXY_WHITELIST_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - proxy-whitelist
-      - apps
     environment:
       POSTGRES_HOST: haf
     command:
@@ -20,7 +19,6 @@ services:
     image: ${PROXY_WHITELIST_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/proxy-whitelist}:${PROXY_WHITELIST_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - proxy-whitelist
-      - apps
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: proxy_whitelist_owner
@@ -43,7 +41,6 @@ services:
     image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/postgrest:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - proxy-whitelist
-      - apps
     environment:
       PGRST_SERVER_HOST: "::"
       PGRST_ADMIN_SERVER_PORT: 3001
@@ -71,7 +68,6 @@ services:
     image: ${PROXY_WHITELIST_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/proxy-whitelist/postgrest-rewriter}:${PROXY_WHITELIST_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - proxy-whitelist
-      - apps
     labels:
       - "io.hive.swagger.url=/proxy-whitelist-api/"
       - "io.hive.swagger.name=ProxyWhitelist"
