@@ -1,0 +1,36 @@
+# Interposes an nginx proxy between caddy and drone to limit
+# keepalive requests per upstream connection (keepalive_requests 100).
+# This recycles connections every 100 requests, preventing actix-http
+# BytesMut buffer accumulation on long-lived connections.
+#
+# Traffic flow: caddy -> drone (nginx proxy :9000) -> drone-real (actual drone :9000)
+#
+# To disable: remove or rename this file and restart.
+
+services:
+  # Rename the real drone service
+  drone-real:
+    extends:
+      file: drone.yaml
+      service: drone
+
+  # nginx proxy takes the "drone" name so caddy routes to it
+  drone:
+    image: nginx:1.24
+    profiles:
+      - servers
+    volumes:
+      - type: bind
+        source: ./drone-proxy/nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+    logging:
+      driver: local
+      options:
+        max-size: 1000m
+        max-file: 50
+    depends_on:
+      drone-real:
+        condition: service_started
+    networks:
+      - haf-network
