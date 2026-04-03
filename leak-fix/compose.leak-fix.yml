@@ -21,7 +21,7 @@ services:
       - servers
     volumes:
       - type: bind
-        source: ./drone-proxy/nginx.conf
+        source: ./leak-fix/nginx.conf
         target: /etc/nginx/nginx.conf
         read_only: true
     logging:
