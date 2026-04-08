@@ -3,6 +3,8 @@ FROM node:alpine
 RUN mkdir -p /home/node/app
 COPY api.js index.js package.json package-lock.json /home/node/app
 WORKDIR /home/node/app
+ARG NPM_CONFIG_REGISTRY
+ENV NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
 RUN npm ci
 
 CMD ["node", "api.js"]
