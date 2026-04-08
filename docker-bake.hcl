@@ -25,6 +25,9 @@ variable "GIT_LAST_COMMITTER" {
 variable "GIT_LAST_COMMIT_DATE" {
   default = ""
 }
+variable "NPM_CONFIG_REGISTRY" {
+  default = ""
+}
 
 function "notempty" {
   params = [variable]
@@ -287,6 +290,7 @@ target "version-display" {
     GIT_LAST_COMMITTER = "${GIT_LAST_COMMITTER}"
     GIT_LAST_COMMIT_DATE = "${GIT_LAST_COMMIT_DATE}"
     CI_COMMIT_TAG = "${CI_COMMIT_TAG}"
+    NPM_CONFIG_REGISTRY = "${NPM_CONFIG_REGISTRY}"
   }
   cache-to = [
     "type=registry,ref=${registry-name("version-display", "")}:buildcache,mode=max"
@@ -358,6 +362,7 @@ target "status" {
     GIT_LAST_COMMITTER = "${GIT_LAST_COMMITTER}"
     GIT_LAST_COMMIT_DATE = "${GIT_LAST_COMMIT_DATE}"
     CI_COMMIT_TAG = "${CI_COMMIT_TAG}"
+    NPM_CONFIG_REGISTRY = "${NPM_CONFIG_REGISTRY}"
   }
   cache-to = [
     "type=registry,ref=${registry-name("status", "")}:buildcache,mode=max"
