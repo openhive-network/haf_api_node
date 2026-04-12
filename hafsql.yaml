@@ -2,7 +2,7 @@ services:
   hafsql:
     profiles:
       - hafsql
-    image: mahdiyari/hafsql:${HAFSQL_VERSION}
+    image: ${HAFSQL_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafsql}:${HAFSQL_VERSION}
     networks:
       - haf-network
     tty: true
