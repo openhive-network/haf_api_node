@@ -32,6 +32,35 @@ log() {
     fi
 }
 
+# set_env_var: Update or insert a variable in .env, keeping it in its natural position.
+#   $1 = variable name (e.g. "COMPOSE_PROFILES")
+#   $2 = full assignment line (e.g. 'COMPOSE_PROFILES="core,admin"')
+# Strategy:
+#   1. If ^VARNAME= exists (uncommented), replace that line in place.
+#   2. Else if ^# VARNAME= exists (commented), insert after the last such comment.
+#   3. Else append at end of file.
+set_env_var() {
+    local var_name="$1"
+    local new_line="$2"
+
+    if grep -q "^${var_name}=" .env; then
+        # Uncommented line exists — replace in place
+        awk -v var="${var_name}" -v repl="$new_line" \
+            '$0 ~ "^" var "=" { print repl; next } { print }' \
+            .env > .env.tmp && mv .env.tmp .env
+    elif grep -q "^#[[:space:]]*${var_name}=" .env; then
+        # Commented line exists — insert after last matching comment
+        awk -v var="${var_name}" -v repl="$new_line" '
+            BEGIN { last = 0; nr = 0 }
+            { lines[++nr] = $0 }
+            $0 ~ "^#[[:space:]]*" var "=" { last = nr }
+            END { for (i = 1; i <= nr; i++) { print lines[i]; if (i == last) print repl } }
+        ' .env > .env.tmp && mv .env.tmp .env
+    else
+        echo "$new_line" >> .env
+    fi
+}
+
 for arg in "$@"; do
     case $arg in
         --no-ramdisk)
@@ -527,10 +556,7 @@ else
             fi
         done < .env
 
-        # Use grep -v and echo to avoid sed quoting issues
-        grep -v "^COMPOSE_PROFILES=" .env > .env.tmp
-        echo "${modified_line}" >> .env.tmp
-        mv .env.tmp .env
+        set_env_var "COMPOSE_PROFILES" "${modified_line}"
 
         # Handle optional HAF_SHM_DIRECTORY and HAF_ROCKSDB_DIRECTORY
         log "Configuring SHM/RocksDB directories (optimization=$OPTIMIZATION_METHOD)"
@@ -540,13 +566,13 @@ else
                 # Variable exists, modify it
                 original_HAF_SHM=$(grep "^HAF_SHM_DIRECTORY=" .env)
                 modified_HAF_SHM="HAF_SHM_DIRECTORY=\"/mnt/haf_shared_mem\""
-                sed -i "s#^$original_HAF_SHM#$modified_HAF_SHM#g" .env
+                set_env_var "HAF_SHM_DIRECTORY" "$modified_HAF_SHM"
                 printf 'original_HAF_SHM=%q\n' "$original_HAF_SHM" >> startup.temp
                 printf 'modified_HAF_SHM=%q\n' "$modified_HAF_SHM" >> startup.temp
                 echo "modified_HAF_SHM_EXISTS=1" >> startup.temp
             else
-                # Variable doesn't exist, add it
-                echo "HAF_SHM_DIRECTORY=\"/mnt/haf_shared_mem\"" >> .env
+                # Variable doesn't exist, add it near its comment
+                set_env_var "HAF_SHM_DIRECTORY" "HAF_SHM_DIRECTORY=\"/mnt/haf_shared_mem\""
                 echo "added_HAF_SHM=1" >> startup.temp
                 added_lines="${added_lines}HAF_SHM_DIRECTORY\n"
             fi
@@ -558,8 +584,8 @@ else
                 printf 'original_HAF_ROCKSDB=%q\n' "$original_HAF_ROCKSDB" >> startup.temp
                 echo "HAF_ROCKSDB_EXISTS=1" >> startup.temp
             else
-                # Variable doesn't exist, add it
-                echo "HAF_ROCKSDB_DIRECTORY=\"/$ZPOOL/$TOP_LEVEL_DATASET/shared_memory\"" >> .env
+                # Variable doesn't exist, add it near its comment
+                set_env_var "HAF_ROCKSDB_DIRECTORY" "HAF_ROCKSDB_DIRECTORY=\"/$ZPOOL/$TOP_LEVEL_DATASET/shared_memory\""
                 echo "added_HAF_ROCKSDB=1" >> startup.temp
                 added_lines="${added_lines}HAF_ROCKSDB_DIRECTORY\n"
             fi
@@ -578,10 +604,7 @@ else
             fi
 
             original_rocksdb_arguments=$(grep "^ARGUMENTS=" .env)
-            # Use grep -v and echo to avoid sed quoting issues
-            grep -v "^ARGUMENTS=" .env > .env.tmp
-            echo "ARGUMENTS=${new_args}" >> .env.tmp
-            mv .env.tmp .env
+            set_env_var "ARGUMENTS" "ARGUMENTS=${new_args}"
 
             printf 'original_rocksdb_arguments=%q\n' "$original_rocksdb_arguments" >> startup.temp
             echo "added_rocksdb_arg=1" >> startup.temp
@@ -705,10 +728,7 @@ else
 
     # Restore the original COMPOSE_PROFILES line
     log "Restoring COMPOSE_PROFILES: $original_line"
-    # Use grep -v and echo to avoid sed quoting issues
-    grep -v "^COMPOSE_PROFILES=" .env > .env.tmp
-    echo "${original_line}" >> .env.tmp
-    mv .env.tmp .env
+    set_env_var "COMPOSE_PROFILES" "${original_line}"
 
     # Restore optimization settings based on method used
     if [[ $OPTIMIZATION_METHOD == "ramdisk" && $remove_shared_mem != 0 ]]; then
@@ -735,10 +755,7 @@ else
 
         # Remove rocksdb argument from ARGUMENTS
         if [[ "$added_rocksdb_arg" == "1" ]]; then
-            # Use grep -v and echo to avoid sed quoting issues
-            grep -v "^ARGUMENTS=" .env > .env.tmp
-            echo "${original_rocksdb_arguments}" >> .env.tmp
-            mv .env.tmp .env
+            set_env_var "ARGUMENTS" "${original_rocksdb_arguments}"
             echo "Restored original ARGUMENTS (removed rocksdb path)"
         fi
 
@@ -782,10 +799,7 @@ else
     # Remove replay arguments
     if [[ $original_arguments != "" ]]; then
         log "Restoring ARGUMENTS: $modified_arguments"
-        # Use grep -v and echo to avoid sed quoting issues
-        grep -v "^ARGUMENTS=" .env > .env.tmp
-        echo "${modified_arguments}" >> .env.tmp
-        mv .env.tmp .env
+        set_env_var "ARGUMENTS" "${modified_arguments}"
     fi
     log "Restored .env: $(grep '^ARGUMENTS=' .env) | $(grep '^COMPOSE_PROFILES=' .env)"
 
