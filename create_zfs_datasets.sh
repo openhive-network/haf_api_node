@@ -124,6 +124,7 @@ zfs create $zfs_common_options $zfs_uncompressed_options -o canmount=on "${ZPOOL
 
 # needs to exist to be bind-mounted, no real reason to make it a dataset of its own though
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/shared_memory/haf_wal"
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/shared_memory/comments-rocksdb-storage"
 
 # Create hivesense subdirectories
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/hivesense/pca"
