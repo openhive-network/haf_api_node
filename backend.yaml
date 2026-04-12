@@ -50,7 +50,18 @@ services:
         target: /pgadmin4/pgpass
         #uid: "5050"
         #gid: "5050"
-
+  dozzle:
+    image: amir20/dozzle:latest
+    profiles:
+      - dozzle
+    environment:
+      - DOZZLE_ENABLE_ACTIONS=true
+      - DOZZLE_ENABLE_SHELL=true
+      - DOZZLE_BASE=/admin/dozzle
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - haf-network
 
 configs:
   # this config pre-loads the haf database server into pgadmin so you don't have to add it by hand

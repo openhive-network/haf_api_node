@@ -158,6 +158,13 @@ Disallow: /wallet/
       file_server
     }
 
+    # Route /admin/dozzle to dozzle log viewer
+    redir /dozzle /admin/dozzle/
+    handle_path /dozzle/* {
+      rewrite * /admin/dozzle{uri}
+      reverse_proxy http://dozzle:8080
+    }
+
     # Route /admin/versions to the version display app
     redir /versions /admin/versions/
     handle_path /versions/* {
