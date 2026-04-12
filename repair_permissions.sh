@@ -93,6 +93,7 @@ echo ""
 # Default ownership for most directories
 # HIVED_UID defaults to 1000, matching hived:users inside the container
 echo "Setting ownership for general HAF directories..."
+mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/shared_memory/comments-rocksdb-storage"
 chown -R ${HIVED_UID:-1000}:${HIVED_UID:-1000} "$TOP_LEVEL_DATASET_MOUNTPOINT"
 
 # PostgreSQL-specific ownership

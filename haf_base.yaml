@@ -131,6 +131,9 @@ services:
       - type: bind
         source: ${HAF_WAL_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/haf_wal}
         target: /home/hived/wal_dir
+      - type: bind
+        source: ${HAF_ROCKSDB_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/comments-rocksdb-storage
+        target: /home/hived/shm_dir/comments-rocksdb-storage
     shm_size: ${HAF_SHM_SIZE:-8gb}
     depends_on:
       hived-pme:
