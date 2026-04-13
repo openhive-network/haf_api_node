@@ -644,7 +644,7 @@ echo "max_swap=$max_swap" >> startup.temp
 
 entered_livesync=0
 while read -r line; do
-    if [[ $line == *"blocks ="* ]]; then
+    if [[ $line == *"blocks ="* || $line == *"Syncing Blockchain"* ]]; then
         echo "$line"
         mem_state=$(free -g | awk '/^Mem:/{print $3}')
         swap_state=$(free -g | awk '/^Swap:/{print $3}')
