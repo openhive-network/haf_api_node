@@ -155,6 +155,43 @@ fi
 
 echo "All datasets appear unmountable"
 
+# Preflight: verify all datasets are currently mounted
+echo "Verifying that all datasets are currently mounted"
+check_dataset_is_mounted() {
+  local ds="$1"
+  if ! zfs list "$ds" >/dev/null 2>&1; then
+    return  # dataset doesn't exist, skip
+  fi
+  local mounted
+  mounted=$(zfs get -H -o value mounted "$ds")
+  if [ "$mounted" != "yes" ]; then
+    echo "ERROR: Dataset $ds is not mounted. Something is wrong — refusing to proceed."
+    exit 1
+  fi
+}
+check_dataset_is_mounted "${ZPOOL}/${TOP_LEVEL_DATASET}"
+check_dataset_is_mounted "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
+check_dataset_is_mounted "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+check_dataset_is_mounted "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
+check_dataset_is_mounted "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense"
+check_dataset_is_mounted "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
+check_dataset_is_mounted "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+check_dataset_is_mounted "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
+check_dataset_is_mounted "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
+check_dataset_is_mounted "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
+echo "All datasets are mounted"
+
+# Preflight: verify snapshot name doesn't already exist on any child dataset
+echo "Checking for existing snapshots named @${SNAPSHOT_NAME}..."
+existing_snaps=$(zfs list -H -o name -t snapshot -r "${ZPOOL}/${TOP_LEVEL_DATASET}" 2>/dev/null | grep "@${SNAPSHOT_NAME}$" || true)
+if [ -n "$existing_snaps" ]; then
+  echo "ERROR: Snapshot @${SNAPSHOT_NAME} already exists on one or more datasets:"
+  echo "$existing_snaps"
+  echo "Use a different snapshot name, or destroy the existing snapshots first."
+  exit 1
+fi
+echo "No conflicting snapshots found"
+
 if [ "$SNAPSHOT_NAME" != "empty" ]; then
   if [ ! -e "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/shared_memory.bin" ]; then
     echo "Warning: No shared memory file found in the shared_memory directory."
@@ -234,6 +271,52 @@ rename() {
   echo " done"
 }
 
+remount_if_needed() {
+  local ds="$1"
+  if ! zfs list "$ds" >/dev/null 2>&1; then
+    return  # dataset doesn't exist, skip
+  fi
+  local mounted
+  mounted=$(zfs get -H -o value mounted "$ds" 2>/dev/null || echo "unknown")
+  if [ "$mounted" = "yes" ]; then
+    return  # already mounted
+  fi
+  stdbuf -o0 echo -n "Re-mounting $ds..."
+  if zfs mount "$ds"; then
+    echo " done"
+  else
+    echo " FAILED (may need manual intervention)"
+  fi
+}
+
+remount_all() {
+  echo "Remounting all datasets..."
+  remount_if_needed "${ZPOOL}/${TOP_LEVEL_DATASET}"
+  remount_if_needed "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
+  remount_if_needed "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
+  remount_if_needed "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
+  remount_if_needed "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense"
+  remount_if_needed "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
+  remount_if_needed "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+  remount_if_needed "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
+  remount_if_needed "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
+  remount_if_needed "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
+}
+
+DATASETS_UNMOUNTED=0
+cleanup() {
+  # Disable set -e inside trap to ensure all remounts are attempted
+  set +e
+  if [ "$DATASETS_UNMOUNTED" -eq 1 ]; then
+    echo ""
+    echo "ERROR: Script failed with datasets unmounted. Remounting..."
+    remount_all
+    echo "Datasets remounted."
+  fi
+}
+trap cleanup EXIT
+
+DATASETS_UNMOUNTED=1
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 unmount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
@@ -263,7 +346,11 @@ if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
 fi
 
 stdbuf -o0 echo -n "Taking snapshot..."
-zfs snap -r "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"
+if ! zfs snap -r "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"; then
+  echo " FAILED"
+  echo "ERROR: zfs snap -r failed for ${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"
+  exit 1
+fi
 echo " done"
 
 if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
@@ -275,30 +362,8 @@ if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
   echo "Done restoring logs dataset"
 fi
 
-remount() {
-  stdbuf -o0 echo -n "Re-mounting $1..."
-  zfs mount "$1"
-  echo " done"
-}
-
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}"
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
-# Remount comments-rocksdb-storage if it exists
-if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage" >/dev/null 2>&1; then
-  remount "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
-fi
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
-# Remount hivesense datasets if they exist
-if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense" >/dev/null 2>&1; then
-  remount "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense"
-fi
-if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama" >/dev/null 2>&1; then
-  remount "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
-fi
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
-remount "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
+remount_all
+DATASETS_UNMOUNTED=0
 
 if [ $PUBLIC_SNAPSHOT -eq 1 ]; then
   echo ""

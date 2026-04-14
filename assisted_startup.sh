@@ -175,7 +175,30 @@ echo "SNAPSHOT_NAME=$SNAPSHOT_NAME" >> startup.temp
 
 if [[ $REPLAY == 1 && $SNAPSHOT_NAME == "first_sync" ]]; then
     log "Destroying old first_sync snapshots..."
-    zfs list -H -o name -t snapshot | xargs -n1 zfs destroy -r first_sync 2>&1 | while read -r line; do log "  zfs destroy: $line"; done || true
+    source .env 2>/dev/null || true
+    if [[ -n "$ZPOOL" && -n "$TOP_LEVEL_DATASET" ]]; then
+        zfs list -H -o name -t snapshot -r "${ZPOOL}/${TOP_LEVEL_DATASET}" 2>/dev/null | grep "@first_sync$" | while read -r snap; do
+            log "  zfs destroy: $snap"
+            zfs destroy "$snap" 2>&1 || true
+        done
+    fi
+fi
+
+# Early validation: check if the snapshot name already exists before spending hours on replay
+if [[ -f .env ]]; then
+    source .env 2>/dev/null || true
+    if [[ -n "$ZPOOL" && -n "$TOP_LEVEL_DATASET" ]]; then
+        existing_snaps=$(zfs list -H -o name -t snapshot -r "${ZPOOL}/${TOP_LEVEL_DATASET}" 2>/dev/null | grep "@${SNAPSHOT_NAME}$" || true)
+        if [[ -n "$existing_snaps" ]]; then
+            log "FATAL: Snapshot @${SNAPSHOT_NAME} already exists on one or more datasets"
+            echo "ERROR: Snapshot @${SNAPSHOT_NAME} already exists:"
+            echo "$existing_snaps"
+            echo "Use --snapshot-name to choose a different name, or destroy the existing snapshots first."
+            echo "(Or use --replay to auto-destroy old first_sync snapshots)"
+            exit 1
+        fi
+        log "Preflight OK: no existing @${SNAPSHOT_NAME} snapshots found"
+    fi
 fi
 
 if [ ! -f .env ]; then
@@ -808,17 +831,37 @@ else
     # if the blockchain and shared_memory write times are too far apart,
     # something that can easily happen when copying the shared memory file)
     log "Creating snapshot: ./snapshot_zfs_datasets.sh --force $SNAPSHOT_NAME"
-    if ./snapshot_zfs_datasets.sh --force $SNAPSHOT_NAME 2>&1 | tee -a "$LOGFILE"; then
-        log "Snapshot created successfully"
-    else
-        log "ERROR: snapshot_zfs_datasets.sh failed with exit code $?"
-    fi
+    snapshot_output=$(./snapshot_zfs_datasets.sh --force "$SNAPSHOT_NAME" 2>&1) || {
+        echo "$snapshot_output" | tee -a "$LOGFILE"
+        log "FATAL: snapshot_zfs_datasets.sh failed"
+        log "Aborting — cannot continue without a successful snapshot"
+        echo "FATAL: Snapshot failed. See log for details."
+        exit 1
+    }
+    echo "$snapshot_output" | tee -a "$LOGFILE"
+    log "Snapshot created successfully"
 
     # Fix data directory ownership and permissions for hived (block_log may have been copied in as root)
     chown -R $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/blockchain/ 2>/dev/null
     chmod -R u+rw /$ZPOOL/$TOP_LEVEL_DATASET/blockchain/ 2>/dev/null
     chown -R $HIVED_UID:$HIVED_GID /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/ 2>/dev/null
     chmod -R u+rw /$ZPOOL/$TOP_LEVEL_DATASET/shared_memory/ 2>/dev/null
+
+    # Verify all critical datasets are mounted before starting containers
+    log "Verifying datasets are mounted before starting containers..."
+    for ds in "${ZPOOL}/${TOP_LEVEL_DATASET}" \
+              "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace" \
+              "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata" \
+              "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal" \
+              "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"; do
+        mounted=$(zfs get -H -o value mounted "$ds" 2>/dev/null)
+        if [ "$mounted" != "yes" ]; then
+            log "FATAL: Dataset $ds is not mounted. Cannot start containers."
+            echo "FATAL: Dataset $ds is not mounted. Aborting."
+            exit 1
+        fi
+    done
+    log "All critical datasets are mounted"
 
     # Stage 1: Start just HAF and wait for it to enter LIVE sync.
     # By starting HAF before apps, no app indexes get registered, so HAF
