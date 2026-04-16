@@ -2,7 +2,7 @@ services:
   hafsql:
     profiles:
       - hafsql
-    image: ${HAFSQL_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafsql}:${HAFSQL_VERSION}
+    image: ${HAFSQL_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafsql}:${HAFSQL_VERSION:-${HIVE_API_NODE_VERSION}}
     networks:
       - haf-network
     tty: true
@@ -51,7 +51,7 @@ services:
   hafsql-uninstall:
     profiles:
       - hafsql-uninstall
-    image: mahdiyari/hafsql:${HAFSQL_VERSION}
+    image: ${HAFSQL_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hafsql}:${HAFSQL_VERSION:-${HIVE_API_NODE_VERSION}}
     networks:
       - haf-network
     tty: true
