@@ -52,10 +52,10 @@ services:
       retries: 3
       start_period: 48h
     depends_on:
-      reputation-tracker-install:
-        condition: service_completed_successfully
       haf:
         condition: service_healthy
+      reputation-tracker-install:
+        condition: service_completed_successfully
   reputation-tracker-postgrest:
     image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/postgrest:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -84,10 +84,10 @@ services:
     networks:
       haf-network:
     depends_on:
-      reputation-tracker-install:
-        condition: service_completed_successfully
       pgbouncer:
         condition: service_healthy
+      reputation-tracker-install:
+        condition: service_completed_successfully
   reputation-tracker-postgrest-rewriter:
     image: ${REPUTATION_TRACKER_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/reputation_tracker/postgrest-rewriter}:${REPUTATION_TRACKER_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:

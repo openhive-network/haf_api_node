@@ -6,8 +6,8 @@ services:
   # Extend caddy service to expose PostgreSQL ports
   caddy:
     ports:
-      - ${HAFSQL_PUBLIC_PORT_SSL:-5432}:5432  # TLS port for PostgreSQL 17+ clients (sslnegotiation=direct)
-      - ${HAFSQL_PUBLIC_PORT_TCP:-5433}:5433  # Plain TCP port for all PostgreSQL clients
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAFSQL_PUBLIC_PORT_SSL:-5432}:5432"  # TLS port for PostgreSQL 17+ clients (sslnegotiation=direct)
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAFSQL_PUBLIC_PORT_TCP:-5433}:5433"  # Plain TCP port for all PostgreSQL clients
     volumes:
       - type: bind
         source: ./caddy/layer4-postgres-snippets

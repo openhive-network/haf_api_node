@@ -12,7 +12,7 @@ services:
     networks:
       haf-network:
     depends_on:
-      hivesense-install-schema:
-        condition: service_completed_successfully
       haf:
         condition: service_healthy
+      hivesense-install-schema:
+        condition: service_completed_successfully

@@ -17,8 +17,6 @@ services:
       - "--storage.tsdb.retention.time=720h"
       - "--web.enable-lifecycle"
     restart: unless-stopped
-    expose:
-      - 9090
     networks:
       - haf-network
     labels:
@@ -38,8 +36,6 @@ services:
       - "--path.sysfs=/host/sys"
       - "--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)"
     restart: unless-stopped
-    expose:
-      - 9100
     networks:
       - haf-network
     labels:
@@ -59,8 +55,6 @@ services:
       - /data/docker:/data/docker:ro
       - /cgroup:/cgroup:ro
     restart: unless-stopped
-    expose:
-      - 8080
     networks:
       - haf-network
     labels:
@@ -72,8 +66,8 @@ services:
       - monitoring
     user: "${HAF_UID:-1000}:${HAF_GID:-1000}"
     depends_on:
-      - prometheus
       - loki
+      - prometheus
     volumes:
       - type: bind
         source: ${HAF_MONITORING_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/monitoring}/grafana
@@ -87,8 +81,6 @@ services:
       - GF_SERVER_ROOT_URL=/admin/grafana/
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
     restart: unless-stopped
-    expose:
-      - 3000
     networks:
       - haf-network
     labels:
@@ -105,8 +97,6 @@ services:
         target: /loki
       - ./monitoring/loki:/etc/loki
     restart: unless-stopped
-    expose:
-      - 3100
     command: -config.file=/etc/loki/local-config.yaml
     networks:
       - haf-network
@@ -134,11 +124,9 @@ services:
     profiles:
       - monitoring
     restart: unless-stopped
-    expose:
-      - 9185
     depends_on:
-      - prometheus
       - loki
+      - prometheus
     networks:
       - haf-network
     healthcheck:
@@ -157,11 +145,9 @@ services:
     restart: unless-stopped
     command:
       - --no-collector.stat_bgwriter
-    expose:
-      - 9187
     depends_on:
-      - prometheus
       - loki
+      - prometheus
     networks:
       - haf-network
     environment:
@@ -174,11 +160,9 @@ services:
     profiles:
       - monitoring-system
     restart: unless-stopped
-    expose:
-      - 9115
     depends_on:
-      - prometheus
       - loki
+      - prometheus
     volumes:
       - ./monitoring/blackbox/config.yml:/etc/blackbox_exporter/config.yml
     networks:
