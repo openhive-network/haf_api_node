@@ -5,9 +5,16 @@ services:
       - admin
       - servers
     ports:
-      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:80:80"
-      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:443:443"
-      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:443:443/udp"
+      - host_ip: "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}"
+        target: 80
+        published: 80
+      - host_ip: "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}"
+        target: 443
+        published: 443
+      - host_ip: "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}"
+        target: 443
+        published: 443
+        protocol: udp
     environment:
       PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME}
       CADDY_SITES: ${CADDY_SITES:-${PUBLIC_HOSTNAME}}
