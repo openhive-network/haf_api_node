@@ -33,9 +33,9 @@ services:
       retries: 10
       start_period: 1m
     depends_on:
-      haproxy:
-        condition: service_healthy
       haf:
+        condition: service_healthy
+      haproxy:
         condition: service_healthy
       redis:
         condition: service_healthy
