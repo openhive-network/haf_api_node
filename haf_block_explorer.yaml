@@ -13,10 +13,10 @@ services:
     networks:
       haf-network:
     depends_on:
-      haf:
-        condition: service_healthy
       block-explorer-install-balance-tracker:
         condition: service_completed_successfully
+      haf:
+        condition: service_healthy
       hafah-install:
         condition: service_completed_successfully
       reputation-tracker-install:

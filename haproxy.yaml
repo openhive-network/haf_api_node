@@ -72,7 +72,7 @@ services:
   smtp-relay:
     profiles:
       - email
-    image: grafana/smtprelay
+    image: grafana/smtprelay:v2.4.0
     environment:
       # SMTP configuration must be provided when using email profile
       SMTP_HOST: "${SMTP_HOST:-}"

@@ -61,9 +61,9 @@ services:
       - "--database-url=postgresql://hivemind@haf/haf_block_log"
       - "server"
     depends_on:
-      hivemind-block-processing:
-        condition: service_healthy
       haf:
+        condition: service_healthy
+      hivemind-block-processing:
         condition: service_healthy
 
   hivemind-postgrest-server:

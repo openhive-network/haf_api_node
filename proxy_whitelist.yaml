@@ -33,10 +33,10 @@ services:
       retries: 3
       start_period: 48h
     depends_on:
-      proxy-whitelist-install:
-        condition: service_completed_successfully
       haf:
         condition: service_healthy
+      proxy-whitelist-install:
+        condition: service_completed_successfully
   proxy-whitelist-postgrest:
     image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/postgrest:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -60,10 +60,10 @@ services:
       retries: 10
       start_period: 15m
     depends_on:
-      proxy-whitelist-install:
-        condition: service_completed_successfully
       pgbouncer:
         condition: service_healthy
+      proxy-whitelist-install:
+        condition: service_completed_successfully
   proxy-whitelist-postgrest-rewriter:
     image: ${PROXY_WHITELIST_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/proxy-whitelist/postgrest-rewriter}:${PROXY_WHITELIST_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:

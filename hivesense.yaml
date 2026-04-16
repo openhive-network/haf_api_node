@@ -194,7 +194,7 @@ services:
         source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/hivesense/pca
         target: /app/output
     depends_on:
-      hivesense-install-schema:
-        condition: service_completed_successfully
       haf:
         condition: service_healthy
+      hivesense-install-schema:
+        condition: service_completed_successfully

@@ -51,7 +51,7 @@ services:
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-uninstall-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-install-1.${NETWORK_NAME}                       trust\n
-        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-benchmarks-1.${NETWORK_NAME}                    trust\n
+
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-schema-1.${NETWORK_NAME}       trust\n
         host    haf_block_log    hafbe_owner      ${COMPOSE_PROJECT_NAME}-block-explorer-install-schema-1.${NETWORK_NAME}       trust\n
@@ -195,7 +195,7 @@ services:
         target: /etc/logrotate.d.sources
         read_only: true
   pgbadger:
-    image: matsuu/pgbadger
+    image: matsuu/pgbadger:13.1
     profiles:
       - pgbadger
     entrypoint: /bin/sleep
@@ -213,7 +213,7 @@ services:
       ofelia.job-exec.datecron.schedule: "@daily"
       ofelia.job-exec.datecron.command: "/bin/sh -c '/usr/local/bin/pgbadger -I -O /pgbadger_output /postgresql_logs/*'"
   ofelia:
-    image: mcuadros/ofelia:latest
+    image: mcuadros/ofelia:v0.3.22
     profiles:
       - pgbadger
     command: daemon --docker

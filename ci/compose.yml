@@ -26,12 +26,15 @@ services:
       - docker
     ports:
       - name: docker-tls
+        host_ip: "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}"
         target: 2376
         published: 2376
       - name: http
+        host_ip: "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}"
         target: 80
         published: 8080
       - name: https
+        host_ip: "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}"
         target: 443
         published: 8443
     healthcheck:
