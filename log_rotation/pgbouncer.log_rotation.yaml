@@ -1,0 +1,4 @@
+services:
+  pgbouncer:
+    logging:
+      driver: local

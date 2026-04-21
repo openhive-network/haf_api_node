@@ -1,10 +1,10 @@
 services:
-  haproxy:
+  block-explorer-ui:
     logging:
       driver: local
-  haproxy-healthchecks:
+  denser-blog:
     logging:
       driver: local
-  smtp-relay:
+  denser-wallet:
     logging:
       driver: local

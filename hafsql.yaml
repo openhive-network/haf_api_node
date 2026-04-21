@@ -47,11 +47,6 @@ services:
       - "io.hive.swagger.url=/hafsql/openapi.json"
       - "io.hive.swagger.name=HafSQL"
       - "io.hive.swagger.order=7"
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: 5
 
   hafsql-uninstall:
     profiles:
@@ -68,8 +63,3 @@ services:
     depends_on:
       haf:
         condition: service_healthy
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: 5

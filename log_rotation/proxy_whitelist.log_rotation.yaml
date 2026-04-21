@@ -1,0 +1,13 @@
+services:
+  proxy-whitelist-install:
+    logging:
+      driver: local
+  proxy-whitelist-block-processing:
+    logging:
+      driver: local
+  proxy-whitelist-postgrest:
+    logging:
+      driver: local
+  proxy-whitelist-postgrest-rewriter:
+    logging:
+      driver: local

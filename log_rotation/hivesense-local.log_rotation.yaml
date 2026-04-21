@@ -1,0 +1,4 @@
+services:
+  hivesense-block-processing:
+    logging:
+      driver: local

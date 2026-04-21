@@ -1,10 +1,7 @@
 services:
-  pghero:
+  hafsql:
     logging:
       driver: local
-  pgadmin:
-    logging:
-      driver: local
-  dozzle:
+  hafsql-uninstall:
     logging:
       driver: local
