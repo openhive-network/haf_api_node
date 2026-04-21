@@ -1,10 +1,7 @@
 services:
-  pghero:
+  hive:
     logging:
       driver: local
-  pgadmin:
-    logging:
-      driver: local
-  dozzle:
+  hivefeed:
     logging:
       driver: local

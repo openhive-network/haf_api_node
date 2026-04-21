@@ -11,6 +11,9 @@ services:
   pgbadger:
     logging:
       driver: local
+  hive-openapi-spec:
+    logging:
+      driver: local
   ofelia:
     logging:
       driver: local

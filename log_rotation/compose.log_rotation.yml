@@ -1,15 +1,23 @@
 include:
+  - log_rotation/${JSONRPC_API_SERVER_NAME:-drone}.log_rotation.yaml
   - log_rotation/backend.log_rotation.yaml
   - log_rotation/balance_tracker.log_rotation.yaml
   - log_rotation/caddy.log_rotation.yaml
-  - log_rotation/${JSONRPC_API_SERVER_NAME:-drone}.log_rotation.yaml
   - log_rotation/haf_base.log_rotation.yaml
   - log_rotation/haf_block_explorer.log_rotation.yaml
   - log_rotation/hafah.log_rotation.yaml
+  - log_rotation/hafsql.log_rotation.yaml
   - log_rotation/haproxy.log_rotation.yaml
+  - log_rotation/hive.log_rotation.yaml
   - log_rotation/hivemind.log_rotation.yaml
-  - log_rotation/varnish.log_rotation.yaml
+  - log_rotation/hivesense-${HIVESENSE_CONFIGURATION:-sync}.log_rotation.yaml
+  - log_rotation/hivesense.log_rotation.yaml
   - log_rotation/monitoring.log_rotation.yaml
-  - log_rotation/reputation_tracker.log_rotation.yaml
   - log_rotation/nft_tracker.log_rotation.yaml
+  - log_rotation/pgbouncer.log_rotation.yaml
+  - log_rotation/proxy_whitelist.log_rotation.yaml
+  - log_rotation/reputation_tracker.log_rotation.yaml
+  - log_rotation/status.log_rotation.yaml
   - log_rotation/swagger.log_rotation.yaml
+  - log_rotation/ui.log_rotation.yaml
+  - log_rotation/varnish.log_rotation.yaml

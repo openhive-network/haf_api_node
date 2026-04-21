@@ -1,14 +1,16 @@
 services:
-  nft-tracker-log-rotation:
-    image: ${LOGROTATE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/logrotate}:${LOGROTATE_VERSION:-${HIVE_API_NODE_VERSION}}
-    profiles:
-      - log-rotation
-    volumes:
-      - ./datadir/logs/nft-tracker:/var/log/nft-tracker:rw
-      - ./log_rotation/logrotate.d:/etc/logrotate.d:ro
-    environment:
-      LOGROTATE_CONFIG: nft-tracker
-    networks:
-      haf-network:
-    depends_on:
-      - nft-tracker-block-processing
+  nft-tracker-install:
+    logging:
+      driver: local
+  nft-tracker-uninstall:
+    logging:
+      driver: local
+  nft-tracker-block-processing:
+    logging:
+      driver: local
+  nft-tracker-postgrest:
+    logging:
+      driver: local
+  nft-tracker-postgrest-rewriter:
+    logging:
+      driver: local

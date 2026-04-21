@@ -1,0 +1,4 @@
+services:
+  hivesense-sync:
+    logging:
+      driver: local

@@ -1,0 +1,19 @@
+services:
+  hivesense-ollama:
+    logging:
+      driver: local
+  hivesense-install-schema:
+    logging:
+      driver: local
+  hivesense-uninstall:
+    logging:
+      driver: local
+  hivesense-postgrest-rewriter:
+    logging:
+      driver: local
+  hivesense-postgrest:
+    logging:
+      driver: local
+  hivesense-pca:
+    logging:
+      driver: local

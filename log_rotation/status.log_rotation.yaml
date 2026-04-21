@@ -1,0 +1,4 @@
+services:
+  status-api:
+    logging:
+      driver: local
