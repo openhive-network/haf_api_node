@@ -125,6 +125,17 @@ lint-docker-compose:
   tags:
     - public-runner-docker
 
+check-log-rotation:
+  stage: build
+  image: python:3.12-alpine
+  before_script:
+    - pip install --quiet pyyaml
+  script:
+    - python3 log_rotation/sync_log_rotation.py --check
+  allow_failure: true
+  tags:
+    - public-runner-docker
+
 ######## End lint ########
 
 ######## Build ########
