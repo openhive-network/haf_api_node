@@ -39,7 +39,7 @@ services:
         done
 
         echo 'Pulling model...'
-        ollama pull \${HIVESENSE_MODEL:-yxchia/multilingual-e5-base:F16}
+        ollama pull \${HIVESENSE_MODEL:-hf.co/jinaai/jina-embeddings-v5-text-small-retrieval:F16}
         echo 'Ready.'
 
         wait
@@ -65,19 +65,19 @@ services:
       POSTGRES_HOST: haf
     command:
       - install_app
-      - "--llm=${HIVESENSE_MODEL:-yxchia/multilingual-e5-base:F16}"
-      - "--vector_size=${HIVESENSE_VECTOR_SIZE:-768}"
+      - "--llm=${HIVESENSE_MODEL:-hf.co/jinaai/jina-embeddings-v5-text-small-retrieval:F16}"
+      - "--vector_size=${HIVESENSE_VECTOR_SIZE:-1024}"
       - "--ollama=${HIVESENSE_OLLAMA:-http://haproxy:7012}"
       - "--start_block=${HIVESENSE_START_BLOCK:-1}"
       - "--parallel_workers=${HIVESENSE_WORKERS:-16}"
-      - "--embedding_batch_size=${HIVESENSE_EMBEDDING_BATCH_SIZE:-100}"
-      - "--tokenizer-model=${HIVESENSE_TOKENIZER_MODEL_NAME:-e5-base}"
-      - "--tokens_per_chunk=${HIVESENSE_TOKENS_PER_CHUNK:-512}"
-      - "--overlap_amount=${HIVESENSE_OVERLAP_AMOUNT:-0.15}"
+      - "--embedding_batch_size=${HIVESENSE_EMBEDDING_BATCH_SIZE:-50}"
+      - "--tokenizer-model=${HIVESENSE_TOKENIZER_MODEL_NAME:-jina-v5-small}"
+      - "--tokens_per_chunk=${HIVESENSE_TOKENS_PER_CHUNK:-2048}"
+      - "--overlap_amount=${HIVESENSE_OVERLAP_AMOUNT:-0.10}"
       - "--use-halfvec-index=${HIVESENSE_USE_HALFVEC_INDEX:-TRUE}"
       - "--store-halfvec-embeddings=${HIVESENSE_STORE_HALFVEC_EMBEDDINGS:-TRUE}"
-      - "--document-prefix=${HIVESENSE_DOCUMENT_PREFIX-passage: }"
-      - "--query-prefix=${HIVESENSE_QUERY_PREFIX-query: }"
+      - "--document-prefix=${HIVESENSE_DOCUMENT_PREFIX-Document: }"
+      - "--query-prefix=${HIVESENSE_QUERY_PREFIX-Query: }"
       - "--min-token-threshold=${HIVESENSE_MIN_TOKEN_THRESHOLD:-75}"
       - "--min-token-search-threshold=${HIVESENSE_MIN_TOKEN_SEARCH_THRESHOLD:-0}"
       - "--swagger-url=${PUBLIC_HOSTNAME}/"
@@ -85,11 +85,11 @@ services:
       - "--reduced-matrix-source=${HIVESENSE_MATRIX_SOURCE:-https://gitlab.syncad.com/hive/hivesense/-/wikis/uploads/0eebabf30d7cceb5776cb62c41abb2c9/projection_matrix_768_128_20250722.json.gz}"
       - "--config-dir=/hivesense/config"
       - "--reduced-dim=${HIVESENSE_REDUCED_DIMENSION:-128}"
-      - "--reduction-mode=${HIVESENSE_REDUCTION_MODE:-pca}"
+      - "--reduction-mode=${HIVESENSE_REDUCTION_MODE:-slice}"
       - "--hnsw-m=${HIVESENSE_HNSW_M:-16}"
       - "--hnsw-ef-construction=${HIVESENSE_HNSW_EF_CONSTRUCTION:-200}"
       - "--maintenance-work-mem=${HIVESENSE_MAINTENANCE_WORK_MEM:-28}"
-      - "--num-ctx=${HIVESENSE_NUM_CTX:-0}"
+      - "--num-ctx=${HIVESENSE_NUM_CTX:-8192}"
     volumes:
       - type: bind
         source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/hivesense/config
