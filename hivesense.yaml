@@ -9,7 +9,7 @@ services:
   # If you're using a GPU, you will likely need to switch to the official ollama image,
   # by setting OLLAMA_IMAGE=ollama/ollama in the .env file
   hivesense-ollama:
-    image: ${OLLAMA_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/ollama}:${OLLAMA_VERSION:-0.6.5}
+    image: ${OLLAMA_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/ollama}:${OLLAMA_VERSION:-0.18.0}
     profiles:
       - hivesense
       - apps
