@@ -43,6 +43,10 @@ services:
         target: /etc/caddy/snippets
         read_only: true
       - type: bind
+        source: ./caddy/admin-snippets
+        target: /etc/caddy/admin-snippets
+        read_only: true
+      - type: bind
         source: ./caddy/admin_html
         target: /etc/caddy/admin_html
         read_only: true
