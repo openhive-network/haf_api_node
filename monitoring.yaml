@@ -86,8 +86,15 @@ services:
       - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=/admin/grafana/
+      # Absolute root_url so Grafana generates correct redirect/email links
+      # behind a reverse-proxy sub-path mount.
+      - GF_SERVER_ROOT_URL=${GF_SERVER_ROOT_URL:-${ADMIN_ENDPOINT_PROTOCOL:-https}://${PUBLIC_HOSTNAME}/admin/grafana/}
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      # Grafana's CSRF middleware compares the browser's Origin header to the
+      # request's Host header. When upstream proxies rewrite Host (system
+      # nginx default), POSTs to /api/ds/query get rejected with 403
+      # "origin not allowed". Trust PUBLIC_HOSTNAME explicitly.
+      - GF_SECURITY_CSRF_TRUSTED_ORIGINS=${GF_SECURITY_CSRF_TRUSTED_ORIGINS:-${PUBLIC_HOSTNAME}}
     restart: unless-stopped
     networks:
       - haf-network

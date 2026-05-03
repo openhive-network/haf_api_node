@@ -113,7 +113,13 @@ Disallow: /wallet/
   }
   handle @admin_grafana {
     import admin-snippets/*.snippet
-    reverse_proxy http://grafana:3000
+    reverse_proxy http://grafana:3000 {
+      # Strip the basicauth Authorization header that the password-for-admin
+      # snippet just consumed. Grafana's auth precedence puts Basic ahead of
+      # session cookies, so a Caddy-only credential leaks through and fails
+      # against Grafana's user DB, breaking every panel data query.
+      header_up -Authorization
+    }
   }
 
   @admin {
