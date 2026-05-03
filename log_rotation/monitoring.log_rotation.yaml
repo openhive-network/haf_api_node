@@ -26,3 +26,6 @@ services:
   loki:
     logging:
       driver: local
+  loki-relay:
+    logging:
+      driver: local

@@ -192,6 +192,32 @@ services:
     labels:
       org.label-schema.group: "monitoring"
 
+  loki-relay:
+    # Tiny socat forwarder used in split-stack deployments where hived-pme
+    # runs alongside hived (typically on a backend host) but the Loki it
+    # ships block_stats to lives on a different host. hived-pme has the
+    # upstream "loki:3100" hardcoded; this service registers itself under
+    # the docker-network alias `loki` so that name resolves to a forwarder
+    # that bridges to LOKI_RELAY_TARGET (host:port form, e.g. the central
+    # Loki's exposed cross-host port).
+    #
+    # Mutually exclusive with monitoring-central — if a real loki service
+    # is already in the active profile set on this stack, leave this off.
+    image: alpine/socat:${SOCAT_VERSION:-1.7.4.4}
+    profiles:
+      - monitoring-loki-relay
+    # LOKI_RELAY_TARGET must be set as host:port (e.g. 172.16.100.4:23100)
+    # in .env when this profile is active. socat fails loudly at startup if
+    # it isn't, with a clear error in `docker compose logs loki-relay`.
+    command: TCP-LISTEN:3100,fork,reuseaddr TCP:${LOKI_RELAY_TARGET:-}
+    restart: unless-stopped
+    networks:
+      haf-network:
+        aliases:
+          - loki
+    labels:
+      org.label-schema.group: "monitoring"
+
   blackboxexporter:
     image: prom/blackbox-exporter:${BLACKBOX_VERSION:-v0.24.0}
     profiles:
