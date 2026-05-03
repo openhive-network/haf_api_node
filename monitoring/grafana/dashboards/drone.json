@@ -952,13 +952,13 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum(rate(drone_request_duration_seconds_sum[$__rate_interval])) by (method))",
+          "expr": "topk(10, sum(rate(drone_request_duration_seconds_sum{method!=\"broadcast_transaction_synchronous\"}[$__rate_interval])) by (method))",
           "legendFormat": "{{ method }}",
           "refId": "A"
         }
       ],
       "title": "Top 10 Methods by Total Time (sec/sec)",
-      "description": "Rate of total CPU-seconds consumed by each method. Higher = more total compute time spent on this method.",
+      "description": "Rate of total CPU-seconds consumed by each method. Higher = more total compute time spent on this method. Excludes broadcast_transaction_synchronous, which blocks waiting for the next block (~3s of wall time) and reflects block cadence rather than method efficiency.",
       "type": "timeseries"
     },
     {
@@ -1040,13 +1040,13 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum(rate(drone_request_duration_seconds_sum{cached=\"false\"}[$__rate_interval])) by (method))",
+          "expr": "topk(10, sum(rate(drone_request_duration_seconds_sum{cached=\"false\",method!=\"broadcast_transaction_synchronous\"}[$__rate_interval])) by (method))",
           "legendFormat": "{{ method }}",
           "refId": "A"
         }
       ],
       "title": "Top 10 Methods by Uncached Time (sec/sec)",
-      "description": "Rate of CPU-seconds for uncached (backend) requests only. This represents actual backend compute load.",
+      "description": "Rate of CPU-seconds for uncached (backend) requests only. This represents actual backend compute load. Excludes broadcast_transaction_synchronous, which blocks waiting for the next block (~3s of wall time) and reflects block cadence rather than method efficiency.",
       "type": "timeseries"
     },
     {
@@ -1128,13 +1128,13 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum(rate(drone_request_duration_seconds_sum{cached=\"false\"}[$__rate_interval])) by (method) / sum(rate(drone_request_duration_seconds_count{cached=\"false\"}[$__rate_interval])) by (method))",
+          "expr": "topk(10, sum(rate(drone_request_duration_seconds_sum{cached=\"false\",method!=\"broadcast_transaction_synchronous\"}[$__rate_interval])) by (method) / sum(rate(drone_request_duration_seconds_count{cached=\"false\",method!=\"broadcast_transaction_synchronous\"}[$__rate_interval])) by (method))",
           "legendFormat": "{{ method }}",
           "refId": "A"
         }
       ],
       "title": "Top 10 Slowest Methods (Avg Duration)",
-      "description": "Average duration per uncached request. Identifies which API calls are slowest on average.",
+      "description": "Average duration per uncached request. Identifies which API calls are slowest on average. Excludes broadcast_transaction_synchronous, which blocks waiting for the next block (~3s of wall time) and reflects block cadence rather than method efficiency.",
       "type": "timeseries"
     },
     {
