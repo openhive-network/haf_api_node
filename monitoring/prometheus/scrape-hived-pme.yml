@@ -1,0 +1,9 @@
+# Hived prometheus exporter (monitoring-targets profile).
+# Override with monitoring/prometheus-disabled/empty-scrape.yml on stacks
+# that don't run hived-pme.
+
+scrape_configs:
+  - job_name: "hived-pme"
+    scrape_interval: 1s
+    static_configs:
+      - targets: ["hived-pme:9185"]

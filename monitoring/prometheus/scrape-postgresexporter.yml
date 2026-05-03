@@ -1,0 +1,9 @@
+# Postgres exporter (monitoring-targets profile).
+# Override with monitoring/prometheus-disabled/empty-scrape.yml on stacks
+# that don't run postgresexporter.
+
+scrape_configs:
+  - job_name: "postgresexporter"
+    scrape_interval: 1s
+    static_configs:
+      - targets: ["postgresexporter:9187"]

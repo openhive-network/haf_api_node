@@ -4,51 +4,22 @@ global:
 
   # Attach these labels to any time series or alerts when communicating with
   # external systems (federation, remote storage, Alertmanager).
+  # ${VAR} substitution requires --enable-feature=expand-external-labels (set in
+  # monitoring.yaml). PROMETHEUS_ROLE/PROMETHEUS_INSTANCE default to "default"
+  # and the compose project name; override per-stack via .env for multi-host
+  # federation setups.
   external_labels:
     monitor: "docker-host"
+    role: "${PROMETHEUS_ROLE}"
+    instance: "${PROMETHEUS_INSTANCE}"
 
 # Load and evaluate rules in this file every 'evaluation_interval' seconds.
 rule_files:
-  - "alert.rules"
   - "drone.rules"
 
-# A scrape configuration containing exactly one endpoint to scrape.
-scrape_configs:
-  - job_name: "nodeexporter"
-    scrape_interval: 5s
-    static_configs:
-      - targets: ["nodeexporter:9100"]
-
-  - job_name: "cadvisor"
-    scrape_interval: 5s
-    static_configs:
-      - targets: ["cadvisor:8080"]
-
-  - job_name: "prometheus"
-    scrape_interval: 10s
-    static_configs:
-      - targets: ["localhost:9090"]
-
-  - job_name: "hived-pme"
-    scrape_interval: 1s
-    static_configs:
-      - targets: ["hived-pme:9185"]
-
-  - job_name: "postgresexporter"
-    scrape_interval: 1s
-    static_configs:
-      - targets: ["postgresexporter:9187"]
-
-  # Drone JSON-RPC caching proxy
-  - job_name: "drone"
-    scrape_interval: 5s
-    static_configs:
-      - targets: ["drone:9000"]
-    metrics_path: /metrics
-
-  # HAProxy load balancer (built-in Prometheus exporter)
-  - job_name: "haproxy"
-    scrape_interval: 5s
-    static_configs:
-      - targets: ["haproxy:8000"]
-    metrics_path: /metrics
+# Scrape jobs are loaded from per-target files matching scrape-*.yml.
+# extra/ is a deployment-local extension dir (see monitoring/prometheus-extra/);
+# put per-host additions like federation jobs there.
+scrape_config_files:
+  - "scrape-*.yml"
+  - "extra/*.yml"

@@ -1,0 +1,3 @@
+# Empty scrape_config_files entry. Bind-mount over an unwanted scrape-*.yml
+# to disable that job on a particular stack. See README.md.
+scrape_configs: []

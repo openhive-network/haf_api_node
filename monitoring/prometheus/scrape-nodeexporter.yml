@@ -1,0 +1,9 @@
+# Host metrics from prom/node-exporter (monitoring-system profile).
+# Override with monitoring/prometheus-disabled/empty-scrape.yml on stacks
+# that don't run nodeexporter to suppress the up==0 noise.
+
+scrape_configs:
+  - job_name: "nodeexporter"
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["nodeexporter:9100"]
