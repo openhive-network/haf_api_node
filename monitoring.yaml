@@ -3,9 +3,15 @@ services:
     image: prom/prometheus:${PROMETHEUS_VERSION:-v2.49.1}
     profiles:
       - monitoring
+      - monitoring-central
+      - monitoring-leaf
     user: "${HAF_UID:-1000}:${HAF_GID:-1000}"
+    environment:
+      - PROMETHEUS_ROLE=${PROMETHEUS_ROLE:-default}
+      - PROMETHEUS_INSTANCE=${PROMETHEUS_INSTANCE:-${COMPOSE_PROJECT_NAME}}
     volumes:
       - ./monitoring/prometheus:/etc/prometheus
+      - ${MONITORING_EXTRA_CONFIG_DIR:-./monitoring/prometheus-extra}:/etc/prometheus/extra:ro
       - type: bind
         source: ${HAF_MONITORING_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs/monitoring}/prometheus
         target: /prometheus
@@ -16,6 +22,7 @@ services:
       - "--web.console.templates=/etc/prometheus/consoles"
       - "--storage.tsdb.retention.time=720h"
       - "--web.enable-lifecycle"
+      - "--enable-feature=expand-external-labels"
     restart: unless-stopped
     networks:
       - haf-network
@@ -64,6 +71,7 @@ services:
     image: grafana/grafana:${GRAFANA_VERSION:-10.3.3}
     profiles:
       - monitoring
+      - monitoring-central
     user: "${HAF_UID:-1000}:${HAF_GID:-1000}"
     depends_on:
       - loki
@@ -90,6 +98,7 @@ services:
     image: grafana/loki:${LOKI_VERSION:-2.9.4}
     profiles:
       - monitoring
+      - monitoring-central
     user: "${HAF_UID:-1000}:${HAF_GID:-1000}"
     volumes:
       - type: bind
@@ -107,12 +116,19 @@ services:
     image: grafana/promtail:${PROMTAIL_VERSION:-2.9.4}
     profiles:
       - monitoring
+      - monitoring-shipper
     depends_on:
-      - loki
+      # required: false so promtail can start in shipper-only stacks where
+      # loki runs on a remote host and isn't part of the active profile.
+      loki:
+        condition: service_started
+        required: false
+    environment:
+      - LOKI_PUSH_URL=${LOKI_PUSH_URL:-http://loki:3100/loki/api/v1/push}
     volumes:
       - ./monitoring/promtail:/etc/promtail
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: -config.file=/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml -config.expand-env=true
     restart: unless-stopped
     networks:
       - haf-network
@@ -123,10 +139,17 @@ services:
     image: registry.gitlab.syncad.com/hive/hived-pme:${HIVED_PME_VERSION:-49a7312d}
     profiles:
       - monitoring
+      - monitoring-targets
     restart: unless-stopped
     depends_on:
-      - loki
-      - prometheus
+      # required: false so this scrape target can run on backend-only stacks
+      # without local loki/prometheus.
+      loki:
+        condition: service_started
+        required: false
+      prometheus:
+        condition: service_started
+        required: false
     networks:
       - haf-network
     healthcheck:
@@ -142,12 +165,19 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:${POSTGRESEXPORTER_VERSION:-v0.16.0}
     profiles:
       - monitoring
+      - monitoring-targets
     restart: unless-stopped
     command:
       - --no-collector.stat_bgwriter
     depends_on:
-      - loki
-      - prometheus
+      # required: false so this scrape target can run on backend-only stacks
+      # without local loki/prometheus.
+      loki:
+        condition: service_started
+        required: false
+      prometheus:
+        condition: service_started
+        required: false
     networks:
       - haf-network
     environment:
@@ -161,8 +191,14 @@ services:
       - monitoring-system
     restart: unless-stopped
     depends_on:
-      - loki
-      - prometheus
+      # required: false so monitoring-system can run host-level on a stack
+      # that doesn't itself host loki/prometheus.
+      loki:
+        condition: service_started
+        required: false
+      prometheus:
+        condition: service_started
+        required: false
     volumes:
       - ./monitoring/blackbox/config.yml:/etc/blackbox_exporter/config.yml
     networks:

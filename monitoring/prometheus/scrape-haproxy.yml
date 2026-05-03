@@ -1,8 +1,10 @@
-# HAProxy scrape configuration (uses built-in Prometheus exporter)
-# Include in prometheus.yml via scrape_config_files or copy to scrape_configs section
+# HAProxy (servers profile, built-in Prometheus exporter).
+# Override with monitoring/prometheus-disabled/empty-scrape.yml on stacks
+# that don't run haproxy (e.g. backend-only stacks).
 
-- job_name: "haproxy"
-  scrape_interval: 5s
-  static_configs:
-    - targets: ["haproxy:8000"]
-  metrics_path: /metrics
+scrape_configs:
+  - job_name: "haproxy"
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["haproxy:8000"]
+    metrics_path: /metrics

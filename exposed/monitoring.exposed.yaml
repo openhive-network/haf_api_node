@@ -1,0 +1,14 @@
+services:
+  prometheus:
+    # Expose Prometheus's HTTP API (including /federate) cross-host so a
+    # central Prometheus on another machine can federate from this leaf.
+    # Following the exposed/ port convention: HC prefix (default 2) + 9090.
+    ports:
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_HEALTHCHECK_PORT_PREFIX:-2}9090:9090"
+
+  loki:
+    # Expose Loki's push endpoint cross-host so Promtail running in stacks
+    # on other machines can ship logs to this central Loki. HC prefix
+    # (default 2) + 3100.
+    ports:
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_HEALTHCHECK_PORT_PREFIX:-2}3100:3100"

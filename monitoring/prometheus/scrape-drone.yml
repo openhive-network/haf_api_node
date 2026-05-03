@@ -1,8 +1,10 @@
-# Drone JSON-RPC caching proxy scrape configuration
-# Include in prometheus.yml via scrape_config_files or copy to scrape_configs section
+# Drone JSON-RPC caching proxy (servers profile).
+# Override with monitoring/prometheus-disabled/empty-scrape.yml on stacks
+# that don't run drone (e.g. backend-only stacks).
 
-- job_name: "drone"
-  scrape_interval: 5s
-  static_configs:
-    - targets: ["drone:9000"]
-  metrics_path: /metrics
+scrape_configs:
+  - job_name: "drone"
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["drone:9000"]
+    metrics_path: /metrics

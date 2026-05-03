@@ -10,3 +10,4 @@ include:
   - exposed/hivesense.exposed.yaml
   - exposed/nft_tracker.exposed.yaml
   - exposed/status.exposed.yaml
+  - exposed/monitoring.exposed.yaml
