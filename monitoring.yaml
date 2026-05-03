@@ -209,7 +209,7 @@ services:
     # LOKI_RELAY_TARGET must be set as host:port (e.g. 172.16.100.4:23100)
     # in .env when this profile is active. socat fails loudly at startup if
     # it isn't, with a clear error in `docker compose logs loki-relay`.
-    command: TCP-LISTEN:3100,fork,reuseaddr TCP:${LOKI_RELAY_TARGET}
+    command: TCP-LISTEN:3100,fork,reuseaddr TCP:${LOKI_RELAY_TARGET:-}
     restart: unless-stopped
     networks:
       haf-network:
