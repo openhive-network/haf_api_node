@@ -216,6 +216,12 @@ Disallow: /wallet/
       Access-Control-Max-Age "3600"
     }
     reverse_proxy http://{$JSONRPC_API_SERVER_NAME}:9000 {
+      # Retry once on transient errors. Drone reaps idle keepalive connections
+      # before Caddy's pool notices, so a low-traffic standby occasionally hits
+      # "use of closed network connection" on the first attempt; the retry
+      # opens a fresh connection and succeeds.
+      lb_try_duration 2s
+      lb_retries 1
       # remove any CORS headers sent by jussi/drone so we don't have duplicates
       header_down -Access-Control-Allow-Origin
       header_down -Access-Control-Allow-Methods
@@ -240,6 +246,10 @@ Disallow: /wallet/
       Access-Control-Max-Age "3600"
     }
     reverse_proxy http://varnish {
+      # Retry once on transient errors (same idle-keepalive race as the
+      # JSON-RPC handler above, against varnish/postgrest backends).
+      lb_try_duration 2s
+      lb_retries 1
       # remove any CORS headers sent by the rest api servers so we don't have duplicates
       # (right now, postgrest doesn't add any of these headers, this is just defensive)
       header_down -Access-Control-Allow-Origin
