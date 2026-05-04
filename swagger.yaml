@@ -6,6 +6,7 @@ services:
       - hivemind
       - hivesense
       - apps
+      - swagger
     environment:
       PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-}
     volumes:
