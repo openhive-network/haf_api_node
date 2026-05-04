@@ -189,6 +189,11 @@ timeouts:
 equivalent_methods:
   destination_api.destination_method:
     - appbase.source_api.source_method
+  # search-api is the only hyphenated namespace; accept the underscore form
+  # (search_api.find_text) clients write against the OpenAPI doc and route it
+  # through to the canonical hyphenated dispatch.
+  search-api.find_text:
+    - appbase.search_api.find_text
   # these are similar, but the block_api version wraps the result in an extra block{}
   #block_api.get_block:
   #  - appbase.condenser_api.get_block
