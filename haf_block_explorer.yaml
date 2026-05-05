@@ -117,6 +117,12 @@ services:
       - haf-network
   block-explorer-postgrest:
     image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/postgrest:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
+    # See note in hivemind.yaml — host containerd may default to nofile=1024
+    # soft, which postgrest can exhaust silently under load.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     profiles:
       - apps
       - hafbe

@@ -68,6 +68,15 @@ services:
 
   hivemind-postgrest-server:
     image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/postgrest:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
+    # Newer containerd packages dropped the explicit LimitNOFILE=infinity from
+    # their systemd unit, so on hosts where the dockerd/containerd unit relies
+    # on the systemd default (1024 soft) the postgrest accept loop can exhaust
+    # FDs under load and stop accepting connections (TCP listener stays bound,
+    # so health checks pass — failure is silent).
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     profiles:
       - apps
       - hivemind
