@@ -341,6 +341,49 @@ If you're upgrading to a new version of hivemind:
 - run `docker compose up -d` to bring up all services.  This should run hivemind's install, then launch the block processing container.
 - you can monitor Hivemind's sync process by watching the logs from `docker compose logs -f hivemind-block-processing`.  In a few short days, your Hivemind app should be fully synced and ready to handle API requests.
 
+## Advisory-lock coordination between installers and block-processors
+
+When you bring the stack up in pieces — `docker compose up` for one profile, then later for another — Docker Compose will re-run install services that are transitive dependencies of the newly-added profile's services. Some installers (notably hivemind's) perform destructive schema operations (e.g. `DROP TYPE`/`CREATE TYPE`) that would race destructively with an actively-running block-processor against the same schema.
+
+To prevent this, every patched block-processor takes a Postgres **shared** advisory lock on each app it depends on at startup; every patched installer tries an **exclusive** lock on its own app and exits cleanly (no schema changes) if any block-processor is holding the corresponding shared lock.
+
+### How it works
+
+Three helper functions live in the `hive_fork_manager` extension and are available to all apps:
+
+- `hive.acquire_app_block_processor_locks(text[])` — used by BPs. Takes a shared lock on each listed app. Polls every 1s and `RAISE NOTICE`s on first miss and every minute after; silent when acquired immediately.
+- `hive.try_acquire_app_install_lock(text)` — used by installers. Tries an exclusive lock once; on contention, `RAISE NOTICE`s which sessions are holding the lock and returns false. The installer should then exit 0.
+- `hive._try_app_lock(text, boolean)` — internal helper.
+
+Lock keys are computed as `(hashtext('hive_fork_manager_app_lock'), hashtext(app_name))` using Postgres's two-int advisory-lock form, which makes both values visible in `pg_locks` for diagnostics. The session's `application_name` should be set before any lock call so the "held by" output is human-readable.
+
+To see who currently holds a lock:
+```sql
+SELECT l.locktype, l.granted, l.classid, l.objid, a.application_name, a.pid
+FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+WHERE l.locktype = 'advisory';
+```
+
+### Which services participate
+
+| App | Block-processor takes shared on… | Installer takes exclusive on… |
+|---|---|---|
+| hivemind | `hivemind` (via `hive sync` / `hive build_schema`) | `hivemind` (via `hive build_schema` / `upgrade_schema`) |
+| hivesense (block-processing, SQL) | `hivemind`, `hivesense` | `hivesense` (via `install_app.sh`) |
+| hivesense-sync (Python) | `hivemind`, `hivesense` | (same installer as above) |
+| proxy-whitelist | `hivemind`, `proxy-whitelist` | `proxy-whitelist` (via `install_app.sh`) |
+
+Apps not in this table (balance_tracker, reputation_tracker, nft_tracker, hafah, haf_block_explorer) have idempotent installers and don't need lock coordination today.
+
+Block-processors connect directly to postgres (not via pgbouncer), which is what lets the simple session-lifetime model work — advisory locks are session-scoped and would be silently released by transaction-pool connection recycling.
+
+### Operational notes
+
+- Hivesense-sync (Python) re-acquires its locks inside `ensure_connection_alive` after any reconnect, since psycopg drops the session on idle-close.
+- Shell-based installers (hivesense, proxy-whitelist, and any future apps that adopt the pattern) self-re-exec through `install_with_app_lock.py` at the top of `install_app.sh`. The wrapper opens a psycopg2 connection, takes the exclusive lock, then runs the install script as a subprocess; the lock is held continuously across every internal `psql` invocation and released when the wrapper exits (cleanly, on signal, or on crash). The wrapper lives in the `common-ci-configuration/psql` base image, which is now the common base for all HAF app installers including hivesense and proxy-whitelist.
+- Hivemind's installer holds the lock continuously across its destructive Python phase via `hive build_schema`, which is the only destructive step. Its preceding shell-level install (`install_app.sh`) is non-destructive (function checks, `ALTER DATABASE`, `GRANT`), so it doesn't need wrapper protection.
+- The dependency list for each BP is hardcoded in its main-loop source. The starting set reflects compose `depends_on` plus known cross-app schema reads (hivesense and proxy-whitelist both query `hivemind_app.*`); expand the lists if a new race is discovered.
+
 # Scripts in the haf_api_node Directory
 
 ## use_develop_env.py
