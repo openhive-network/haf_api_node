@@ -12,6 +12,11 @@ services:
     stop_grace_period: 2m
     environment:
       SHM_DIR: /home/hived/shm_dir
+      # hived listening endpoints; leave unset to use the entrypoint default (0.0.0.0).
+      # Set in .env to bind a specific address or enable IPv6, e.g. P2P_ENDPOINT="[::]:2001".
+      P2P_ENDPOINT: ${P2P_ENDPOINT:-}
+      WS_ENDPOINT: ${WS_ENDPOINT:-}
+      HTTP_ENDPOINT: ${HTTP_ENDPOINT:-}
     # uncomment to expose the p2p port.  good for the health of the network as a whole, but 
     # not required unless you're using this as a seed node.  
     # ports:
