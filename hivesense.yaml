@@ -68,6 +68,7 @@ services:
       - "--llm=${HIVESENSE_MODEL:-hf.co/jinaai/jina-embeddings-v5-text-small-retrieval:F16}"
       - "--vector_size=${HIVESENSE_VECTOR_SIZE:-1024}"
       - "--ollama=${HIVESENSE_OLLAMA:-http://haproxy:7012}"
+      - "--embedding-api=${HIVESENSE_EMBEDDING_API:-ollama}"
       - "--start_block=${HIVESENSE_START_BLOCK:-1}"
       - "--parallel_workers=${HIVESENSE_WORKERS:-16}"
       - "--embedding_batch_size=${HIVESENSE_EMBEDDING_BATCH_SIZE:-50}"
