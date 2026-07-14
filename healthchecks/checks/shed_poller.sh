@@ -28,9 +28,15 @@
 SHED_POLL_INTERVAL="${SHED_POLL_INTERVAL:-5}"
 SHED_CONFIRMATIONS="${SHED_CONFIRMATIONS:-2}"
 SHED_COOLDOWN="${SHED_COOLDOWN:-3}"
+# IMPORTANT: scale these to the deployment's ACTUAL postgrest pool sizes.
+# SHED_OVERLOAD_ACTIVE should be ~80% of hivemind's PGRST_DB_POOL (default
+# pool 10 -> 8); SHED_OVERLOAD_TOTAL_ACTIVE should sit above the server's
+# normal busy concurrency (roughly 65% of the sum of all postgrest pools).
+# If a deployment raises the pools (e.g. hivemind 30), raise these too or
+# normal load will read as overload.
 SHED_OVERLOAD_ACTIVE="${SHED_OVERLOAD_ACTIVE:-8}"
 SHED_OVERLOAD_AGE_S="${SHED_OVERLOAD_AGE_S:-2}"
-SHED_OVERLOAD_TOTAL_ACTIVE="${SHED_OVERLOAD_TOTAL_ACTIVE:-15}"
+SHED_OVERLOAD_TOTAL_ACTIVE="${SHED_OVERLOAD_TOTAL_ACTIVE:-25}"
 SHED_ARMED="${SHED_ARMED:-false}"
 SHED_MAX_LEVEL=2
 
