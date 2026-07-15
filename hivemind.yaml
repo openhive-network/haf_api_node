@@ -96,6 +96,14 @@ services:
       # when debugging, you can enable this
       # PGRST_DB_PLAN_ENABLED: true
       PGRST_LOG_LEVEL: ${HIVEMIND_SERVER_LOG_LEVEL:-error}
+      # Haskell RTS options for the postgrest binary. The upstream build bakes
+      # in "-qg" (parallel GC disabled), so under bursty load a major GC can
+      # stall ALL request dispatch for tens of seconds (observed as periodic
+      # ~1min hivemind latency pulses while postgres sits idle). Setting
+      # GHCRTS=--nonmoving-gc switches the old generation to a concurrent
+      # collector, eliminating the long pauses at ~10-20% steady-state
+      # CPU/memory overhead. Empty = upstream defaults.
+      GHCRTS: ${HIVEMIND_POSTGREST_GHCRTS:-}
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
       interval: 10s
