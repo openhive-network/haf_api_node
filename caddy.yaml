@@ -29,6 +29,8 @@ services:
       CADDY_ADMIN_ALLOWED_IPS: ${CADDY_ADMIN_ALLOWED_IPS:-}
       # Trusted proxies for X-Forwarded-For
       CADDY_TRUSTED_PROXIES: ${CADDY_TRUSTED_PROXIES:-private_ranges}
+      # PROXY protocol: CIDR(s) allowed to send the PROXY protocol header (empty = disabled)
+      CADDY_PROXY_PROTOCOL_ALLOW: ${CADDY_PROXY_PROTOCOL_ALLOW:-}
       # Rate limiting
       CADDY_RATE_LIMIT_ENABLED: ${CADDY_RATE_LIMIT_ENABLED:-true}
       CADDY_RATE_LIMIT_EVENTS: ${CADDY_RATE_LIMIT_EVENTS:-600}
