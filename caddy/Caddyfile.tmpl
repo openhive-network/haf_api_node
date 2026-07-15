@@ -2,9 +2,23 @@
   order rate_limit before basicauth
 
 {{ $trustedProxies := getenv "CADDY_TRUSTED_PROXIES" "private_ranges" -}}
-{{ if ne $trustedProxies "" }}
+{{ $proxyProtocolAllow := getenv "CADDY_PROXY_PROTOCOL_ALLOW" "" -}}
+{{ if or (ne $trustedProxies "") (ne $proxyProtocolAllow "") }}
   servers {
+{{- if ne $trustedProxies "" }}
     trusted_proxies static {{ $trustedProxies }}
+{{- end }}
+{{- if ne $proxyProtocolAllow "" }}
+    # Accept the PROXY protocol header from the listed proxy CIDR(s) so the real client
+    # IP is preserved when Caddy sits behind a TCP/SNI-passthrough proxy (e.g. HAProxy).
+    # The `tls` wrapper MUST stay after `proxy_protocol`. Enable via CADDY_PROXY_PROTOCOL_ALLOW.
+    listener_wrappers {
+      proxy_protocol {
+        allow {{ $proxyProtocolAllow }}
+      }
+      tls
+    }
+{{- end }}
   }
 {{ end }}
 
