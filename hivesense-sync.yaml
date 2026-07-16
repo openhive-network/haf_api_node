@@ -1,6 +1,6 @@
 services:
   hivesense-sync:
-    image: ${HIVESENSE_SYNCER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/syncer}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HIVESENSE_SYNCER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/syncer}:${HIVESENSE_SYNCER_VERSION:-${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}}
     profiles:
       - hivesense
       - apps
