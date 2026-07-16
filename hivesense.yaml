@@ -10,6 +10,11 @@ services:
   # by setting OLLAMA_IMAGE=ollama/ollama in the .env file
   hivesense-ollama:
     image: ${OLLAMA_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense/ollama}:${OLLAMA_VERSION:-0.18.0}
+    # Set HIVESENSE_OLLAMA_REPLICAS=0 to disable the local ollama entirely
+    # (e.g. when embeddings are served by a remote OpenAI-compatible pool with
+    # the hivesense-llama-cpu service as local fallback -- see .env.example).
+    deploy:
+      replicas: ${HIVESENSE_OLLAMA_REPLICAS:-1}
     profiles:
       - hivesense
       - apps
@@ -55,6 +60,32 @@ services:
     ###  - /dev/dri
     ### group_add:
     ###  - video
+  # Optional local CPU embedding server speaking the OpenAI protocol
+  # (/v1/embeddings), for use as a fallback when embeddings are normally served
+  # by a remote OpenAI-compatible GPU pool (HIVESENSE_EMBEDDING_API=openai).
+  # Disabled by default: enable by adding "hivesense-llama-cpu" to
+  # COMPOSE_PROFILES and routing to it from a HAProxy override (see
+  # haproxy/35-ollama-remote.cfg.example). The model is downloaded from
+  # HuggingFace on first start and cached on the bind mount, mirroring the
+  # hivesense-ollama pull-on-start behaviour.
+  hivesense-llama-cpu:
+    image: ${HIVESENSE_LLAMA_CPU_IMAGE:-ghcr.io/ggml-org/llama.cpp}:${HIVESENSE_LLAMA_CPU_VERSION:-server}
+    profiles:
+      - hivesense-llama-cpu
+    environment:
+      - TZ=America/New_York
+      - LLAMA_CACHE=/models
+    command: >
+      -hf ${HIVESENSE_LLAMA_CPU_MODEL:-jinaai/jina-embeddings-v5-text-small-retrieval:F16}
+      --embeddings
+      -c ${HIVESENSE_LLAMA_CPU_CTX:-8192} -b 8192 -ub 8192
+      --host 0.0.0.0 --port 8080
+    networks:
+      haf-network:
+    volumes:
+      - type: bind
+        source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/hivesense/llama-cpu
+        target: /models
   hivesense-install-schema:
     image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
