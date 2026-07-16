@@ -17,3 +17,6 @@ services:
   hivesense-pca:
     logging:
       driver: local
+  hivesense-llama-cpu:
+    logging:
+      driver: local
