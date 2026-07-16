@@ -1,0 +1,45 @@
+# Example: route hivesense embedding traffic (port 7012) to a remote
+# OpenAI-compatible GPU pool, falling back to a local CPU llama-server when the
+# pool is unreachable.
+#
+# Requires:
+#   - HIVESENSE_EMBEDDING_API=openai in .env (hivesense then calls
+#     /v1/embeddings instead of ollama's /api/embed)
+#   - "hivesense-llama-cpu" added to COMPOSE_PROFILES in .env (the local
+#     fallback service defined in hivesense.yaml)
+#   - optionally HIVESENSE_OLLAMA_REPLICAS=0 to stop the now-unused local ollama
+#
+# To activate, copy this file to e.g. haproxy/35-ollama-override.cfg, edit the
+# server line(s) for your pool, and bind-mount it over the stock config in a
+# compose.override.yml:
+#
+#   services:
+#     haproxy:
+#       volumes:
+#         - type: bind
+#           source: ./haproxy/35-ollama-override.cfg
+#           target: /usr/local/etc/haproxy/35-ollama.cfg
+#           read_only: true
+
+frontend ollama-in-7012
+  bind *:7012
+  option http-server-close
+  timeout client 900s
+  default_backend ollama
+
+backend ollama
+  balance leastconn
+  timeout server 900s
+  option httpchk
+  http-check connect
+  # llama-swap and llama-server both answer 200 on /health
+  http-check send meth GET uri /health
+  http-check expect status 200
+
+  # Primary: the remote GPU pool (an OpenAI-compatible /v1/embeddings server,
+  # e.g. llama-swap instances behind their own load balancer).
+  server gpus gpus.example.com:9292 check
+
+  # Fallback: the local CPU llama-server (hivesense-llama-cpu service).
+  # Only receives traffic while every non-backup server is down.
+  server local-cpu hivesense-llama-cpu:8080 check backup
