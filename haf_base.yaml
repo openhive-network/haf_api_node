@@ -16,10 +16,21 @@ services:
     # cleanly shut down, and would often make PostgreSQL perform crash recovery at the
     # next startup
     stop_grace_period: 2m
+    # the p2p port is exposed by default: accepting inbound peers improves the health
+    # of the p2p network.  Override via P2P_PORT_MAPPING in .env - see .env.example
+    # for the unexposed / alternate-port / single-family variants.
+    ports:
+      - "${P2P_PORT_MAPPING:-2001:2001}"
     # grant passwordless access to the other haf apps.  if you add apps later, you'll
     # need to add access rules for them here
     # TODO: needs work:
     environment:
+      # hived listening endpoints; leave unset to use the entrypoint default
+      # (dual-stack [::] on images whose entrypoint supports it, 0.0.0.0 on older ones).
+      # Set in .env to force a binding, e.g. P2P_ENDPOINT="0.0.0.0:2001" for IPv4-only.
+      P2P_ENDPOINT: ${P2P_ENDPOINT:-}
+      WS_ENDPOINT: ${WS_ENDPOINT:-}
+      HTTP_ENDPOINT: ${HTTP_ENDPOINT:-}
       PG_ACCESS: "
         # haf_maintainer for background vacuum/index operations (hived connects via Unix socket)\n
         local   haf_block_log    haf_maintainer                                                                trust\n

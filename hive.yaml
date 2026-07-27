@@ -12,15 +12,17 @@ services:
     stop_grace_period: 2m
     environment:
       SHM_DIR: /home/hived/shm_dir
-      # hived listening endpoints; leave unset to use the entrypoint default (0.0.0.0).
-      # Set in .env to bind a specific address or enable IPv6, e.g. P2P_ENDPOINT="[::]:2001".
+      # hived listening endpoints; leave unset to use the entrypoint default
+      # (dual-stack [::] on images whose entrypoint supports it, 0.0.0.0 on older ones).
+      # Set in .env to force a binding, e.g. P2P_ENDPOINT="0.0.0.0:2001" for IPv4-only.
       P2P_ENDPOINT: ${P2P_ENDPOINT:-}
       WS_ENDPOINT: ${WS_ENDPOINT:-}
       HTTP_ENDPOINT: ${HTTP_ENDPOINT:-}
-    # uncomment to expose the p2p port.  good for the health of the network as a whole, but 
-    # not required unless you're using this as a seed node.  
-    # ports:
-    #   - "2001:2001"
+    # the p2p port is exposed by default: accepting inbound peers improves the health
+    # of the p2p network.  Override via P2P_PORT_MAPPING in .env - see .env.example
+    # for the unexposed / alternate-port / single-family variants.
+    ports:
+      - "${P2P_PORT_MAPPING:-2001:2001}"
 
     # when mounting volumes, declare the directories you want to bind-mount here, 
     # using either the short or long syntax.  Don't declare them as top-level named
