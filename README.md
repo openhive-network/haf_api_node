@@ -282,6 +282,45 @@ Currently available profiles are:
 - `apps`: core HAF apps: hivemind, HAfAH, haf-block-explorer
 - `servers`: services for routing/caching API calls: haproxy, jussi,varnish
 
+## Networking: IPv6 and the p2p port
+
+By default, the stack runs hived dual-stack and exposes its p2p port:
+
+- hived binds its p2p and web endpoints to `[::]`, accepting both IPv6 and IPv4
+  (with images whose entrypoint predates dual-stack defaults, the binding stays
+  `0.0.0.0`).
+- the p2p port (2001) is published on the host on both address families, because
+  accepting inbound peer connections improves the health of the p2p network.
+
+Both behaviors can be overridden with a line or two in your `.env` file:
+
+```bash
+# run hived IPv4-only:
+P2P_ENDPOINT="0.0.0.0:2001"
+
+# expose the p2p port somewhere else (or effectively unexpose it):
+P2P_PORT_MAPPING="12001:2001"           # alternate host port
+P2P_PORT_MAPPING="127.0.0.1:2001:2001"  # host loopback only, i.e. unexposed
+P2P_PORT_MAPPING="0.0.0.0:2001:2001"    # host IPv4 only
+```
+
+Notes on docker and IPv6: the `haf-network` compose network has `enable_ipv6`
+set, which is safe even on hosts without IPv6 connectivity (containers just get
+non-routable local addresses; the only hard requirement is that the kernel was
+not booted with `ipv6.disable=1`). Docker Engine 27 or newer installs the IPv6
+NAT and port-publishing rules automatically; on older engines, add
+`{ "ip6tables": true }` to `/etc/docker/daemon.json` (plus `"experimental": true`
+before engine 23) — without it, inbound IPv6 connections are handled by the
+userland proxy, which hides the peers' real addresses from hived.
+
+When verifying IPv6 reachability of the p2p port, test from a *different*
+machine: connecting from the host to its own published port over IPv6 (and
+especially via `::1`) takes a hairpin path that does not behave like a real
+inbound connection. Also note that host firewall layers that insert themselves
+ahead of docker's FORWARD rules (Tailscale's `ts-forward`, ufw, firewalld
+custom zones) can silently drop forwarded IPv6 traffic even when docker's own
+rules are correct.
+
 ## Observing node startup
 
 After you start your HAF instance, hived will need some time to catch up to the head block
