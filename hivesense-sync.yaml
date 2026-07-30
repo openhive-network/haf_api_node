@@ -7,7 +7,16 @@ services:
     environment:
       POSTGRES_URI: postgresql://hivesense_owner@haf/haf_block_log?application_name=hivesense_sync
       HIVESENSE_API: ${HIVESENSE_SYNC_API:-https://api.hive.blog/hivesense-api}
-      LOG_LEVEL: INFO # one of DEBUG, INFO, WARNING, ERROR
+      LOG_LEVEL: ${HIVESENSE_SYNC_LOG_LEVEL:-INFO} # one of DEBUG, INFO, WARNING, ERROR
+      # what to do when upstream has embeddings for a post that doesn't exist in the
+      # local hivemind database (a sign of an inconsistent/corrupted hivemind):
+      #   skip - drop the op and keep syncing (the post will never have embeddings here)
+      #   exit - stop the syncer (container restart-loops) until hivemind is repaired,
+      #          e.g. by restoring a known-good snapshot
+      MISSING_POST_ACTION: ${HIVESENSE_MISSING_POST_ACTION:-skip}
+      # how many times (1s apart) to re-check hivemind for a missing post before
+      # applying MISSING_POST_ACTION
+      MISSING_POST_RETRIES: ${HIVESENSE_MISSING_POST_RETRIES:-30}
     init: true
     networks:
       haf-network:
