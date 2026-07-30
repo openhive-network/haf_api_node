@@ -20,7 +20,6 @@ services:
       - apps
       - ollama
     environment:
-      - TZ=America/New_York
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_NUM_PARALLEL=16
       - OLLAMA_NUM_THREADS=16
