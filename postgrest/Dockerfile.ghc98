@@ -1,0 +1,54 @@
+# PostgREST built from source with GHC 9.8, instead of copying the official
+# binary (which upstream builds with GHC 9.4.8, even for v14.x — verified
+# via `postgrest +RTS --info`).
+#
+# Why: the GC-stall root cause on busy hivemind nodes. The 9.4.8 nonmoving
+# collector caused a production incident (heap fragmentation ballooned RSS to
+# 10.8 GiB, 2026-07-16); GHC 9.8.3+ carries the relevant fragmentation fix
+# (ghc#23340, "reduced RSS ~20% in a real-world application") plus the
+# --nonmoving-dense-allocator-count knob. This image exists to evaluate
+# nonmoving-gc on a fixed runtime — LONG soak on a test node first, with an
+# RSS alarm (>2 GB = bad); do not deploy to production from a short A/B.
+#
+# Why 9.8 and not newer: released postgrest (v14.15) constrains base <4.20,
+# i.e. GHC <= 9.8; the tested-with 9.10/9.12 in upstream's cabal file is
+# unreleased main-branch work. GHC 9.8 is also precisely where the
+# fragmentation fix landed, so nothing is lost. The baked RTS options remain
+# upstream's (-N -I0 -qg) and -rtsopts stays enabled, so runtime GC choice
+# is still made via the GHCRTS env var (e.g. GHCRTS=--nonmoving-gc).
+#
+# Note the final stage is debian-slim (glibc, matching the build stage), not
+# the alpine base used by the stock postgrest image — a musl/static build is
+# possible but not worth the toolchain complexity for an experiment image.
+# wget is included for the compose healthchecks, mirroring the stock image.
+
+ARG POSTGREST_VERSION=v14.15
+ARG GHC_IMAGE=haskell:9.8-slim
+
+FROM ${GHC_IMAGE} AS builder
+ARG POSTGREST_VERSION
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl ca-certificates zlib1g-dev libgmp-dev pkg-config libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN curl -fsSL "https://github.com/PostgREST/postgrest/archive/refs/tags/${POSTGREST_VERSION}.tar.gz" \
+      | tar xz --strip-components=1
+# The shipped freeze file pins dependency versions for upstream's GHC 9.4
+# toolchain; drop it and let cabal re-solve for this compiler.
+RUN rm -f cabal.project.freeze
+RUN cabal update
+# Build only the executable; -j uses all cores. This takes a while (~30-60m
+# cold; the cabal store layer caches dependencies for rebuilds).
+RUN cabal build -j exe:postgrest \
+    && mkdir -p /out \
+    && cp "$(cabal list-bin exe:postgrest)" /out/postgrest \
+    && /out/postgrest --version
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      wget ca-certificates libgmp10 zlib1g libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -u 1000 -m postgrest
+COPY --from=builder /out/postgrest /bin/postgrest
+USER 1000
+CMD [ "/bin/postgrest" ]
