@@ -2,6 +2,7 @@
 set -e
 
 . "$(dirname "$0")/check_haf_lib.sh"
+. "$(dirname "$0")/shed_functions.sh"
 
 # Setup a trap to kill potentially pending healthcheck SQL query at script exit
 trap "trap - 2 15 && kill -- -\$\$" 2 15
@@ -21,5 +22,5 @@ if [ "$NFTTRACKER_ADJUSTED_AGE" -gt 60 ]; then
   exit 3
 fi
 
-echo "up"
+shed_up "${NFTTRACKER_SHED_MAXCONNS:-32 8 4}"
 exit 0

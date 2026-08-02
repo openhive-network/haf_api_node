@@ -1,5 +1,9 @@
 #! /bin/sh
 
+# Single-writer load-shed poller: computes the shared shed level the agent
+# check scripts read via shed_functions.sh (see checks/shed_poller.sh)
+/checks/shed_poller.sh &
+
 nc -lk -p 7001 -e /checks/hived.sh &
 nc -lk -p 7002 -e /checks/hivemind.sh &
 nc -lk -p 7003 -e /checks/hafah.sh &

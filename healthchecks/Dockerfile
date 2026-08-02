@@ -10,6 +10,9 @@ COPY checks/hafah.sh /checks/hafah.sh
 COPY checks/hafbe.sh /checks/hafbe.sh
 COPY checks/format_seconds.sh /checks/format_seconds.sh
 COPY checks/check_haf_lib.sh /checks/check_haf_lib.sh
+COPY checks/shed_functions.sh /checks/shed_functions.sh
+COPY checks/shed_poller.sh /checks/shed_poller.sh
+COPY checks/check_http_sync_age.sh /checks/check_http_sync_age.sh
 COPY checks/hivesense.sh /checks/hivesense.sh
 COPY checks/nft_tracker.sh /checks/nft_tracker.sh
 COPY checks/status.sh /checks/status.sh

@@ -1,0 +1,102 @@
+####
+#### Spillover backends — EXAMPLE, not loaded by default
+####
+#
+# When the local stack is overloaded, send the *excess* load to secondary
+# backends instead of returning 503s. This is for deployments that operate
+# more than one API stack (e.g. a primary plus peer stacks, and/or a public
+# fallback node). Single-stack deployments do not need any of this — leave
+# this file with its ".example" suffix so it is never mounted.
+#
+# ---------------------------------------------------------------------------
+# How it works
+# ---------------------------------------------------------------------------
+# `balance first` assigns each request to the FIRST server (in declaration
+# order) that has a free connection slot, overflowing to the next server only
+# when the current one is at its `maxconn`. Declare the local rewriter first,
+# then the secondaries in preference order.
+#
+# The load-shed poller (healthchecks/checks/shed_poller.sh) lowers the local
+# server's effective `maxconn` (via its agent-check response) when it detects
+# database saturation. Under `balance first` that lowered cap is exactly what
+# makes the excess spill to the secondaries — no extra configuration. When the
+# local DB recovers, the cap rises and traffic packs back onto the local
+# server. A 503 is only returned when the local server AND every secondary are
+# simultaneously at maxconn (genuine global overload), bounded by
+# `timeout queue`.
+#
+# ---------------------------------------------------------------------------
+# How to enable
+# ---------------------------------------------------------------------------
+# A HAProxy backend cannot be split across files, so you cannot "append"
+# servers to the stock `backend hivemind`. Instead, copy the stock backend
+# definitions you want to extend out of 30-proxies.cfg, add the secondary
+# `server` lines (as below), and bind-mount your edited file OVER the stock
+# `30-proxies.cfg` target in a compose.override.yml — the same way the hbt4
+# deployment already does with its 30-proxies-override.cfg. HAProxy loads the
+# whole /usr/local/etc/haproxy directory, so only your version of each backend
+# must exist.
+#
+# ---------------------------------------------------------------------------
+# Two secondary patterns
+# ---------------------------------------------------------------------------
+# 1. External public node over HTTPS (e.g. api.openhive.network). The request
+#    at this backend boundary is a standard JSON-RPC 2.0 POST to "/", which any
+#    Hive API node serves, so a public node is a valid target. Needs TLS:
+#      ssl verify required ca-file ca-certificates.crt sni str(<host>)
+#    The existing `sync-hived` backend in 30-proxies.cfg is the precedent, but
+#    it omits `sni` — include it here so the origin's TLS front-end selects the
+#    right certificate. Host-header caveat: like `sync-hived` we rely on the
+#    origin routing by SNI; if a specific node rejects a mismatched Host header,
+#    it needs `http-request set-header Host <host>`, which only makes sense when
+#    every server in the backend is that same host — i.e. a dedicated
+#    single-target backend, not this mixed one. Give a public node a
+#    conservative `maxconn` so we never hammer it.
+#
+# 2. Peer stack over the "exposed" scheme (see exposed/README.md). A redundant
+#    stack exposes its API at frontend-port+10000 and its healthcheck agent at
+#    frontend-port+20000 (hivemind 7002 -> API 17002, agent 27002). Because the
+#    peer is health-checked by ITS OWN agent, `balance first` automatically
+#    skips a peer that is itself shedding/overloaded.
+#
+# `retries` + `option redispatch` let a request that lands on a failing
+# secondary retry the next server. Safe here because the hivemind/hafah
+# backends carry only read-only queries (synchronous broadcasts use the
+# separate `sync-hived` backend).
+#
+# The $VARs below reuse the presetenv defaults from 00-global.cfg.
+
+backend hivemind
+  balance first
+  retries 2
+  option redispatch
+  timeout queue "$API_QUEUE_TIMEOUT"
+  option httpchk
+  http-check connect
+  http-check send meth POST uri / hdr Content-Type application/json body "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"hive.db_head_state\",\"params\":{}}"
+  http-check expect status 200
+  # 1) local primary — the shed poller tightens this server's maxconn under
+  #    DB overload, which is what starts the overflow to the servers below
+  server-template hivemind 1 hivemind-postgrest-rewriter:80 maxconn "$HIVEMIND_SERVER_MAXCONN" check agent-check agent-addr haproxy-healthchecks agent-port 7002 agent-inter "$HIVEMIND_AGENT_INTER"
+  # 2) preferred spillover: external public node (HTTPS + SNI, conservative cap)
+  server spill-openhive api.openhive.network:443 maxconn 100 check ssl verify required ca-file ca-certificates.crt sni str(api.openhive.network)
+  # 3) peer stacks via the exposed scheme (170NN API, 270NN that peer's agent)
+  server spill-steem15 10.10.10.15:17002 maxconn "$HIVEMIND_SERVER_MAXCONN" check agent-check agent-addr 10.10.10.15 agent-port 27002 agent-inter "$HIVEMIND_AGENT_INTER"
+  server spill-steem7  10.10.10.7:17002  maxconn "$HIVEMIND_SERVER_MAXCONN" check agent-check agent-addr 10.10.10.7  agent-port 27002 agent-inter "$HIVEMIND_AGENT_INTER"
+
+backend hafah
+  balance first
+  retries 2
+  option redispatch
+  timeout queue "$API_QUEUE_TIMEOUT"
+  option httpchk
+  http-check connect
+  http-check send meth GET uri /version
+  http-check expect status 200
+  # 1) local primary
+  server-template hafah-postgrest 1 hafah-postgrest-rewriter:80 maxconn "$HAFAH_SERVER_MAXCONN" check agent-check agent-addr haproxy-healthchecks agent-port 7003 agent-inter 10s
+  # 2) external public node
+  server spill-openhive api.openhive.network:443 maxconn 100 check ssl verify required ca-file ca-certificates.crt sni str(api.openhive.network)
+  # 3) peer stacks (hafah frontend 7003 -> exposed API 17003, agent 27003)
+  server spill-steem15 10.10.10.15:17003 maxconn "$HAFAH_SERVER_MAXCONN" check agent-check agent-addr 10.10.10.15 agent-port 27003 agent-inter 10s
+  server spill-steem7  10.10.10.7:17003  maxconn "$HAFAH_SERVER_MAXCONN" check agent-check agent-addr 10.10.10.7  agent-port 27003 agent-inter 10s
