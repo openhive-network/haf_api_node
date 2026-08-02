@@ -3,24 +3,17 @@ set -e
 
 . "$(dirname "$0")/check_haf_lib.sh"
 . "$(dirname "$0")/shed_functions.sh"
+. "$(dirname "$0")/check_http_sync_age.sh"
 
 # Setup a trap to kill potentially pending healthcheck SQL query at script exit
-trap "trap - 2 15 && kill -- -\$\$" 2 15
+trap "trap - 2 15 && kill -- -\$$" 2 15
 
+# HAF gate first (psql) — see hivemind.sh for why this precedes HTTP probes.
 check_haf_lib
 
-NFTTRACKER_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_NFTTRACKER" --quiet --no-align --tuples-only --command="select extract('epoch' from hive.get_app_current_block_age('nfttracker_app'))::integer")
-# Adjust age for CI environments (TIME_OFFSET is set by check_haf_lib)
-NFTTRACKER_ADJUSTED_AGE=$(adjust_age_for_ci "$NFTTRACKER_LAST_PROCESSED_BLOCK_AGE")
-if [ "$NFTTRACKER_ADJUSTED_AGE" -gt 60 ]; then
-  age_string=$(format_seconds "$NFTTRACKER_LAST_PROCESSED_BLOCK_AGE")
-  if [ "$TIME_OFFSET" -gt 0 ]; then
-    echo "down #nfttracker block over a minute old ($age_string, adjusted from CI offset)"
-  else
-    echo "down #nfttracker block over a minute old ($age_string)"
-  fi
-  exit 3
-fi
+# Full-path sync check via the uniform /sync-status API (rewriter ->
+# postgrest -> DB round-trip + app last-block age in one call).
+check_sync_status "nfttracker" 60 "${NFTTRACKER_HEALTH_URL:-http://nft-tracker-postgrest-rewriter}"
 
-shed_up "${NFTTRACKER_SHED_MAXCONNS:-32 8 4}"
+shed_up "${80/sync-status:NFTTRACKER_SHED_MAXCONNS:-32 8 4}"
 exit 0

@@ -8,37 +8,13 @@ set -e
 # Setup a trap to kill potentially pending healthcheck SQL query at script exit
 trap "trap - 2 15 && kill -- -\$\$" 2 15
 
+# HAF gate first (psql) — see hivemind.sh for why this precedes HTTP probes.
 check_haf_lib
 
-# Full-path liveness through the block-explorer rewriter + postgrest (the
-# response is a bare block number; sync ages are still checked via SQL below)
-check_http_alive "hafbe" "${HAFBE_HEALTH_URL:-http://block-explorer-postgrest-rewriter:80/last-synced-block}"
-
-REPTRACKER_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_REPTRACKER" --quiet --no-align --tuples-only --command="select extract('epoch' from hive.get_app_current_block_age('reptracker_app'))::integer")
-# Adjust age for CI environments (TIME_OFFSET is set by check_haf_lib)
-REPTRACKER_ADJUSTED_AGE=$(adjust_age_for_ci "$REPTRACKER_LAST_PROCESSED_BLOCK_AGE")
-if [ "$REPTRACKER_ADJUSTED_AGE" -gt 60 ]; then
-  age_string=$(format_seconds "$REPTRACKER_LAST_PROCESSED_BLOCK_AGE")
-  if [ "$TIME_OFFSET" -gt 0 ]; then
-    echo "down #reptracker_app block over a minute old ($age_string, adjusted from CI offset)"
-  else
-    echo "down #reptracker_app block over a minute old ($age_string)"
-  fi
-  exit 3
-fi
-
-HAFBE_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_HAFBE" --quiet --no-align --tuples-only --command="select extract('epoch' from hive.get_app_current_block_age(ARRAY['hafbe_app', 'hafbe_bal']))::integer")
-# Adjust age for CI environments
-HAFBE_ADJUSTED_AGE=$(adjust_age_for_ci "$HAFBE_LAST_PROCESSED_BLOCK_AGE")
-if [ "$HAFBE_ADJUSTED_AGE" -gt 60 ]; then
-  age_string=$(format_seconds "$HAFBE_LAST_PROCESSED_BLOCK_AGE")
-  if [ "$TIME_OFFSET" -gt 0 ]; then
-    echo "down #hafbe block over a minute old ($age_string, adjusted from CI offset)"
-  else
-    echo "down #hafbe block over a minute old ($age_string)"
-  fi
-  exit 4
-fi
+# hafbe's /sync-status reports the LEAST block across all of its HAF contexts
+# (hafbe_app, hafbe_bal, reptracker_app), so this single full-path call
+# replaces the separate reptracker + hafbe/btracker SQL age checks.
+check_sync_status "hafbe" 60 "${HAFBE_HEALTH_URL:-http://block-explorer-postgrest-rewriter:80/sync-status}"
 
 shed_up "${HAFBE_SHED_MAXCONNS:-32 8 4}"
 exit 0
