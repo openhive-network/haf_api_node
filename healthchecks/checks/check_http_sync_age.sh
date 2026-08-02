@@ -44,6 +44,32 @@ check_http_alive() {
   fi
 }
 
+
+# check_sync_status <name> <threshold_seconds> <url>
+#
+# Probe an app's /sync-status endpoint (the uniform HAF-app sync/health API:
+# {"last_block_num": N, "last_block_time": "YYYY-MM-DDTHH:MM:SS"}) through
+# its postgrest rewriter, and go down if the app's last processed block is
+# older than the threshold. One call covers both "postgrest path works" and
+# "app is synced". Requires app images that ship /sync-status (2026-08
+# develop or later); the endpoint fails fast with an error during HAF
+# massive sync, which correctly reads as down here — though the psql
+# check_haf_lib gate in every agent script runs first and normally catches
+# that case before any HTTP probe is made.
+check_sync_status() {
+  _name="$1"
+  _threshold="$2"
+  _url="$3"
+  check_http_alive "$_name" "$_url"
+  _block_time=$(echo "$HTTP_CHECK_RESPONSE" | sed -n 's/.*"last_block_time"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  if [ -z "$_block_time" ]; then
+    # null timestamp: app context exists but no block processed yet
+    echo "down #$_name has no processed block yet"
+    exit 14
+  fi
+  check_http_block_time "$_name" "$_threshold" "$_block_time"
+}
+
 # check_http_block_time <name> <threshold_seconds> <block_time_string>
 #
 # Compute the age of a block timestamp returned over the API (e.g.

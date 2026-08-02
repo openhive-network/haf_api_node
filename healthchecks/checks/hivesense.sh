@@ -3,24 +3,19 @@ set -e
 
 . "$(dirname "$0")/check_haf_lib.sh"
 . "$(dirname "$0")/shed_functions.sh"
+. "$(dirname "$0")/check_http_sync_age.sh"
 
 # Setup a trap to kill potentially pending healthcheck SQL query at script exit
 trap "trap - 2 15 && kill -- -\$\$" 2 15
 
+# HAF gate first (psql) — see hivemind.sh for why this precedes HTTP probes.
 check_haf_lib
 
-HIVESENSE_LAST_PROCESSED_BLOCK_AGE=$(psql "$POSTGRES_URL_HIVESENSE" --quiet --no-align --tuples-only --command="select extract('epoch' from hive.get_app_current_block_age('hivesense_app'))::integer")
-# Adjust age for CI environments (TIME_OFFSET is set by check_haf_lib)
-HIVESENSE_ADJUSTED_AGE=$(adjust_age_for_ci "$HIVESENSE_LAST_PROCESSED_BLOCK_AGE")
-if [ "$HIVESENSE_ADJUSTED_AGE" -gt 60 ]; then
-  age_string=$(format_seconds "$HIVESENSE_LAST_PROCESSED_BLOCK_AGE")
-  if [ "$TIME_OFFSET" -gt 0 ]; then
-    echo "down #hivesense_app block over a minute old ($age_string, adjusted from CI offset)"
-  else
-    echo "down #hivesense_app block over a minute old ($age_string)"
-  fi
-  exit 3
-fi
+# Full-path sync check via the uniform /sync-status API (hive/hivesense!134).
+# Note: hivesense syncs embeddings out of band; its last_block_time tracks
+# the embedding server's head in steady state and honestly lags during
+# catch-up, so the standard 60s threshold applies unchanged.
+check_sync_status "hivesense" 60 "${HIVESENSE_HEALTH_URL:-http://hivesense-postgrest-rewriter:80/sync-status}"
 
 shed_up "${HIVESENSE_SHED_MAXCONNS:-32 8 4}"
 exit 0
