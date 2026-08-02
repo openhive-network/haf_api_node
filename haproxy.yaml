@@ -8,6 +8,20 @@ services:
       SYNC_BROADCAST_BACKEND_SERVER: "${SYNC_BROADCAST_BACKEND_SERVER:-api.hive.blog}"
       SYNC_BROADCAST_BACKEND_PORT: "${SYNC_BROADCAST_BACKEND_PORT:-443}"
       SYNC_BROADCAST_BACKEND_SSL: "${SYNC_BROADCAST_BACKEND_SSL:-ssl}"
+      # Static per-server concurrency caps + shed-fast queue timeout for the
+      # postgrest-backed backends (see haproxy/00-global.cfg for the defaults'
+      # rationale). If you override a *_SERVER_MAXCONN, keep the matching
+      # *_SHED_MAXCONNS "normal" value (haproxy-healthchecks below) in sync.
+      HIVEMIND_SERVER_MAXCONN: "${HIVEMIND_SERVER_MAXCONN:-64}"
+      HAFAH_SERVER_MAXCONN: "${HAFAH_SERVER_MAXCONN:-48}"
+      BALANCE_TRACKER_SERVER_MAXCONN: "${BALANCE_TRACKER_SERVER_MAXCONN:-32}"
+      BLOCK_EXPLORER_SERVER_MAXCONN: "${BLOCK_EXPLORER_SERVER_MAXCONN:-32}"
+      REPUTATION_TRACKER_SERVER_MAXCONN: "${REPUTATION_TRACKER_SERVER_MAXCONN:-32}"
+      HIVESENSE_SERVER_MAXCONN: "${HIVESENSE_SERVER_MAXCONN:-32}"
+      NFT_TRACKER_SERVER_MAXCONN: "${NFT_TRACKER_SERVER_MAXCONN:-32}"
+      PROXY_WHITELIST_SERVER_MAXCONN: "${PROXY_WHITELIST_SERVER_MAXCONN:-32}"
+      API_QUEUE_TIMEOUT: "${API_QUEUE_TIMEOUT:-5s}"
+      HIVEMIND_AGENT_INTER: "${HIVEMIND_AGENT_INTER:-5s}"
       # Email alert configuration (optional)
       HAPROXY_EMAIL_TO: "${HAPROXY_EMAIL_TO:-}"
       HAPROXY_EMAIL_FROM: "${HAPROXY_EMAIL_FROM:-}"
@@ -58,6 +72,41 @@ services:
       POSTGRES_URL_HIVESENSE: postgresql://hivesense_user@pgbouncer:6432/haf_block_log
       POSTGRES_URL_NFTTRACKER: postgresql://nfttracker_user@pgbouncer:6432/haf_block_log
       EXPECTED_BLOCK_TIME: "${EXPECTED_BLOCK_TIME:-}"
+      # HTTP probes through each app's postgrest rewriter, so the checks
+      # exercise the real request path and catch a wedged postgrest that
+      # direct SQL checks can't see (see checks/check_http_sync_age.sh)
+      HIVEMIND_HEALTH_URL: "${HIVEMIND_HEALTH_URL:-http://hivemind-postgrest-rewriter:80/}"
+      HAFAH_HEALTH_URL: "${HAFAH_HEALTH_URL:-http://hafah-postgrest-rewriter:80/version}"
+      REPTRACKER_HEALTH_URL: "${REPTRACKER_HEALTH_URL:-http://reputation-tracker-postgrest-rewriter:80/last-synced-block}"
+      HAFBE_HEALTH_URL: "${HAFBE_HEALTH_URL:-http://block-explorer-postgrest-rewriter:80/last-synced-block}"
+      HTTP_CHECK_TIMEOUT: "${HTTP_CHECK_TIMEOUT:-5}"
+      # Load-shed configuration (see healthchecks/checks/shed_poller.sh).
+      # SHED_ARMED=false (the default) is log-only: overload is detected and
+      # logged, but the agent responses always report the normal maxconn.
+      SHED_ARMED: "${SHED_ARMED:-false}"
+      SHED_POLL_INTERVAL: "${SHED_POLL_INTERVAL:-5}"
+      SHED_CONFIRMATIONS: "${SHED_CONFIRMATIONS:-2}"
+      SHED_COOLDOWN: "${SHED_COOLDOWN:-3}"
+      SHED_OVERLOAD_ACTIVE: "${SHED_OVERLOAD_ACTIVE:-8}"
+      SHED_OVERLOAD_AGE_S: "${SHED_OVERLOAD_AGE_S:-2}"
+      SHED_OVERLOAD_TOTAL_ACTIVE: "${SHED_OVERLOAD_TOTAL_ACTIVE:-15}"
+      # pgbouncer admin view for the pool-saturation signal ("stats" is a
+      # read-only stats_users entry; with the default auth_type=trust no
+      # password is needed. Under PGBOUNCER_AUTH_TYPE=md5, add stats:<pass>
+      # to PGBOUNCER_USERS_WITH_PASSWORDS and put the password in this URL,
+      # or set it empty to disable the pgbouncer signal.)
+      POSTGRES_URL_PGBOUNCER: "${POSTGRES_URL_PGBOUNCER:-postgresql://stats@pgbouncer:6432/pgbouncer}"
+      # Per-app "normal reduced floor" maxconn triples reported by the agent
+      # checks. "normal" should match the *_SERVER_MAXCONN static caps on the
+      # haproxy service; floor is never 0, so shedding can't cause an outage.
+      HIVEMIND_SHED_MAXCONNS: "${HIVEMIND_SHED_MAXCONNS:-64 12 6}"
+      HAFAH_SHED_MAXCONNS: "${HAFAH_SHED_MAXCONNS:-48 10 5}"
+      HAFBE_SHED_MAXCONNS: "${HAFBE_SHED_MAXCONNS:-32 8 4}"
+      BTRACKER_SHED_MAXCONNS: "${BTRACKER_SHED_MAXCONNS:-32 8 4}"
+      REPTRACKER_SHED_MAXCONNS: "${REPTRACKER_SHED_MAXCONNS:-32 8 4}"
+      HIVESENSE_SHED_MAXCONNS: "${HIVESENSE_SHED_MAXCONNS:-32 8 4}"
+      NFTTRACKER_SHED_MAXCONNS: "${NFTTRACKER_SHED_MAXCONNS:-32 8 4}"
+      PROXY_WHITELIST_SHED_MAXCONNS: "${PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
     healthcheck:
       test: ["CMD-SHELL", "/healthcheck_healthcheck.sh || exit 1"]
       interval: 10s
