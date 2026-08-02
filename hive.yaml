@@ -21,6 +21,10 @@ services:
     # the p2p port is exposed by default: accepting inbound peers improves the health
     # of the p2p network.  Override via P2P_PORT_MAPPING in .env - see .env.example
     # for the unexposed / alternate-port / single-family variants.
+    # The unbound (no-interface) mapping is deliberate: docker binds it
+    # dual-stack (IPv4+IPv6), which is the point of this feature. The
+    # linter's suggested 0.0.0.0: prefix would silently make it IPv4-only.
+    # dclint disable-line no-unbound-port-interfaces
     ports:
       - "${P2P_PORT_MAPPING:-2001:2001}"
 
