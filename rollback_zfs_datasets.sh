@@ -3,10 +3,20 @@
 set -e
 
 print_help() {
-  echo "Usage: $0 [--env-file=filename] snapshot-name"
+  echo "Usage: $0 [--env-file=filename] [--public-snapshot] [--swap-logs-with-dataset=dataset] snapshot-name"
+  echo "  Pass the same --public-snapshot / --swap-logs-with-dataset arguments that were"
+  echo "  given to snapshot_zfs_datasets.sh when the snapshot was taken."
+  echo "  --public-snapshot         accepted for symmetry with snapshot_zfs_datasets.sh; the"
+  echo "                            log files were moved aside at snapshot time, so the rolled-"
+  echo "                            back tree simply contains empty logs (nothing to restore)"
+  echo "  --swap-logs-with-dataset  the snapshot was taken with the logs (and hivesense/ollama)"
+  echo "                            datasets swapped with empty stand-ins, so <top-level>/logs and"
+  echo "                            <top-level>/hivesense/ollama carry no snapshot; leave their"
+  echo "                            current contents in place instead of rolling them back."
+  echo "                            (Their snapshots live on the stand-in dataset given here.)"
 }
 
-OPTIONS=$(getopt -o he: --long env-file:,help,zpool:,top-level-dataset: -n "$0" -- "$@")
+OPTIONS=$(getopt -o he:pl: --long env-file:,help,zpool:,top-level-dataset:,public-snapshot,swap-logs-with-dataset: -n "$0" -- "$@")
 
 if [ $? -ne 0 ]; then
     print_help
@@ -17,6 +27,8 @@ ZPOOL=""
 TOP_LEVEL_DATASET=""
 ZPOOL_MOUNT_POINT=""
 TOP_LEVEL_DATASET_MOUNTPOINT=""
+PUBLIC_SNAPSHOT=0
+SWAP_LOGS_DATASET=""
 
 eval set -- "$OPTIONS"
 
@@ -32,6 +44,14 @@ while true; do
       ;;
     --top-level-dataset)
       TOP_LEVEL_DATASET="$2"
+      shift 2
+      ;;
+    --public-snapshot|-p)
+      PUBLIC_SNAPSHOT=1
+      shift
+      ;;
+    --swap-logs-with-dataset|-l)
+      SWAP_LOGS_DATASET="$2"
       shift 2
       ;;
     --help|-h)
@@ -153,14 +173,36 @@ check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
 check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense"
-check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
-check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+if [ -z "${SWAP_LOGS_DATASET}" ]; then
+  check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
+  check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+else
+  # The snapshot was taken with the logs and hivesense/ollama datasets swapped
+  # with empty stand-ins, so the snapshot lives on the stand-ins, not on the
+  # top-level dataset's children. Verify it there — this doubles as a check
+  # that the snapshot really was taken with --swap-logs-with-dataset.
+  check_snapshot_exists "${SWAP_LOGS_DATASET}/logs"
+  check_snapshot_exists "${SWAP_LOGS_DATASET}/hivesense/ollama"
+  if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/logs@${SNAPSHOT_NAME}" >/dev/null 2>&1; then
+    echo "ERROR: ${ZPOOL}/${TOP_LEVEL_DATASET}/logs@${SNAPSHOT_NAME} exists, so this snapshot"
+    echo "appears to have been taken WITHOUT --swap-logs-with-dataset. Re-run without that option."
+    exit 1
+  fi
+fi
 check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 check_snapshot_exists "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
 if [ -n "$missing_snaps" ]; then
   echo "ERROR: Snapshot @${SNAPSHOT_NAME} is missing on one or more datasets (listed above)."
   echo "Cannot rollback — the snapshot set is incomplete."
+  case "$missing_snaps" in
+    *"${ZPOOL}/${TOP_LEVEL_DATASET}/logs"*)
+      if [ -z "${SWAP_LOGS_DATASET}" ]; then
+        echo "Note: if this snapshot was taken with snapshot_zfs_datasets.sh's"
+        echo "--swap-logs-with-dataset option, pass the same option to this script."
+      fi
+      ;;
+  esac
   exit 1
 fi
 echo "All required snapshots found"
@@ -188,8 +230,11 @@ check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
 check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory/comments-rocksdb-storage"
 check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense"
-check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
-check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+if [ -z "${SWAP_LOGS_DATASET}" ]; then
+  # In swap mode these datasets carry no @${SNAPSHOT_NAME} and are not rolled back
+  check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
+  check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+fi
 check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 check_no_newer_snapshots "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
@@ -208,6 +253,10 @@ echo "top-level dataset: $TOP_LEVEL_DATASET"
 echo "  mounted on:      $TOP_LEVEL_DATASET_MOUNTPOINT"
 echo "This will unmount the HAF datasets, rollback to the named snapshot, then remount them."
 echo "All data on those datasets since the snapshot $SNAPSHOT_NAME will be lost"
+if [ $PUBLIC_SNAPSHOT -eq 1 ]; then
+  echo "(--public-snapshot: log files were moved aside when this snapshot was taken, so"
+  echo " the rolled-back tree will contain empty p2p/ and docker_entrypoint.log)"
+fi
 stdbuf -o0 echo -n "Hit control-c in the next 5 seconds to abort..."
 sleep 5
 echo " continuing"
@@ -307,10 +356,19 @@ rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
 if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense" >/dev/null 2>&1; then
   rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense"
 fi
-if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama" >/dev/null 2>&1; then
-  rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
+if [ -z "${SWAP_LOGS_DATASET}" ]; then
+  if zfs list "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama" >/dev/null 2>&1; then
+    rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
+  fi
+  rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
+else
+  # These datasets were swapped with empty stand-ins when the snapshot was taken,
+  # so they carry no @${SNAPSHOT_NAME}. Their snapshot content is (by design) empty;
+  # keep the current contents — logs are harmless to retain, and re-downloading
+  # ollama models would be pure waste.
+  echo "Skipping ${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama (snapshot taken with --swap-logs-with-dataset)"
+  echo "Skipping ${ZPOOL}/${TOP_LEVEL_DATASET}/logs (snapshot taken with --swap-logs-with-dataset)"
 fi
-rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
 rollback "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
