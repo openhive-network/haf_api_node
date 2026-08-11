@@ -32,7 +32,6 @@ variables:
   DOCKER_TLS_CERTDIR: "${REPLAY_PIPELINE_DIRECTORY}_certs"
 
   # Other settings
-  TEST_IMAGE_TAG: ":ubuntu22.04-12"
 
 include:
   - template: Workflows/Branch-Pipelines.gitlab-ci.yml
@@ -127,7 +126,7 @@ lint-docker-compose:
 
 check-log-rotation:
   stage: build
-  image: python:3.12-alpine
+  image: python:3.14-alpine
   before_script:
     - pip install --quiet pyyaml
   script:
