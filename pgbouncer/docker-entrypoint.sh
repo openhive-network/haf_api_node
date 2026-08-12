@@ -84,13 +84,19 @@ max_db_connections = ${PGBOUNCER_MAX_DB_CONNECTIONS:-30}
 server_idle_timeout = ${PGBOUNCER_SERVER_IDLE_TIMEOUT:-600}
 server_lifetime = ${PGBOUNCER_SERVER_LIFETIME:-3600}
 server_reset_query = DISCARD ALL
+server_reset_query_always = ${PGBOUNCER_SERVER_RESET_QUERY_ALWAYS:-0}
 server_check_delay = ${PGBOUNCER_SERVER_CHECK_DELAY:-30}
+query_timeout = ${PGBOUNCER_QUERY_TIMEOUT:-0}
 query_wait_timeout = ${PGBOUNCER_QUERY_WAIT_TIMEOUT:-120}
+cancel_wait_timeout = ${PGBOUNCER_CANCEL_WAIT_TIMEOUT:-10}
+idle_transaction_timeout = ${PGBOUNCER_IDLE_TRANSACTION_TIMEOUT:-0}
+transaction_timeout = ${PGBOUNCER_TRANSACTION_TIMEOUT:-0}
 client_idle_timeout = ${PGBOUNCER_CLIENT_IDLE_TIMEOUT:-0}
 client_login_timeout = ${PGBOUNCER_CLIENT_LOGIN_TIMEOUT:-60}
 
 ;; Low-level tuning
 pkt_buf = ${PGBOUNCER_PKT_BUF:-4096}
+max_packet_size = ${PGBOUNCER_MAX_PACKET_SIZE:-2147483647}
 tcp_keepalive = ${PGBOUNCER_TCP_KEEPALIVE:-1}
 tcp_keepcnt = ${PGBOUNCER_TCP_KEEPCNT:-3}
 tcp_keepidle = ${PGBOUNCER_TCP_KEEPIDLE:-60}
