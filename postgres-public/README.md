@@ -23,7 +23,9 @@ Internet → Caddy Layer4 → pgbouncer-public:6432 → PostgreSQL:5432
 3. **Connection limiting**: Hard limit of 5 concurrent connections (configurable), preventing public users
                             from starving core and API functionality
 4. **TLS encryption**: Available on port 5432 for PostgreSQL 17+ clients
-5. **Read-only access**: The HAFSQL user (the only user currently using this feature) only has SELECT permissions
+5. **Query limits**: Queries, transactions, idle transactions, queued queries, idle clients, and oversized packets are bounded by the dedicated PgBouncer instance
+6. **Session cleanup**: `DISCARD ALL` runs when a server connection returns to the public transaction pool
+7. **Database ACLs**: HafSQL setup removes the public role's temporary-object, permanent ParadeDB creation, dangerous function, HAF logging, and pg_cron deletion privileges
 
 ## Enabling Public Access
 
