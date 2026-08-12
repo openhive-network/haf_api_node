@@ -1,4 +1,4 @@
-FROM registry.gitlab.syncad.com/hive/haf_api_node/alpine:3.22.1
+FROM registry.gitlab.syncad.com/hive/haf_api_node/alpine:3.23.5
 
 # Install packages in a single layer for better caching
 # pgbouncer: connection pooler
