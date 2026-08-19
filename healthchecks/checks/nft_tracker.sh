@@ -15,5 +15,5 @@ check_haf_lib
 # postgrest -> DB round-trip + app last-block age in one call).
 check_sync_status "nfttracker" 60 "${NFTTRACKER_HEALTH_URL:-http://nft-tracker-postgrest-rewriter}"
 
-shed_up "${80/sync-status:NFTTRACKER_SHED_MAXCONNS:-32 8 4}"
+shed_up "${NFTTRACKER_SHED_MAXCONNS:-32 8 4}"
 exit 0

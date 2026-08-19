@@ -15,5 +15,5 @@ check_haf_lib
 # postgrest -> DB round-trip + app last-block age in one call).
 check_sync_status "proxy_whitelist" 60 "${PROXY_WHITELIST_HEALTH_URL:-http://proxy-whitelist-postgrest-rewriter}"
 
-shed_up "${80/sync-status:PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
+shed_up "${PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
 exit 0
