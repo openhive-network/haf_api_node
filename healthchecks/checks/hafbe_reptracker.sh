@@ -15,5 +15,5 @@ check_haf_lib
 # postgrest -> DB round-trip + app last-block age in one call).
 check_sync_status "reptracker" 60 "${REPTRACKER_HEALTH_URL:-http://reputation-tracker-postgrest-rewriter}"
 
-shed_up "${80/sync-status:REPTRACKER_SHED_MAXCONNS:-32 8 4}"
+shed_up "${REPTRACKER_SHED_MAXCONNS:-32 8 4}"
 exit 0
