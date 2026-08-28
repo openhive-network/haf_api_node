@@ -7,6 +7,12 @@ services:
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: hivesense_owner
+      # log kept in the datadir (survives compose down; rotated by the logrotate service)
+      LOG_FILE: /logs/hivesense.log
+    volumes:
+      - type: bind
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/apps
+        target: /logs
     command: >
       process_blocks ${HIVESENSE_SYNC_ARGS:-}
     networks:
