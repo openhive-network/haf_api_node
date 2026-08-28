@@ -17,6 +17,12 @@ services:
       # how many times (1s apart) to re-check hivemind for a missing post before
       # applying MISSING_POST_ACTION
       MISSING_POST_RETRIES: ${HIVESENSE_MISSING_POST_RETRIES:-30}
+      # log kept in the datadir (survives compose down; rotated by the logrotate service)
+      LOG_FILE: /logs/hivesense_sync.log
+    volumes:
+      - type: bind
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/apps
+        target: /logs
     init: true
     networks:
       haf-network:
