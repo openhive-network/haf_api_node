@@ -35,6 +35,12 @@ services:
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: nfttracker_owner
+      # block-processing log, kept in the datadir (survives compose down; rotated by the logrotate service)
+      LOG_FILE: /logs/nft_tracker_block_processing.log
+    volumes:
+      - type: bind
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/apps
+        target: /logs
     networks:
       haf-network:
     restart: on-failure
