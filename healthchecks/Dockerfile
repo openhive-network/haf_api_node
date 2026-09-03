@@ -15,6 +15,8 @@ COPY checks/shed_poller.sh /checks/shed_poller.sh
 COPY checks/check_http_sync_age.sh /checks/check_http_sync_age.sh
 COPY checks/hivesense.sh /checks/hivesense.sh
 COPY checks/nft_tracker.sh /checks/nft_tracker.sh
+COPY checks/haf_stats.sh /checks/haf_stats.sh
+COPY checks/haf_fyp.sh /checks/haf_fyp.sh
 COPY checks/status.sh /checks/status.sh
 COPY checks/proxy_whitelist.sh /checks/proxy_whitelist.sh
 COPY healthcheck_healthcheck.sh /

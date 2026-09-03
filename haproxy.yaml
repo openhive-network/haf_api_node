@@ -85,6 +85,10 @@ services:
       HIVESENSE_HEALTH_URL: "${HIVESENSE_HEALTH_URL:-http://hivesense-postgrest-rewriter:80/sync-status}"
       BTRACKER_HEALTH_URL: "${BTRACKER_HEALTH_URL:-http://balance-tracker-postgrest-rewriter:80/sync-status}"
       NFTTRACKER_HEALTH_URL: "${NFTTRACKER_HEALTH_URL:-http://nft-tracker-postgrest-rewriter:80/sync-status}"
+      HAF_STATS_HEALTH_URL: "${HAF_STATS_HEALTH_URL:-http://haf-stats-postgrest-rewriter:80/sync-status}"
+      # haf_fyp serves /sync-status from its FastAPI overlay, not postgrest --
+      # see checks/haf_fyp.sh.
+      HAF_FYP_HEALTH_URL: "${HAF_FYP_HEALTH_URL:-http://haf-fyp-api:3002/sync-status}"
       PROXY_WHITELIST_HEALTH_URL: "${PROXY_WHITELIST_HEALTH_URL:-http://proxy-whitelist-postgrest-rewriter:80/sync-status}"
       HTTP_CHECK_TIMEOUT: "${HTTP_CHECK_TIMEOUT:-5}"
       # Load-shed configuration (see healthchecks/checks/shed_poller.sh).
@@ -113,6 +117,8 @@ services:
       REPTRACKER_SHED_MAXCONNS: "${REPTRACKER_SHED_MAXCONNS:-32 8 4}"
       HIVESENSE_SHED_MAXCONNS: "${HIVESENSE_SHED_MAXCONNS:-32 8 4}"
       NFTTRACKER_SHED_MAXCONNS: "${NFTTRACKER_SHED_MAXCONNS:-32 8 4}"
+      HAF_STATS_SHED_MAXCONNS: "${HAF_STATS_SHED_MAXCONNS:-32 8 4}"
+      HAF_FYP_SHED_MAXCONNS: "${HAF_FYP_SHED_MAXCONNS:-32 8 4}"
       PROXY_WHITELIST_SHED_MAXCONNS: "${PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
     healthcheck:
       test: ["CMD-SHELL", "/healthcheck_healthcheck.sh || exit 1"]
