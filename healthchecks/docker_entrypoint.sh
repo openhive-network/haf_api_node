@@ -14,5 +14,7 @@ nc -lk -p 7011 -e /checks/hivesense.sh &
 nc -lk -p 7013 -e /checks/nft_tracker.sh &
 nc -lk -p 7014 -e /checks/status.sh &
 nc -lk -p 7015 -e /checks/proxy_whitelist.sh &
+nc -lk -p 7016 -e /checks/haf_stats.sh &
+nc -lk -p 7017 -e /checks/haf_fyp.sh &
 
 wait
