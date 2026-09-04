@@ -2,10 +2,15 @@ services:
   haf-stats-install:
     image: ${HAF_STATS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
-      - apps
       - haf-stats
     environment:
       POSTGRES_HOST: haf
+      # REQUIRED, unlike some siblings. install_app.sh's step 1 loads db/builtin_roles.sql,
+      # which CREATEs both app roles -- and haf_stats' scripts/common.sh defaults
+      # POSTGRES_USER to haf_stats_owner, a role that does not exist yet on a fresh node.
+      # (uninstall_app.sh self-defaults to haf_admin; install_app.sh does not.) Without
+      # this: FATAL: role "haf_stats_owner" does not exist.
+      POSTGRES_USER: haf_admin
     networks:
       haf-network:
     command:
@@ -14,6 +19,14 @@ services:
     depends_on:
       haf:
         condition: service_healthy
+  # Teardown. DESTRUCTIVE and has no undo -- it drops all three schemas CASCADE,
+  # including haf_stats_backend, whose rollups take hours to rebuild from a genesis
+  # replay. Run it deliberately and never as part of a normal up:
+  #
+  #     docker compose --profile core --profile haf-stats-uninstall up haf-stats-uninstall
+  #
+  # --profile core is required: this service depends on `haf`, and without core the
+  # project fails to validate ("depends on undefined service haf").
   haf-stats-uninstall:
     image: ${HAF_STATS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -35,17 +48,15 @@ services:
   haf-stats-block-processing:
     image: ${HAF_STATS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
-      - apps
       - haf-stats
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: haf_stats_owner
-      # block-processing log, kept in the datadir (survives compose down; rotated by the logrotate service)
-      LOG_FILE: /logs/haf_stats_block_processing.log
-    volumes:
-      - type: bind
-        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/apps
-        target: /logs
+      # No LOG_FILE / /logs bind-mount, unlike balance_tracker. That pattern was copied
+      # here and then removed: `git grep LOG_FILE` in hive/haf_stats returns nothing, so
+      # the variable was inert and the mount stayed empty -- an operator following the
+      # comment to find logs after an incident would have found an empty directory.
+      # Container stdout is captured instead; see log_rotation/haf_stats.log_rotation.yaml.
     networks:
       haf-network:
     restart: on-failure
@@ -81,7 +92,6 @@ services:
         soft: 65536
         hard: 65536
     profiles:
-      - apps
       - haf-stats
     environment:
       PGRST_SERVER_HOST: "::"
@@ -115,14 +125,13 @@ services:
   haf-stats-postgrest-rewriter:
     image: ${HAF_STATS_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats/rewriter}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
-      - apps
       - haf-stats
-    labels:
-      # for Swagger UI
-      - "io.hive.swagger.url=/haf-stats-api/"
-      - "io.hive.swagger.name=HAF Stats API"
-      - "io.hive.swagger.order=20"
-      - "io.hive.healthcheck.port=7016"
+    # NO io.hive.swagger.* / io.hive.healthcheck.port labels yet, deliberately.
+    # Both advertise infrastructure that arrives with !243: there is no /haf-stats-api/
+    # route in Caddy/Varnish/HAProxy, and nothing binds 7016. status/app.js reads the
+    # healthcheck label and reports `unhealthy` when the port refuses -- so shipping the
+    # label early would put a permanent red row on the public status page for a perfectly
+    # healthy app. Omitting it yields `unknown`, which is honest.
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
       interval: 10s
