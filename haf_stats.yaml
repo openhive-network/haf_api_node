@@ -1,3 +1,7 @@
+# haf_stats. Gated on its own `haf-stats` profile rather than `apps` until
+# hive/haf_stats#66 lands: CI currently publishes only commit-SHA tags, so the
+# conventional ${HIVE_API_NODE_VERSION} default does not resolve to a real image.
+# Once tagging exists, move these services into `apps` alongside the others.
 services:
   haf-stats-install:
     image: ${HAF_STATS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
