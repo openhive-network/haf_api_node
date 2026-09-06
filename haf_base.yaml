@@ -3,7 +3,6 @@ services:
     profiles:
       - core
       - block-explorer-uninstall
-      - haf-stats-uninstall
     image: ${HAF_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf}:${HAF_VERSION:-${HIVE_API_NODE_VERSION}}
     networks:
       - haf-network
