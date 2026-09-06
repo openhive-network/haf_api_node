@@ -9,5 +9,6 @@ include:
   - exposed/reputation_tracker.exposed.yaml
   - exposed/hivesense.exposed.yaml
   - exposed/nft_tracker.exposed.yaml
+  - exposed/haf_stats.exposed.yaml
   - exposed/status.exposed.yaml
   - exposed/monitoring.exposed.yaml
