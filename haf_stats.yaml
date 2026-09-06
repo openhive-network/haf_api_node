@@ -15,6 +15,15 @@ services:
       # (uninstall_app.sh self-defaults to haf_admin; install_app.sh does not.) Without
       # this: FATAL: role "haf_stats_owner" does not exist.
       POSTGRES_USER: haf_admin
+      # install_app.sh asserts the operation-type registry matches the chain and
+      # exits NON-ZERO on a mismatch -- deliberately not `|| true`. No sibling app
+      # has such a gate, and this service is a service_completed_successfully
+      # dependency for both block-processing and postgrest, so a tripped arm takes
+      # the whole app down. The escape hatch has to be reachable from compose:
+      # haf_stats' README notes that `compose run --rm -e ...` does NOT work on this
+      # node, because pg_hba is keyed per container name and an ad-hoc container's
+      # name does not match any row.
+      HAF_STATS_SKIP_OP_TYPE_ASSERT: ${HAF_STATS_SKIP_OP_TYPE_ASSERT:-0}
     networks:
       haf-network:
     command:
@@ -27,10 +36,24 @@ services:
   # including haf_stats_backend, whose rollups take hours to rebuild from a genesis
   # replay. Run it deliberately and never as part of a normal up:
   #
-  #     docker compose --profile core --profile haf-stats-uninstall up haf-stats-uninstall
+  # Stop the app first -- uninstall_app.sh refuses while sessions are connected as
+  # a haf_stats role, and the block processor's connection never idles out:
   #
-  # --profile core is required: this service depends on `haf`, and without core the
-  # project fails to validate ("depends on undefined service haf").
+  #     docker compose stop haf-stats-block-processing haf-stats-postgrest \
+  #                         haf-stats-postgrest-rewriter
+  #     docker compose --profile core --profile haf-stats-uninstall \
+  #                    run --rm haf-stats-uninstall
+  #
+  # --profile core is required: this service depends on `haf`, and haf is not in
+  # this profile, so without core the project fails to validate ("depends on
+  # undefined service haf"). That is the same behaviour as every sibling.
+  #
+  # Adding haf-stats-uninstall to `haf`'s own profile list -- the idiom haf uses for
+  # block-explorer-uninstall -- would make the extra flag unnecessary, and was tried
+  # and REJECTED: it also removes a guard. With haf in the profile, `--profile
+  # haf-stats-uninstall up -d`, service name omitted, VALIDATES and runs the
+  # teardown. For nft-tracker that one-token slip fails closed. Costing an operator
+  # one flag is worth keeping a destructive command fail-closed.
   haf-stats-uninstall:
     image: ${HAF_STATS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
@@ -56,6 +79,12 @@ services:
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: haf_stats_owner
+      # The in-image healthcheck fails if hafd.contexts.last_active_at is older
+      # than this. The 300s default can report unhealthy on a HEALTHY replay,
+      # because a MASSIVE-mode batch legitimately runs longer than one window.
+      # Cosmetic today (nothing gates on this health); load-bearing once !243
+      # adds an agent-check.
+      HAF_STATS_HEALTHCHECK_MAX_AGE_SECONDS: ${HAF_STATS_HEALTHCHECK_MAX_AGE_SECONDS:-300}
       # No LOG_FILE / /logs bind-mount, unlike balance_tracker. That pattern was copied
       # here and then removed: `git grep LOG_FILE` in hive/haf_stats returns nothing, so
       # the variable was inert and the mount stayed empty -- an operator following the
@@ -130,12 +159,31 @@ services:
     image: ${HAF_STATS_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats/rewriter}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - haf-stats
-    # NO io.hive.swagger.* / io.hive.healthcheck.port labels yet, deliberately.
-    # Both advertise infrastructure that arrives with !243: there is no /haf-stats-api/
-    # route in Caddy/Varnish/HAProxy, and nothing binds 7016. status/app.js reads the
-    # healthcheck label and reports `unhealthy` when the port refuses -- so shipping the
-    # label early would put a permanent red row on the public status page for a perfectly
-    # healthy app. Omitting it yields `unknown`, which is honest.
+    environment:
+      # REQUIRED. rewriter_entrypoint.sh defaults POSTGREST_HOST to `haf-stats-api`,
+      # which is the service name in haf_stats' OWN docker/docker-compose.yml -- not
+      # this one. The template renders `proxy_pass http://$POSTGREST_HOST:3000`, and
+      # nginx resolves a literal upstream at CONFIG-PARSE time with no resolver
+      # directive. So a name that does not exist is not a 502 at request time:
+      # openresty exits immediately with [emerg] host not found in upstream. There
+      # is no restart policy, so it stays exited and the port-81 healthcheck never
+      # runs. haf_fyp's rewriter_entrypoint.sh documents this asymmetry and names
+      # haf_stats as the counter-example.
+      POSTGREST_HOST: haf-stats-postgrest
+    # NO io.hive.swagger.* / io.hive.healthcheck.port labels yet, deliberately, and
+    # they are NOT both unblocked by the same MR:
+    #
+    #   io.hive.healthcheck.port  waits on !243, which binds 7016.
+    #   io.hive.swagger.url       waits on a Caddy/Varnish/HAProxy route for
+    #                             /haf-stats-api/. NO MR PROVIDES THAT YET -- !243
+    #                             adds only healthchecks/ plus two haproxy.yaml vars.
+    #
+    # status/app.js discards any container without io.hive.swagger.url before any
+    # health logic runs (`if (!swaggerUrl) continue;`), so with neither label
+    # haf_stats does not appear on the status page AT ALL -- it is not listed as
+    # `unknown`. Shipping swagger.url alone would list it `unknown`; shipping both
+    # while nothing binds 7016 would list it a permanent `unhealthy`. Adding
+    # healthcheck.port alone changes nothing, because swagger.url is the gate.
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
       interval: 10s
