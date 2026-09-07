@@ -13,16 +13,22 @@ services:
       # which CREATEs both app roles -- and haf_stats' scripts/common.sh defaults
       # POSTGRES_USER to haf_stats_owner, a role that does not exist yet on a fresh node.
       # (uninstall_app.sh self-defaults to haf_admin; install_app.sh does not.) Without
-      # this: FATAL: role "haf_stats_owner" does not exist.
+      # this the install connects as haf_stats_owner, for which haf_base.yaml has no
+      # pg_hba row on this container: FATAL: no pg_hba.conf entry for host ..., user
+      # "haf_stats_owner". (Authentication runs before the role lookup, so that is the
+      # error you get here; on a stack with a permissive pg_hba the same slip surfaces
+      # as `role "haf_stats_owner" does not exist`, since step 1 is what creates it.)
       POSTGRES_USER: haf_admin
       # install_app.sh asserts the operation-type registry matches the chain and
       # exits NON-ZERO on a mismatch -- deliberately not `|| true`. No sibling app
       # has such a gate, and this service is a service_completed_successfully
       # dependency for both block-processing and postgrest, so a tripped arm takes
       # the whole app down. The escape hatch has to be reachable from compose:
-      # haf_stats' README notes that `compose run --rm -e ...` does NOT work on this
-      # node, because pg_hba is keyed per container name and an ad-hoc container's
-      # name does not match any row.
+      # haf_stats' README prescribes `compose run --rm -e HAF_STATS_SKIP_OP_TYPE_ASSERT=1
+      # haf-stats-setup` as the escape hatch, and names adding the variable to the
+      # service's `environment:` as the better fix. Only the second works here: pg_hba on
+      # this node is keyed per container name, and a `run` container's name matches no
+      # row. (The README says nothing about pg_hba -- that constraint is this repo's.)
       HAF_STATS_SKIP_OP_TYPE_ASSERT: ${HAF_STATS_SKIP_OP_TYPE_ASSERT:-0}
     networks:
       haf-network:
@@ -36,17 +42,30 @@ services:
   # including haf_stats_backend, whose rollups take hours to rebuild from a genesis
   # replay. Run it deliberately and never as part of a normal up:
   #
-  # Stop the app first -- uninstall_app.sh refuses while sessions are connected as
-  # a haf_stats role, and the block processor's connection never idles out:
+  # Stop the app first -- uninstall_app.sh refuses while sessions are connected as a
+  # haf_stats role. The block processor's connection never idles out, and pooled
+  # haf_stats_user backends survive up to PGBOUNCER_SERVER_IDLE_TIMEOUT (600s) after
+  # postgrest stops, so either wait it out or restart pgbouncer:
   #
   #     docker compose stop haf-stats-block-processing haf-stats-postgrest \
   #                         haf-stats-postgrest-rewriter
   #     docker compose --profile core --profile haf-stats-uninstall \
-  #                    run --rm haf-stats-uninstall
+  #                    up haf-stats-uninstall
+  #
+  # `up <service>`, NOT `run --rm`. haf_stats' README prescribes `run --rm` and is right
+  # THERE: its own compose profiles nothing, so `up` would also start haf-stats-setup
+  # (whose command is install_app) alongside the teardown, and it grants
+  # `host haf_block_log haf_stats_owner all trust`, so an ad-hoc container connects.
+  # Neither holds here. Upstream profiles every app service, so `up <service>` starts
+  # only that one -- and pg_hba is keyed per CONTAINER NAME, where `run` names its
+  # container <project>-haf-stats-uninstall-run-<slug>, matching no row in haf_base.yaml.
+  # The recipes are not interchangeable.
   #
   # --profile core is required: this service depends on `haf`, and haf is not in
   # this profile, so without core the project fails to validate ("depends on
-  # undefined service haf"). That is the same behaviour as every sibling.
+  # undefined service haf"). Six of the seven sibling uninstall services behave the
+  # same way; block-explorer-uninstall is the exception -- and it is the exception
+  # because it uses the idiom rejected just below.
   #
   # Adding haf-stats-uninstall to `haf`'s own profile list -- the idiom haf uses for
   # block-explorer-uninstall -- would make the extra flag unnecessary, and was tried
@@ -79,11 +98,18 @@ services:
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: haf_stats_owner
-      # The in-image healthcheck fails if hafd.contexts.last_active_at is older
-      # than this. The 300s default can report unhealthy on a HEALTHY replay,
-      # because a MASSIVE-mode batch legitimately runs longer than one window.
-      # Cosmetic today (nothing gates on this health); load-bearing once !243
-      # adds an agent-check.
+      # The in-image check is
+      #     (last_active_at fresher than this AND later than this container's start)
+      #     OR hive.is_app_in_sync(context)
+      # so this window only binds while the app is BEHIND -- at the tip the OR arm
+      # reports healthy whatever this is set to. Raise it when a MASSIVE-mode batch runs
+      # longer than the window and reports unhealthy on a healthy replay; note the
+      # one-iteration lag means 300s tolerates iterations of roughly half that.
+      #
+      # Cosmetic in this stack: nothing gates on this health, and !243 does NOT change
+      # that -- its agent-check measures a different quantity (get_app_current_block_age
+      # over HTTP /sync-status, with its own 60s threshold) and never reads container
+      # health or this variable. It matters for `docker ps` and for whoever reads it.
       HAF_STATS_HEALTHCHECK_MAX_AGE_SECONDS: ${HAF_STATS_HEALTHCHECK_MAX_AGE_SECONDS:-300}
       # No LOG_FILE / /logs bind-mount, unlike balance_tracker. That pattern was copied
       # here and then removed: `git grep LOG_FILE` in hive/haf_stats returns nothing, so
