@@ -47,8 +47,17 @@ services:
   # haf_stats_user backends survive up to PGBOUNCER_SERVER_IDLE_TIMEOUT (600s) after
   # postgrest stops, so either wait it out or restart pgbouncer:
   #
-  #     docker compose stop haf-stats-block-processing haf-stats-postgrest \
-  #                         haf-stats-postgrest-rewriter
+  #     docker compose stop haf-stats-block-processing haf-stats-postgrest pgbouncer
+  #
+  # pgbouncer is in that list and the rewriter is not, which looks backwards and is
+  # not. The rewriter is an nginx proxy and holds no database session at all. pgbouncer
+  # holds server-side connections authenticated AS haf_stats_user -- its `[databases]`
+  # line carries no `user=`, which is exactly why this MR had to add a haf_stats_user
+  # pg_hba row for it. Stopping PostgREST closes only the client half; the pooled
+  # backends linger in pg_stat_activity for PGBOUNCER_SERVER_IDLE_TIMEOUT (600s).
+  # Skip pgbouncer and the teardown refuses for up to ten minutes, naming
+  # application_name=haf_stats_postgrest -- a container you already stopped.
+  # (Stopping pgbouncer briefly interrupts every app's PostgREST; they reconnect.)
   #     docker compose --profile core --profile haf-stats-uninstall \
   #                    up haf-stats-uninstall
   #
@@ -131,7 +140,9 @@ services:
       # It reads hafd.contexts.last_active_at, so it proves the loop is ITERATING. It
       # does NOT prove the chain is advancing -- HAF commits that heartbeat before every
       # early return in app_next_iteration, so a paused app or a stopped hived still
-      # ticks it. Chain staleness is the agent-check's job (healthchecks/checks/haf_stats.sh).
+      # ticks it. Chain staleness belongs to an agent-check -- but note that
+      # healthchecks/checks/haf_stats.sh DOES NOT EXIST in this repo yet. !243 adds it;
+      # until that merges nothing on a stock node measures haf_stats' chain lag.
       test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
       interval: 60s
       timeout: 10s
@@ -155,7 +166,16 @@ services:
     environment:
       PGRST_SERVER_HOST: "::"
       PGRST_ADMIN_SERVER_PORT: 3001
-      PGRST_DB_URI: postgresql://haf_stats_user@pgbouncer:6432/haf_block_log?application_name=haf_stats_postgrest
+      # statement_timeout is carried ON THE CONNECTION because that is the only place
+      # it arms: haf_stats' README records that a function-level SET never takes effect
+      # for PostgREST, and `ALTER ROLE ... SET statement_timeout` is dead config here.
+      # It matters MORE in this file than in haf_stats' own compose, which is where the
+      # 30s comes from: there PostgREST owns a private pool straight to haf:5432, so a
+      # runaway query starves only haf_stats. Here the pool is pgbouncer's, shared with
+      # every other app (DEFAULT_POOL_SIZE 25 / MAX_DB_CONNECTIONS 30), so an uncapped
+      # query holds a slot the whole node competes for. No sibling sets one; that is a
+      # gap in the siblings, not a licence to drop the cap the app ships with.
+      PGRST_DB_URI: postgresql://haf_stats_user@pgbouncer:6432/haf_block_log?application_name=haf_stats_postgrest&options=-c%20statement_timeout%3D30s
       PGRST_DB_SCHEMA: haf_stats_endpoints
       PGRST_DB_ANON_ROLE: haf_stats_user
       PGRST_DB_POOL: 8
