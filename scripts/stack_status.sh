@@ -221,6 +221,7 @@ APPS=(
     "Balance Tracker|hafbe_bal|balance-tracker-block-processing-1"
     "Reputation Tracker|reptracker_app|reputation-tracker-block-processing-1"
     "NFT Tracker|nfttracker_app|nft-tracker-block-processing-1"
+    "HAF Stats|haf_stats_app|haf-stats-block-processing-1"
     "Hivesense|hivesense_app|hivesense-sync-1"
     "HAfAH|hafah_app|"
 )
@@ -362,6 +363,7 @@ declare -A GITLAB_IDS=(
     [balance_tracker]=330
     [reputation_tracker]=418
     [nft_tracker]=536
+    [haf_stats]=602
     [hivesense]=506
     [haf_block_explorer]=358
     [drone]=446

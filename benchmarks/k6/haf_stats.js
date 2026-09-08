@@ -2,16 +2,29 @@
 // REST API at /haf-stats-api/
 //
 // READ THIS BEFORE CHANGING THE URLS. haf_stats is not shaped like the other apps
-// benchmarked here. Its endpoints are date-windowed aggregations over rollup tables, and
-// every one of them treats an OMITTED from_date as "since genesis" -- 2016-03-24
-// (hive/haf_stats#34, #35). So `/network/content-volume` with no parameters is not a
-// light default case, it is the single most expensive query the app can serve, and a
-// benchmark written the obvious way measures nothing but that worst case on every
-// iteration.
+// benchmarked here: most of its endpoints are date-windowed aggregations over rollup
+// tables, and the NETWORK TIME-SERIES family treats an OMITTED from_date as "since
+// genesis" -- 2016-03-24 (hive/haf_stats#35, which unified those defaults to full
+// history; #34 covers get_daily_active_users alone). So `/network/content-volume` with
+// no parameters is not a light default case, it is close to the most expensive query
+// the app can serve, and a benchmark written the obvious way measures that worst case
+// on every iteration and reports it as typical.
 //
-// Every request below therefore carries an explicit, bounded window. WINDOW_DAYS is the
-// knob: raise it deliberately to characterise how cost scales with window width, rather
-// than discovering genesis-width numbers by accident and reading them as typical.
+// That is why the network requests below carry an explicit bounded window. WINDOW_DAYS
+// is the knob: raise it deliberately to characterise how cost scales with width.
+//
+// IT IS NOT UNIFORM, AND SENDING A WINDOW WHERE IT DOES NOT BELONG IS A 404. Two of
+// these endpoints take NO ARGUMENTS AT ALL:
+//
+//     get_network_hp_distribution()             endpoint_schema.sql
+//     get_governance_influence_concentration()
+//
+// PostgREST resolves an RPC by its query-parameter names, so passing from_date to a
+// zero-argument function is PGRST202 -> 404, not an ignored parameter. Those two are
+// called bare below. Two others default to something already narrow rather than to
+// genesis -- get_account_content_stats to 30 days, get_account_financial_summary to
+// one year -- so a window there changes the shape of the measurement rather than
+// rescuing it from a pathological default.
 
 import http from "k6/http";
 import { check, group, sleep } from "k6";
@@ -77,18 +90,23 @@ export default function () {
     restGet(`/network/engagement?${WINDOW}`, "engagement");
     restGet(`/network/daily-active-users?${WINDOW}`, "daily_active_users");
     restGet(`/network/top-accounts?${WINDOW}`, "top_accounts");
-    restGet(`/network/hp-distribution?${WINDOW}`, "hp_distribution");
+    // NO WINDOW: zero-argument function, a date param here is PGRST202 -> 404.
+    restGet(`/network/hp-distribution`, "hp_distribution");
     // json_id is REQUIRED here -- omitting it is 400, not a default (endpoint_schema.sql).
     restGet(`/network/custom-json-usage?json_id=${jsonId}&${WINDOW}`, "custom_json_usage");
   });
 
   group("governance", () => {
-    restGet(`/governance/influence-concentration?${WINDOW}`, "influence_concentration");
+    // NO WINDOW: zero-argument function, same as hp-distribution.
+    restGet(`/governance/influence-concentration`, "influence_concentration");
     restGet(`/witnesses/missed-blocks?${WINDOW}`, "missed_blocks");
   });
 
-  // Per-account endpoints. Note these are NOT free at genesis width either -- the
-  // per-account path does not get the same rollup shortcuts the network path does.
+  // Per-account endpoints. These read the same *_daily rollups as the network family
+  // but filtered on account_id, which is the leading index column -- so they SEEK where
+  // the network path scans, and are generally the cheaper half of this profile. The
+  // genuinely expensive per-account endpoint is get_account_interactions, deliberately
+  // not called here.
   group("account", () => {
     restGet(`/account/${account}/content-stats?${WINDOW}`, "account_content_stats");
     restGet(`/account/${account}/community-activity?${WINDOW}`, "account_community_activity");
