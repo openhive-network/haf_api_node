@@ -208,13 +208,25 @@ services:
     labels:
       # for Swagger UI. status/app.js discards any container without swagger.url before
       # any health logic runs (`if (!swaggerUrl) continue;`), so these are what put
-      # haf_stats on the status page at all -- healthcheck.port alone would do nothing.
-      # They are added HERE, with the route, and deliberately not in !244: a swagger.url
-      # pointing at a path nothing serves produces a status row whose link 404s.
+      # haf_stats on the status page at all. They belong HERE and not in !244: a
+      # swagger.url pointing at a path nothing serves produces a status row whose link
+      # 404s, so the labels and the route have to land together.
+      #
+      # io.hive.healthcheck.port IS DELIBERATELY ABSENT and belongs in !243, not here.
+      # status/app.js does NOT treat a refused connect as unknown:
+      #
+      #     let status = 'unknown';
+      #     if (healthPort) { status = isHealthy ? 'healthy' : 'unhealthy'; }
+      #
+      # Nothing binds 7016 on haproxy-healthchecks until !243 adds it to the entrypoint,
+      # so shipping the label here would put a permanent red "HAF Stats API unhealthy"
+      # row on the public status page while the API served perfectly. Omitting it leaves
+      # status at 'unknown', which is the honest state: the route works, the agent that
+      # would measure it does not exist yet. !243 adds the listener and the label
+      # together.
       - "io.hive.swagger.url=/haf-stats-api/"
       - "io.hive.swagger.name=HAF Stats API"
       - "io.hive.swagger.order=9"
-      - "io.hive.healthcheck.port=7016"
     environment:
       # REQUIRED. rewriter_entrypoint.sh defaults POSTGREST_HOST to `haf-stats-api`,
       # which is the service name in haf_stats' OWN docker/docker-compose.yml -- not
@@ -226,20 +238,11 @@ services:
       # runs. haf_fyp's rewriter_entrypoint.sh documents this asymmetry and names
       # haf_stats as the counter-example.
       POSTGREST_HOST: haf-stats-postgrest
-    # NO io.hive.swagger.* / io.hive.healthcheck.port labels yet, deliberately, and
-    # they are NOT both unblocked by the same MR:
-    #
-    #   io.hive.healthcheck.port  waits on !243, which binds 7016.
-    #   io.hive.swagger.url       waits on a Caddy/Varnish/HAProxy route for
-    #                             /haf-stats-api/. NO MR PROVIDES THAT YET -- !243
-    #                             adds only healthchecks/ plus two haproxy.yaml vars.
-    #
-    # status/app.js discards any container without io.hive.swagger.url before any
-    # health logic runs (`if (!swaggerUrl) continue;`), so with neither label
-    # haf_stats does not appear on the status page AT ALL -- it is not listed as
-    # `unknown`. Shipping swagger.url alone would list it `unknown`; shipping both
-    # while nothing binds 7016 would list it a permanent `unhealthy`. Adding
-    # healthcheck.port alone changes nothing, because swagger.url is the gate.
+    # The swagger labels are set above, with the route that makes them true. The
+    # sequencing they used to describe still holds and is recorded there:
+    # swagger.url is the status page's gate, healthcheck.port alone changes nothing,
+    # and healthcheck.port without a listener on 7016 reads as a permanent unhealthy
+    # rather than unknown -- which is why it waits for !243.
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
       interval: 10s

@@ -59,6 +59,7 @@ declare -A APP_SCRIPTS=(
   [reputation_tracker]="reputation_tracker.js"
   [haf_block_explorer]="haf_block_explorer.js"
   [nft_tracker]="nft_tracker.js"
+  [haf_stats]="haf_stats.js"
 )
 
 # Map app names to health check URLs
@@ -69,9 +70,10 @@ declare -A APP_HEALTH=(
   [reputation_tracker]="/reputation-api/version"
   [haf_block_explorer]="/hafbe-api/version"
   [nft_tracker]="/nft-tracker-api/version"
+  [haf_stats]="/haf-stats-api/version"
 )
 
-ALL_APPS=(hafah hivemind balance_tracker reputation_tracker haf_block_explorer nft_tracker)
+ALL_APPS=(hafah hivemind balance_tracker reputation_tracker haf_block_explorer nft_tracker haf_stats)
 
 run_k6() {
   local script="$1"
