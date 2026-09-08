@@ -205,6 +205,16 @@ services:
     image: ${HAF_STATS_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats/rewriter}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - haf-stats
+    labels:
+      # for Swagger UI. status/app.js discards any container without swagger.url before
+      # any health logic runs (`if (!swaggerUrl) continue;`), so these are what put
+      # haf_stats on the status page at all -- healthcheck.port alone would do nothing.
+      # They are added HERE, with the route, and deliberately not in !244: a swagger.url
+      # pointing at a path nothing serves produces a status row whose link 404s.
+      - "io.hive.swagger.url=/haf-stats-api/"
+      - "io.hive.swagger.name=HAF Stats API"
+      - "io.hive.swagger.order=9"
+      - "io.hive.healthcheck.port=7016"
     environment:
       # REQUIRED. rewriter_entrypoint.sh defaults POSTGREST_HOST to `haf-stats-api`,
       # which is the service name in haf_stats' OWN docker/docker-compose.yml -- not

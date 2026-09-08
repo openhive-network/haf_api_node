@@ -51,6 +51,11 @@ backend nft_tracker {
     .port = "7013";
 }
 
+backend haf_stats {
+    .host = "haproxy";
+    .port = "7016";
+}
+
 backend proxy_whitelist {
     .host = "haproxy";
     .port = "7015";
@@ -164,6 +169,14 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url ~ "^/haf-stats-api/") {
+        # rewrite the URL to where PostgREST expects it
+        set req.url = regsub(req.url, "^/haf-stats-api/(.*)$", "/\1");
+        set req.backend_hint = haf_stats;
+
+        if (req.method == "POST") {
+            call recv_cachable_post;
+        }
     } elseif (req.url ~ "^/proxy-whitelist-api/") {
         # rewrite the URL to where PostgREST expects it
         set req.url = regsub(req.url, "^/proxy-whitelist-api/(.*)$", "/\1");
@@ -210,7 +223,7 @@ sub vcl_backend_fetch {
 }
 
 sub vcl_backend_response {
-    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense || bereq.backend == nft_tracker || bereq.backend == hivemind || bereq.backend == proxy_whitelist) {
+    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense || bereq.backend == nft_tracker || bereq.backend == hivemind || bereq.backend == proxy_whitelist || bereq.backend == haf_stats) {
         # PostgREST generates invalid content-range headers, and varnish will refuse to cache/proxy calls because of it.
         # Until they fix it, just remove the header.  (see https://github.com/PostgREST/postgrest/issues/1089)
         unset beresp.http.Content-Range;
@@ -245,6 +258,8 @@ sub vcl_hash {
         hash_data("hivesense-api");
     } else if (req.backend_hint == nft_tracker) {
         hash_data("nft-tracker-api");
+    } else if (req.backend_hint == haf_stats) {
+        hash_data("haf-stats-api");
     } else if (req.backend_hint == proxy_whitelist) {
         hash_data("proxy-whitelist-api");
     } else if (req.backend_hint == hivemind) {
