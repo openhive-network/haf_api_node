@@ -212,21 +212,32 @@ services:
       # swagger.url pointing at a path nothing serves produces a status row whose link
       # 404s, so the labels and the route have to land together.
       #
-      # io.hive.healthcheck.port IS DELIBERATELY ABSENT and belongs in !243, not here.
-      # status/app.js does NOT treat a refused connect as unknown:
+      # io.hive.healthcheck.port BELONGS HERE, and an earlier revision of this MR was
+      # wrong to move it out. It said the label "belongs in !243, not here" -- but !243
+      # targets develop, where this file does not exist, and its own last commit
+      # ("chore: split the compose module out into its own MR") is what removed
+      # haf_stats.yaml from it. !243 therefore CANNOT carry the label, and review found
+      # it present in no branch at all: merging both MRs and rendering
+      # `docker compose config` yields the three swagger labels and nothing else. The
+      # result would have been a "HAF Stats API - unknown" row forever, and the agent
+      # listener !243 exists to provide would never be read by anything but HAProxy.
+      #
+      # THE ORDERING CONCERN THAT MOTIVATED THE MOVE IS REAL, so state it rather than
+      # act on it. status/app.js does not treat a refused connect as unknown:
       #
       #     let status = 'unknown';
       #     if (healthPort) { status = isHealthy ? 'healthy' : 'unhealthy'; }
       #
-      # Nothing binds 7016 on haproxy-healthchecks until !243 adds it to the entrypoint,
-      # so shipping the label here would put a permanent red "HAF Stats API unhealthy"
-      # row on the public status page while the API served perfectly. Omitting it leaves
-      # status at 'unknown', which is the honest state: the route works, the agent that
-      # would measure it does not exist yet. !243 adds the listener and the label
-      # together.
+      # Nothing binds 7016 until !243 adds it to the healthchecks entrypoint, so between
+      # this MR merging and !243 merging the status row reads `unhealthy` while the API
+      # serves perfectly. That window is a cosmetic false alarm on one row, bounded by
+      # the gap between two MRs that are meant to land together -- which is a smaller
+      # cost than shipping a permanently-`unknown` app and losing the label in the gap
+      # between the two, which is what actually happened. Merge !243 with or before this.
       - "io.hive.swagger.url=/haf-stats-api/"
       - "io.hive.swagger.name=HAF Stats API"
       - "io.hive.swagger.order=9"
+      - "io.hive.healthcheck.port=7016"
     environment:
       # REQUIRED. rewriter_entrypoint.sh defaults POSTGREST_HOST to `haf-stats-api`,
       # which is the service name in haf_stats' OWN docker/docker-compose.yml -- not
@@ -238,11 +249,11 @@ services:
       # runs. haf_fyp's rewriter_entrypoint.sh documents this asymmetry and names
       # haf_stats as the counter-example.
       POSTGREST_HOST: haf-stats-postgrest
-    # The swagger labels are set above, with the route that makes them true. The
-    # sequencing they used to describe still holds and is recorded there:
-    # swagger.url is the status page's gate, healthcheck.port alone changes nothing,
-    # and healthcheck.port without a listener on 7016 reads as a permanent unhealthy
-    # rather than unknown -- which is why it waits for !243.
+    # Both label groups are set above, with the route that makes them true, and the
+    # sequencing note lives there: swagger.url is the status page's gate,
+    # healthcheck.port alone changes nothing, and healthcheck.port without a listener
+    # on 7016 reads as unhealthy rather than unknown -- so !243 should merge with or
+    # before this MR.
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
       interval: 10s
