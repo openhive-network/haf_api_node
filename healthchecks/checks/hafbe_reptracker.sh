@@ -13,7 +13,7 @@ check_haf_lib
 
 # Full-path sync check via the uniform /sync-status API (rewriter ->
 # postgrest -> DB round-trip + app last-block age in one call).
-check_sync_status "reptracker" 60 "${REPTRACKER_HEALTH_URL:-http://reputation-tracker-postgrest-rewriter}"
+check_sync_status "reptracker" 60 "${REPTRACKER_HEALTH_URL:-http://reputation-tracker-postgrest-rewriter:80/sync-status}"
 
 shed_up "${REPTRACKER_SHED_MAXCONNS:-32 8 4}"
 exit 0
