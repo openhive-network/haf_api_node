@@ -34,7 +34,30 @@ services:
       haf-network:
     command:
       - install_app
-      - --swagger-url=${PUBLIC_HOSTNAME}
+      # A RELATIVE PATH, not ${PUBLIC_HOSTNAME}. Until hive/haf_stats!87 (#70) merged on
+      # 2026-09-10 this flag was inert -- it SET a GUC on the installer's own psql
+      # session, which nothing read and nothing could read, since PostgREST connects
+      # later on its own pool. It is now persisted to haf_stats_app.app_config and read
+      # by haf_stats_endpoints.root(), which patches the OpenAPI `servers` entry.
+      #
+      # ${PUBLIC_HOSTNAME} is a bare hostname, which install_app rejects, falling back to
+      # the default and logging "WARNING: --swagger-url='...' is not an absolute path or
+      # an http(s) URL with a path". The published document was therefore correct by
+      # accident -- and the argument read as if it did something.
+      #
+      # The rejection is deliberate on haf_stats' side and worth understanding: a
+      # scheme-prefixed PUBLIC_HOSTNAME is legal here (CADDY_SITES defaults to it), and
+      # accepting a bare origin would have published `https://<host>` as the base URL --
+      # an origin this node does not route, since the app lives under /haf-stats-api/.
+      #
+      # A relative path is correct behind Caddy -> Varnish -> HAProxy regardless of
+      # hostname or scheme, and it is what install_app's own warning recommends for a
+      # node deployment. Varnish strips the prefix before the rewriter sees it
+      # (default.vcl), so this describes the PUBLIC base URL, not the internal one.
+      #
+      # Reported as hive/haf_api_node#43; fixed here rather than left as a follow-up
+      # because it is one line and this MR is what introduces the flag.
+      - --swagger-url=/haf-stats-api
     depends_on:
       haf:
         condition: service_healthy
