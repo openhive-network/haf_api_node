@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 . "$(dirname "$0")/format_seconds.sh"
 
 # Calculate time offset if EXPECTED_BLOCK_TIME is set (for CI environments)
@@ -16,12 +17,12 @@ calculate_time_offset() {
 
 # Apply time offset to age calculations
 adjust_age_for_ci() {
-  local age=$1
+  _age="$1"
   if [ "$TIME_OFFSET" -gt 0 ]; then
     # Subtract the offset to get the "real" age relative to expected time
-    echo $((age - TIME_OFFSET))
+    echo $((_age - TIME_OFFSET))
   else
-    echo "$age"
+    echo "$_age"
   fi
 }
 

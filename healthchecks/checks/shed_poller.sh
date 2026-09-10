@@ -119,6 +119,7 @@ while true; do
     # told to cap anything (safe even against an unchanged haproxy config).
     # Log the maxconn hivemind WOULD be capped to, to make the effect concrete.
     if [ "$level" -gt 0 ] || [ "$overloaded" -eq 1 ]; then
+      # shellcheck disable=SC2086 # word-split "<normal> <reduced> <floor>" into $1 $2 $3
       would=$(SHED_LEVEL_FILE=/dev/null; set -- ${HIVEMIND_SHED_MAXCONNS:-64 12 6}; \
               case "$level" in 1) echo "${2}";; 2) echo "${3}";; *) echo "${1}";; esac)
       log "log-only (SHED_ARMED=false): computed level=${level} (would cap hivemind maxconn -> ${would})${reason:+ [${reason}]}"
