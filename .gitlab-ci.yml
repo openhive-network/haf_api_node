@@ -124,6 +124,20 @@ lint-docker-compose:
   tags:
     - public-runner-docker
 
+lint-shellcheck:
+  stage: build  # Run parallel with docker-build
+  image: registry.gitlab.syncad.com/hive/haf_api_node/alpine:3.22.1
+  script:
+    - apk add --no-cache shellcheck
+    - shellcheck --version
+    # Agent-check scripts run under busybox sh inside the haproxy-healthchecks
+    # image; a mangled expansion there fails at runtime, not at parse time
+    # (see !241), so lint them. .shellcheckrc at the repo root follows the
+    # sourced libs (source-path=SCRIPTDIR) so callers are checked in context.
+    - shellcheck -f gcc healthchecks/checks/*.sh healthchecks/*.sh
+  tags:
+    - public-runner-docker
+
 check-log-rotation:
   stage: build
   image: python:3.14-alpine

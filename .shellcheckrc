@@ -1,0 +1,5 @@
+# Resolve `. "$(dirname "$0")/lib.sh"` relative to the sourcing script and
+# follow into the sourced file, so functions and variables defined there are
+# known when checking the callers (and SC1091 "not following" stays quiet).
+source-path=SCRIPTDIR
+external-sources=true
