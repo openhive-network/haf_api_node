@@ -13,7 +13,7 @@ check_haf_lib
 
 # Full-path sync check via the uniform /sync-status API (rewriter ->
 # postgrest -> DB round-trip + app last-block age in one call).
-check_sync_status "proxy_whitelist" 60 "${PROXY_WHITELIST_HEALTH_URL:-http://proxy-whitelist-postgrest-rewriter}"
+check_sync_status "proxy_whitelist" 60 "${PROXY_WHITELIST_HEALTH_URL:-http://proxy-whitelist-postgrest-rewriter:80/sync-status}"
 
-shed_up "${80/sync-status:PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
+shed_up "${PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
 exit 0

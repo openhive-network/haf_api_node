@@ -1,12 +1,11 @@
 #! /bin/sh
 # All agent-check listeners must be bound
-# `-ge`, not an exact count. The previous form asserted `^10$` and this MR would
-# have had to bump it to `^11$`; the haf_fyp check on 7017 that this MR reserves
-# would then have to bump it again, and a container binding MORE listeners than
-# the assertion expects reports unhealthy for no reason. testapi is running a
-# 12-listener build of this image today for exactly that reason. What the check
-# is for is catching a listener that FAILED to bind, so a floor is the correct
-# comparison and an equality is a forward-compatibility trap.
+# `-ge`, not an exact count. develop made this shellcheck-clean in 9068fb6 and kept
+# the exact form (`-eq 10`); this MR adds 7016, and the haf_fyp check on 7017 that it
+# reserves would force yet another bump. A container binding MORE listeners than the
+# assertion expects then reports unhealthy for no reason -- testapi runs a 12-listener
+# build of this image today for exactly that reason. What the check is for is catching
+# a listener that FAILED to bind, so a floor is the right comparison.
 [ "$(netstat -tln | grep -cE ':(7001|7002|7003|7004|7005|7009|7011|7013|7014|7015|7016)\b')" -ge 11 ] || exit 1
 
 # The shed poller must be alive and publishing (file rewritten every poll;
