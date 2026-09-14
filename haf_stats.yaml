@@ -189,16 +189,20 @@ services:
     environment:
       PGRST_SERVER_HOST: "::"
       PGRST_ADMIN_SERVER_PORT: 3001
-      # statement_timeout is carried ON THE CONNECTION because that is the only place
-      # it arms: haf_stats' README records that a function-level SET never takes effect
-      # for PostgREST, and `ALTER ROLE ... SET statement_timeout` is dead config here.
-      # It matters MORE in this file than in haf_stats' own compose, which is where the
-      # 30s comes from: there PostgREST owns a private pool straight to haf:5432, so a
-      # runaway query starves only haf_stats. Here the pool is pgbouncer's, shared with
-      # every other app (DEFAULT_POOL_SIZE 25 / MAX_DB_CONNECTIONS 30), so an uncapped
-      # query holds a slot the whole node competes for. No sibling sets one; that is a
-      # gap in the siblings, not a licence to drop the cap the app ships with.
-      PGRST_DB_URI: postgresql://haf_stats_user@pgbouncer:6432/haf_block_log?application_name=haf_stats_postgrest&options=-c%20statement_timeout%3D30s
+      # NO statement_timeout on this URI. haf_stats' own compose carries
+      # `options=-c statement_timeout=30s` (its PostgREST pools straight to haf:5432),
+      # but here the connection goes through pgbouncer, and PgBouncer 1.25.1 with the
+      # stack's `ignore_startup_parameters = extra_float_digits` rejects the startup
+      # parameter outright:
+      #     FATAL: unsupported startup parameter in options: statement_timeout
+      # so PostgREST could never connect and the API never came up. Listing the
+      # parameter in ignore_startup_parameters makes the connection succeed but silently
+      # drops the timeout, and track_extra_parameters does not accept it either.
+      # What does arm through pgbouncer is a role-level setting, because the pool logs
+      # in AS haf_stats_user (verified on a fresh pool: ALTER ROLE haf_stats_user SET
+      # statement_timeout = '1s' cancels a 2s pg_sleep). That belongs in haf_stats'
+      # installer; until it lands, haf_stats runs uncapped here like every sibling.
+      PGRST_DB_URI: postgresql://haf_stats_user@pgbouncer:6432/haf_block_log?application_name=haf_stats_postgrest
       PGRST_DB_SCHEMA: haf_stats_endpoints
       PGRST_DB_ANON_ROLE: haf_stats_user
       PGRST_DB_POOL: 8
