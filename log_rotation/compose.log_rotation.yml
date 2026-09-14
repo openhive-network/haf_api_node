@@ -6,6 +6,7 @@ include:
   - log_rotation/haf_base.log_rotation.yaml
   - log_rotation/haf_block_explorer.log_rotation.yaml
   - log_rotation/hafah.log_rotation.yaml
+  - log_rotation/haf_stats.log_rotation.yaml
   - log_rotation/hafsql.log_rotation.yaml
   - log_rotation/haproxy.log_rotation.yaml
   - log_rotation/hive.log_rotation.yaml

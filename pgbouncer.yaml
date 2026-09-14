@@ -4,10 +4,14 @@ services:
     profiles:
       - servers
       - apps
+      # haf_stats is gated on its own profile rather than `apps` (see haf_stats.yaml and
+      # .env.example), so `--profile core --profile haf-stats` has to bring the pooler
+      # with it. Same idiom as `haf` carrying `block-explorer-uninstall`.
+      - haf-stats
     environment:
       # Users allowed to connect through PgBouncer (space-separated list)
       # These users must also be allowed in PostgreSQL's pg_hba.conf
-      PGBOUNCER_USERS: "hafah_user hivemind_user hafbe_user btracker_user reptracker_user nfttracker_user hivesense_user proxy_whitelist_user stats postgres haf_admin pghero pgbouncer"
+      PGBOUNCER_USERS: "hafah_user hivemind_user hafbe_user btracker_user reptracker_user nfttracker_user hivesense_user proxy_whitelist_user haf_stats_user stats postgres haf_admin pghero pgbouncer"
       # Listen on all interfaces (IPv4 and IPv6)
       PGBOUNCER_LISTEN_ADDR: "*"
       # Database connection settings

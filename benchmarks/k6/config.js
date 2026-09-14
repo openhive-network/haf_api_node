@@ -10,6 +10,7 @@ export const BALANCE_URL = __ENV.BALANCE_URL || `${STACK_URL}/balance-api`;
 export const REPUTATION_URL = __ENV.REPUTATION_URL || `${STACK_URL}/reputation-api`;
 export const HAFBE_URL = __ENV.HAFBE_URL || `${STACK_URL}/hafbe-api`;
 export const NFT_URL = __ENV.NFT_URL || `${STACK_URL}/nft-tracker-api`;
+export const HAF_STATS_URL = __ENV.HAF_STATS_URL || `${STACK_URL}/haf-stats-api`;
 
 // Test parameters
 export const VUS = parseInt(__ENV.VUS || "10");

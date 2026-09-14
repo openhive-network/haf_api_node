@@ -46,6 +46,7 @@ services:
         host    haf_block_log    btracker_user    ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    reptracker_user  ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    nfttracker_user  ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
+        host    haf_block_log    haf_stats_user   ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    hivesense_user           ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    proxy_whitelist_user     ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-pgbouncer-1.${NETWORK_NAME}                           trust\n
@@ -63,6 +64,10 @@ services:
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-nft-tracker-install-1.${NETWORK_NAME}                 trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-nft-tracker-uninstall-1.${NETWORK_NAME}               trust\n
         host    haf_block_log    nfttracker_owner ${COMPOSE_PROJECT_NAME}-nft-tracker-block-processing-1.${NETWORK_NAME}        trust\n
+        \n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-haf-stats-install-1.${NETWORK_NAME}                   trust\n
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-haf-stats-uninstall-1.${NETWORK_NAME}                 trust\n
+        host    haf_block_log    haf_stats_owner  ${COMPOSE_PROJECT_NAME}-haf-stats-block-processing-1.${NETWORK_NAME}          trust\n
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-uninstall-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-install-1.${NETWORK_NAME}                       trust\n

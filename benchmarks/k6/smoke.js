@@ -5,7 +5,7 @@
 import http from "k6/http";
 import { check, group } from "k6";
 import {
-  HAFAH_URL, HIVEMIND_URL, BALANCE_URL, REPUTATION_URL, HAFBE_URL, NFT_URL,
+  HAFAH_URL, HIVEMIND_URL, BALANCE_URL, REPUTATION_URL, HAFBE_URL, NFT_URL, HAF_STATS_URL,
   jsonRpc, JSON_HEADERS,
 } from "./config.js";
 
@@ -65,6 +65,13 @@ export default function () {
     const res = http.get(`${NFT_URL}/version`);
     check(res, {
       "nft_tracker responds": (r) => r.status === 200,
+    });
+  });
+
+  group("haf_stats", () => {
+    const res = http.get(`${HAF_STATS_URL}/version`);
+    check(res, {
+      "haf_stats responds": (r) => r.status === 200,
     });
   });
 }

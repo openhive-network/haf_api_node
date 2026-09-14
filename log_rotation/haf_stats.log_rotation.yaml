@@ -1,0 +1,16 @@
+services:
+  haf-stats-install:
+    logging:
+      driver: local
+  haf-stats-uninstall:
+    logging:
+      driver: local
+  haf-stats-block-processing:
+    logging:
+      driver: local
+  haf-stats-postgrest:
+    logging:
+      driver: local
+  haf-stats-postgrest-rewriter:
+    logging:
+      driver: local
