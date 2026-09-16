@@ -1,7 +1,9 @@
-# haf_stats. Gated on its own `haf-stats` profile rather than `apps` until
-# hive/haf_stats#66 lands: CI currently publishes only commit-SHA tags, so the
-# conventional ${HIVE_API_NODE_VERSION} default does not resolve to a real image.
-# Once tagging exists, move these services into `apps` alongside the others.
+# haf_stats. Gated on its own `haf-stats` profile rather than `apps` because the
+# conventional default -- registry.hive.blog/haf_stats:${HIVE_API_NODE_VERSION} -- does
+# not resolve yet, for TWO reasons: haf_stats has no release tag (hive/haf_stats#66),
+# and nothing is mirrored to registry.hive.blog (hive/haf_stats#93). Its CI publishes
+# commit-SHA tags and `latest`, to registry.gitlab.syncad.com only. Move these services
+# into `apps` once BOTH are done, not just the tag.
 services:
   haf-stats-install:
     image: ${HAF_STATS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
@@ -229,7 +231,14 @@ services:
       pgbouncer:
         condition: service_healthy
   haf-stats-postgrest-rewriter:
-    image: ${HAF_STATS_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats/rewriter}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
+    # postgrest-rewriter, the name every sibling app publishes (hive/haf_stats#83).
+    # haf_stats published it as haf_stats/rewriter until then and still publishes both
+    # names for a transition, but a SHA from a haf_stats commit WITHOUT the rename
+    # (develop commits from 2026-08-02 up to d4e73b05; older ones have no rewriter image
+    # at all) exists only under the old one. Pinning such a SHA needs
+    #   HAF_STATS_REWRITER_IMAGE=<registry>/haf_stats/rewriter
+    # with no tag in the value: HAF_STATS_VERSION supplies it, as for HAF_STATS_IMAGE.
+    image: ${HAF_STATS_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats/postgrest-rewriter}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - haf-stats
     labels:
