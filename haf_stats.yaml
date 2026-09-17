@@ -57,8 +57,8 @@ services:
       # node deployment. Varnish strips the prefix before the rewriter sees it
       # (default.vcl), so this describes the PUBLIC base URL, not the internal one.
       #
-      # Reported as hive/haf_api_node#43; fixed here rather than left as a follow-up
-      # because it is one line and this MR is what introduces the flag.
+      # Reported as hive/haf_api_node#43; fixed in this module rather than left as a
+      # follow-up because it is one line and this module is what introduced the flag.
       - --swagger-url=/haf-stats-api
     depends_on:
       haf:
@@ -74,15 +74,15 @@ services:
   #
   #     docker compose stop haf-stats-block-processing haf-stats-postgrest pgbouncer
   #
-  # pgbouncer is in that list and the rewriter is not, which looks backwards and is
-  # not. The rewriter is an nginx proxy and holds no database session at all. pgbouncer
-  # holds server-side connections authenticated AS haf_stats_user -- its `[databases]`
-  # line carries no `user=`, which is exactly why this MR had to add a haf_stats_user
-  # pg_hba row for it. Stopping PostgREST closes only the client half; the pooled
-  # backends linger in pg_stat_activity for PGBOUNCER_SERVER_IDLE_TIMEOUT (600s).
-  # Skip pgbouncer and the teardown refuses for up to ten minutes, naming
-  # application_name=haf_stats_postgrest -- a container you already stopped.
-  # (Stopping pgbouncer briefly interrupts every app's PostgREST; they reconnect.)
+  # pgbouncer is in that list and the rewriter is not, which looks backwards and is not.
+  # The rewriter is an nginx proxy and holds no database session at all. pgbouncer holds
+  # server-side connections authenticated AS haf_stats_user -- its `[databases]` line
+  # carries no `user=`, which is exactly why haf_base.yaml carries a haf_stats_user
+  # pg_hba row for the pgbouncer host. Stopping PostgREST closes only the client half;
+  # the pooled backends linger in pg_stat_activity for PGBOUNCER_SERVER_IDLE_TIMEOUT
+  # (600s). Skip pgbouncer and the teardown refuses for up to ten minutes, naming
+  # application_name=haf_stats_postgrest -- a container you already stopped. (Stopping
+  # pgbouncer briefly interrupts every app's PostgREST; they reconnect.)
   #     docker compose --profile core --profile haf-stats-uninstall \
   #                    up haf-stats-uninstall
   #
@@ -140,10 +140,12 @@ services:
       # longer than the window and reports unhealthy on a healthy replay; note the
       # one-iteration lag means 300s tolerates iterations of roughly half that.
       #
-      # Cosmetic in this stack: nothing gates on this health, and !243 does NOT change
-      # that -- its agent-check measures a different quantity (get_app_current_block_age
-      # over HTTP /sync-status, with its own 60s threshold) and never reads container
-      # health or this variable. It matters for `docker ps` and for whoever reads it.
+      # Cosmetic in this stack: nothing gates on this health, and the agent-check
+      # (healthchecks/checks/haf_stats.sh, from !243) does NOT change that -- it
+      # measures other quantities (LIB age over psql, then the age of last_block_time
+      # from HTTP /sync-status, each against 60s) and never reads container health or
+      # this variable.
+      # It matters for `docker ps` and for whoever reads it.
       HAF_STATS_HEALTHCHECK_MAX_AGE_SECONDS: ${HAF_STATS_HEALTHCHECK_MAX_AGE_SECONDS:-300}
       # No LOG_FILE / /logs bind-mount, unlike balance_tracker. That pattern was copied
       # here and then removed: `git grep LOG_FILE` in hive/haf_stats returns nothing, so
@@ -165,9 +167,10 @@ services:
       # It reads hafd.contexts.last_active_at, so it proves the loop is ITERATING. It
       # does NOT prove the chain is advancing -- HAF commits that heartbeat before every
       # early return in app_next_iteration, so a paused app or a stopped hived still
-      # ticks it. Chain staleness belongs to an agent-check -- but note that
-      # healthchecks/checks/haf_stats.sh DOES NOT EXIST in this repo yet. !243 adds it;
-      # until that merges nothing on a stock node measures haf_stats' chain lag.
+      # ticks it. Chain staleness belongs to the agent-check,
+      # healthchecks/checks/haf_stats.sh (!243), which measures it over /sync-status. A
+      # haproxy-healthchecks image older than that (e.g. 1.28.6) has no such check, and
+      # nothing on such a node measures haf_stats' chain lag.
       test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
       interval: 60s
       timeout: 10s
@@ -244,32 +247,24 @@ services:
     labels:
       # for Swagger UI. status/app.js discards any container without swagger.url before
       # any health logic runs (`if (!swaggerUrl) continue;`), so these are what put
-      # haf_stats on the status page at all. They belong HERE and not in !244: a
-      # swagger.url pointing at a path nothing serves produces a status row whose link
-      # 404s, so the labels and the route have to land together.
+      # haf_stats on the status page at all. They go with the /haf-stats-api/ route
+      # (Caddy -> Varnish -> HAProxy:7016): a swagger.url pointing at a path nothing
+      # serves produces a status row whose link 404s.
       #
-      # io.hive.healthcheck.port BELONGS HERE, and an earlier revision of this MR was
-      # wrong to move it out. It said the label "belongs in !243, not here" -- but !243
-      # targets develop, where this file does not exist, and its own last commit
-      # ("chore: split the compose module out into its own MR") is what removed
-      # haf_stats.yaml from it. !243 therefore CANNOT carry the label, and review found
-      # it present in no branch at all: merging both MRs and rendering
-      # `docker compose config` yields the three swagger labels and nothing else. The
-      # result would have been a "HAF Stats API - unknown" row forever, and the agent
-      # listener !243 exists to provide would never be read by anything but HAProxy.
+      # io.hive.healthcheck.port belongs here, next to the swagger labels: swagger.url is
+      # what puts the app on the status page, and the port label is what gives its row a
+      # health state. Without it the row reads `unknown` forever.
       #
-      # THE ORDERING CONCERN THAT MOTIVATED THE MOVE IS REAL, so state it rather than
-      # act on it. status/app.js does not treat a refused connect as unknown:
+      # status/app.js does not treat a refused connect as unknown:
       #
       #     let status = 'unknown';
       #     if (healthPort) { status = isHealthy ? 'healthy' : 'unhealthy'; }
       #
-      # Nothing binds 7016 until !243 adds it to the healthchecks entrypoint, so between
-      # this MR merging and !243 merging the status row reads `unhealthy` while the API
-      # serves perfectly. That window is a cosmetic false alarm on one row, bounded by
-      # the gap between two MRs that are meant to land together -- which is a smaller
-      # cost than shipping a permanently-`unknown` app and losing the label in the gap
-      # between the two, which is what actually happened. Merge !243 with or before this.
+      # The listener on 7016 is healthchecks/checks/haf_stats.sh, added by !243. A
+      # haproxy-healthchecks image older than that (e.g. 1.28.6) binds nothing on 7016, so
+      # on such a node this row reads `unhealthy` while the API serves perfectly -- a
+      # cosmetic false alarm, fixed by running a healthchecks image that carries the check
+      # (1.29.0-rc2 or later).
       - "io.hive.swagger.url=/haf-stats-api/"
       - "io.hive.swagger.name=HAF Stats API"
       - "io.hive.swagger.order=9"
@@ -285,11 +280,10 @@ services:
       # runs. haf_fyp's rewriter_entrypoint.sh documents this asymmetry and names
       # haf_stats as the counter-example.
       POSTGREST_HOST: haf-stats-postgrest
-    # Both label groups are set above, with the route that makes them true, and the
-    # sequencing note lives there: swagger.url is the status page's gate,
-    # healthcheck.port alone changes nothing, and healthcheck.port without a listener
-    # on 7016 reads as unhealthy rather than unknown -- so !243 should merge with or
-    # before this MR.
+    # Both label groups are set above, with the route that makes them true:
+    # swagger.url is the status page's gate, healthcheck.port alone changes nothing, and
+    # healthcheck.port without a listener on 7016 reads as unhealthy rather than unknown
+    # (see the note above the labels).
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
       interval: 10s
