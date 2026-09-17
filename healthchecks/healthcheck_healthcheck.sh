@@ -1,11 +1,14 @@
 #! /bin/sh
 # All agent-check listeners must be bound
-# `-ge`, not an exact count. develop made this shellcheck-clean in 9068fb6 and kept
-# the exact form (`-eq 10`); this MR adds 7016, and the haf_fyp check on 7017 that it
-# reserves would force yet another bump. A container binding MORE listeners than the
-# assertion expects then reports unhealthy for no reason -- testapi runs a 12-listener
-# build of this image today for exactly that reason. What the check is for is catching
-# a listener that FAILED to bind, so a floor is the right comparison.
+# `-ge`, not an exact count (develop's 9068fb6 had `-eq 10`; 7016, haf_stats, was added
+# since). netstat prints one line per listening SOCKET -- one per port here, since each
+# check binds a single dual-stack socket -- and only the ports listed below match. So
+# while the number equals the length of the list the two forms behave the same: both fail
+# when a listed port did not bind, and neither sees a listener outside the list (testapi
+# serves 7016 and 7017 from bind-mounted checks and stays healthy under the stock 10-port
+# `^10$`). Where they differ: a port bound v4 and v6 separately prints two lines, which
+# the floor tolerates and an exact count would not. When adding a port, raise the number
+# with it -- a floor lower than the list passes with a listener missing.
 [ "$(netstat -tln | grep -cE ':(7001|7002|7003|7004|7005|7009|7011|7013|7014|7015|7016)\b')" -ge 11 ] || exit 1
 
 # The shed poller must be alive and publishing (file rewritten every poll;
