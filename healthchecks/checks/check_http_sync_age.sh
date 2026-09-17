@@ -56,16 +56,32 @@ check_http_alive() {
 # massive sync, which correctly reads as down here — though the psql
 # check_haf_lib gate in every agent script runs first and normally catches
 # that case before any HTTP probe is made.
+#
+# A null last_block_time is reported in two distinct ways: with block 0 (or
+# no number at all) the app context exists but has not processed anything
+# yet; with a real block number the app's sync-status lookup could not find
+# the timestamp of its own current block. The latter was seen with
+# sync_status() implementations that joined hafd.blocks only: a forking
+# context's freshly processed head block still sits in hafd.blocks_reversible
+# for a few hundred ms before OBI makes it irreversible, so ~1 in 80 probes
+# came back without a time and the backend flapped (fixed app-side in
+# reputation_tracker!228, balance_tracker!396, haf_block_explorer!512).
 check_sync_status() {
   _name="$1"
   _threshold="$2"
   _url="$3"
   check_http_alive "$_name" "$_url"
+  _block_num=$(echo "$HTTP_CHECK_RESPONSE" | sed -n 's/.*"last_block_num"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')
   _block_time=$(echo "$HTTP_CHECK_RESPONSE" | sed -n 's/.*"last_block_time"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
   if [ -z "$_block_time" ]; then
-    # null timestamp: app context exists but no block processed yet
-    echo "down #$_name has no processed block yet"
-    exit 14
+    if [ -z "$_block_num" ] || [ "$_block_num" -eq 0 ]; then
+      # block 0 / null: app context exists but no block processed yet
+      echo "down #$_name has no processed block yet"
+      exit 14
+    fi
+    # a block number without a timestamp: report what was actually observed
+    echo "down #$_name block $_block_num has no timestamp in sync-status"
+    exit 15
   fi
   check_http_block_time "$_name" "$_threshold" "$_block_time"
 }
