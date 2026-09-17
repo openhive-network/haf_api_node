@@ -1,9 +1,11 @@
 # haf_stats. Gated on its own `haf-stats` profile rather than `apps` because the
 # conventional default -- registry.hive.blog/haf_stats:${HIVE_API_NODE_VERSION} -- does
-# not resolve yet, for TWO reasons: haf_stats has no release tag (hive/haf_stats#66),
-# and nothing is mirrored to registry.hive.blog (hive/haf_stats#93). Its CI publishes
-# commit-SHA tags and `latest`, to registry.gitlab.syncad.com only. Move these services
-# into `apps` once BOTH are done, not just the tag.
+# not resolve yet: nothing is mirrored to registry.hive.blog (hive/haf_stats#93). It also
+# needs a haf_stats tag matching the node version, and haf_stats' first release tag is
+# 1.29.0-rc2 (hive/haf_stats#66), so node versions before that have none. Its CI publishes
+# commit-SHA tags, `latest` and release tags, to registry.gitlab.syncad.com only. Move
+# these services into `apps` once the mirror exists and the node version has a matching
+# haf_stats tag.
 services:
   haf-stats-install:
     image: ${HAF_STATS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
@@ -232,10 +234,12 @@ services:
         condition: service_healthy
   haf-stats-postgrest-rewriter:
     # postgrest-rewriter, the name every sibling app publishes (hive/haf_stats#83).
-    # haf_stats published it as haf_stats/rewriter until then and still publishes both
-    # names for a transition, but a SHA from a haf_stats commit WITHOUT the rename
-    # (develop commits from 2026-08-02 up to d4e73b05; older ones have no rewriter image
-    # at all) exists only under the old one. Pinning such a SHA needs
+    # haf_stats published it as haf_stats/rewriter until then. Its develop and release
+    # CI no longer publish that name (hive/haf_stats!101), but its images are kept, so a
+    # SHA from a haf_stats commit WITHOUT the rename (develop commits from 2026-08-02 up
+    # to d4e73b05; older ones have no rewriter image at all) still resolves -- only
+    # under the old name; commits after the retirement have it only under the new one.
+    # Pinning a pre-rename SHA needs
     #   HAF_STATS_REWRITER_IMAGE=<registry>/haf_stats/rewriter
     # with no tag in the value: HAF_STATS_VERSION supplies it, as for HAF_STATS_IMAGE.
     image: ${HAF_STATS_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats/postgrest-rewriter}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
