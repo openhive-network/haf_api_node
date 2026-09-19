@@ -1,0 +1,489 @@
+# haf_fyp -- the For You Page feed app (hive/haf_fyp). Gated on its own `haf-fyp` profile
+# rather than `apps`, for the same reason haf_stats is, plus one more:
+#
+#   1. haf_fyp publishes NO bare `haf_fyp` image. Its CI builds three sub-path images --
+#      haf_fyp/sql (the app image, carrying the install/process/uninstall verbs),
+#      haf_fyp/python (the ranker and the API) and haf_fyp/postgrest-rewriter -- so the
+#      conventional `${HIVE_API_NODE_REGISTRY}/haf_fyp` default cannot exist at all. That
+#      is why this file carries THREE image variables where haf_stats needs two.
+#   2. Its only release tag, 1.29.0-rc2, predates its release lane (hive/haf_fyp#57), so
+#      that tag published nothing; the first tag cut after it is the first that will.
+#   3. Nothing is mirrored to registry.hive.blog, as for haf_stats (hive/haf_stats#93).
+#
+# So the defaults below do NOT resolve on a stock node, and an operator enabling this
+# profile must also set the HAF_FYP_* image and version variables -- see .env.example.
+#
+# Move these services into `apps` once (2) and (3) are done; (1) only decides how many
+# variables it takes, not whether it works.
+#
+# `--profile haf-fyp` ALONE DOES NOT VALIDATE: these services depend on `haf`, which
+# lives on the `core` profile, so compose reports "depends on undefined service haf".
+# Run it with core, as every sibling profile is run:
+#
+#     docker compose --profile core --profile haf-fyp up -d
+#
+# HIVEMIND IS A SOFT DEPENDENCY, AND ITS ABSENCE IS INVISIBLE TO EVERY HEALTH SIGNAL
+# HERE. haf_fyp installs and syncs fine without it: db/cross_schema_grants.sql wraps the
+# grants in `IF EXISTS (hivemind_app) ... ELSE RAISE NOTICE`, and resolve_hivemind_post_ids
+# is exception-guarded. What breaks is the output -- post_candidates.hive_post_id stays
+# NULL, so the feed endpoints cannot build bridge-shaped posts and /v1/fyp/feed/* and
+# /v1/fyp/global come back empty. Block processing, /sync-status and the agent-check on
+# 7017 all read perfectly healthy while that is true, because they measure chain lag and
+# nothing else. Enable `apps` alongside this profile. The same applies to hivesense_app,
+# which supplies the embeddings.
+#
+# A NOTICE in a scrolling install log is the only warning you get, and grants are lost
+# again whenever hivemind RECREATES its views -- /v1/fyp/global then returns 401 until
+# haf_fyp's scripts/grant_cross_schema.sh is re-run. That is an operator runbook item,
+# not something compose can express.
+#
+# ADOPTING THIS ON A NODE THAT ALREADY RUNS haf_fyp IS A RENAME MIGRATION, NOT A DROP-IN.
+# The one node running it today uses a private module whose services are named
+# haf-fyp-setup, haf-fyp-sync, haf-fyp-rewriter and haf-stats-fyp-redis; this file uses
+# haf-fyp-install, haf-fyp-block-processing, haf-fyp-postgrest-rewriter and
+# haf-fyp-redis, and it puts the write API on 7018 where that node uses 7016 (which
+# upstream assigns to haf_stats). That redis carries haf_stats in its NAME only: it is
+# referenced by haf_fyp's ranker and API and by nothing in haf_stats, so the rename takes
+# nothing away from the other app.
+#
+# Consequences worth planning for: pg_hba here is keyed per CONTAINER NAME, so the old
+# names authenticate against nothing; the old containers survive as orphans until
+# removed; and the app's data is untouched by any of it, since the schemas are keyed to
+# roles, not containers. Stop and remove the old services first.
+#
+# One failure mode this paragraph used to predict does NOT apply to that node: none of
+# the services being renamed publishes a host port (the only published port belongs to
+# haf-fyp-api, a name this file keeps, so that container is recreated rather than
+# orphaned). On a node that published more, orphans holding ports would block `up`.
+services:
+  haf-fyp-install:
+    image: ${HAF_FYP_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_fyp/sql}:${HAF_FYP_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - haf-fyp
+    environment:
+      POSTGRES_HOST: haf
+      # haf_admin, not haf_fyp_owner: step 1 of install_app.sh creates both app roles, so
+      # on a fresh node haf_fyp_owner does not exist yet -- and haf_base.yaml has no
+      # pg_hba row for it on this container either. Same reasoning as haf_stats-install.
+      POSTGRES_USER: haf_admin
+      POSTGRES_DB: haf_block_log
+    networks:
+      haf-network:
+    command:
+      - install_app
+      # NO --swagger-url, deliberately, and this is where haf_fyp differs from haf_stats.
+      #
+      # haf_stats passes `--swagger-url=/haf-stats-api` because for haf_stats the flag is
+      # load-bearing: since hive/haf_stats!87 it is persisted to app_config and patches the
+      # OpenAPI `servers` entry. haf_fyp's flag is INERT -- install_app.sh sets a
+      # `custom.swagger_url` GUC on its own psql session and nothing anywhere reads it,
+      # while the served document hardcodes `servers: [{url: /haf-fyp-api}]` in
+      # endpoints/endpoint_schema.sql. Passing it would look like configuration and do
+      # nothing, which is exactly the trap hive/haf_api_node#43 was filed about for
+      # haf_stats. Reported upstream as hive/haf_fyp#58; add the flag here once the app
+      # reads it.
+      #
+      # NO --is_forking either. haf_fyp registers a NON-forking context
+      # (db/haf_fyp_app.sql calls hive.app_context_set_non_forking), and its installer
+      # accepts the flag only "for compatibility with the upstream module template",
+      # warning and continuing rather than failing -- because this service's failure would
+      # block every dependent. Passing a node-wide ${IS_FORKING:-TRUE} would log a
+      # WARNING on every install and change nothing. haf_stats passes no such flag either.
+      # Note the limit the installer itself records: set_non_forking runs only when the
+      # context is CREATED, so a database whose context was made forking by an older build
+      # is not converted by re-installing.
+    depends_on:
+      haf:
+        condition: service_healthy
+  # Teardown. DESTRUCTIVE and has no undo: it drops haf_fyp's schemas CASCADE and the
+  # roles with them. The feed caches and ranker state rebuild, but post_candidates and the
+  # embedding bridge re-derive only as blocks are reprocessed.
+  #
+  # Stop the app first -- uninstall_app.sh refuses while sessions are connected as a
+  # haf_fyp role, and haf_fyp has FOUR such services where haf_stats has two: the block
+  # processor and the ranker connect as haf_fyp_owner, the API and PostgREST as
+  # haf_fyp_user. The ranker additionally keeps its session open across cycles (see its
+  # own note below -- autocommit off, and it waits on Redis rather than on the database),
+  # so it will not idle out of the way on its own:
+  #
+  #     docker compose stop haf-fyp-block-processing haf-fyp-ranker haf-fyp-api \
+  #                         haf-fyp-postgrest pgbouncer
+  #
+  # pgbouncer is in that list because its pooled backends are authenticated AS
+  # haf_fyp_user and linger for PGBOUNCER_SERVER_IDLE_TIMEOUT (600s) after PostgREST
+  # stops; the rewriter is not, because it is an nginx proxy holding no database session.
+  # Skip pgbouncer and the teardown refuses for up to ten minutes, naming a container you
+  # already stopped. (Stopping pgbouncer briefly interrupts every app's PostgREST; they
+  # reconnect.)
+  #
+  #     docker compose --profile core --profile haf-fyp-uninstall up haf-fyp-uninstall
+  #
+  # `up <service>`, NOT `run --rm`, even though haf_fyp's own README prescribes `run --rm`
+  # and is right THERE. pg_hba on this node is keyed per CONTAINER NAME (haf_base.yaml),
+  # and `run` names its container <project>-haf-fyp-uninstall-run-<slug>, which matches no
+  # row -- the connection fails authentication before it can do anything. --profile core
+  # is required because this service depends on `haf`, which is not in this profile.
+  haf-fyp-uninstall:
+    image: ${HAF_FYP_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_fyp/sql}:${HAF_FYP_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - haf-fyp-uninstall
+    environment:
+      POSTGRES_HOST: haf
+      # haf_admin, not haf_fyp_owner: dropping roles needs CREATEROLE plus the ADMIN
+      # option on each, and a role cannot drop itself.
+      POSTGRES_USER: haf_admin
+      POSTGRES_DB: haf_block_log
+    networks:
+      haf-network:
+    command:
+      - uninstall_app
+      - --force
+    depends_on:
+      haf:
+        condition: service_healthy
+  haf-fyp-block-processing:
+    image: ${HAF_FYP_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_fyp/sql}:${HAF_FYP_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - haf-fyp
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: haf_fyp_owner
+      POSTGRES_DB: haf_block_log
+      # The in-image check reports that the processing loop ITERATED within this window
+      # and since this container started, or that the app is in sync. It does not prove
+      # the chain is advancing -- HAF commits that heartbeat before every early return --
+      # so chain staleness is the agent-check's job (healthchecks/checks/haf_fyp.sh, on
+      # 7017), which measures a different quantity and never reads this variable.
+      HAF_FYP_HEALTHCHECK_MAX_AGE_SECONDS: ${HAF_FYP_HEALTHCHECK_MAX_AGE_SECONDS:-300}
+    networks:
+      haf-network:
+    restart: on-failure
+    command:
+      - process_blocks
+    healthcheck:
+      test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 72h
+      # 72h, not haf_stats' 48h: haf_fyp's own compose uses this and a full genesis
+      # replay of its candidate tables runs longer than haf_stats' rollups.
+      #
+      # A long start_period hides a crash loop, so it is worth saying why one cannot
+      # happen here any more. On a HAF without the application registry (1.28.6-class --
+      # which is this repo's own default) the app-driver path used to exit before its
+      # first range and crash-loop silently behind exactly this window. haf_fyp now
+      # PROBES the registry first (scripts/process_blocks.sh) and falls back to its
+      # legacy CALL main() loop when it is absent, so the failure is a log line rather
+      # than a loop. HAF_FYP_USE_LEGACY_LOOP=true still forces the legacy loop, and is
+      # not set here because the probe makes it unnecessary.
+    depends_on:
+      haf:
+        condition: service_healthy
+      haf-fyp-install:
+        condition: service_completed_successfully
+  # The ranker: a Python daemon that scores candidates and writes feed caches. No sibling
+  # app in this repo ships anything like it, so two of its properties are worth stating.
+  #
+  # It connects DIRECT to haf:5432, not through pgbouncer, because it runs long
+  # maintenance transactions with autocommit off (ranker_daemon.py sets
+  # `conn.autocommit = False`) and keeps that session across cycles -- which is what
+  # transaction pooling cannot carry. It therefore needs its own pg_hba row
+  # (haf_base.yaml), keyed to this container name.
+  #
+  # What it blocks on between cycles is a REDIS pubsub subscription (`pubsub.listen()` on
+  # haf_fyp:refresh, on a daemon thread), NOT a PostgreSQL LISTEN. Earlier revisions of
+  # this file called it a blocking LISTEN, which would have been a database-side reason
+  # and is not what the daemon does; the transaction behaviour above is the real one.
+  #
+  # It serves nothing: no ports, no route, no swagger label, no agent-check. If it dies,
+  # the API keeps serving whatever the last cycle wrote -- staler feeds, not an outage --
+  # and nothing here detects that. `docker compose ps` and the container's restart count
+  # are the signal.
+  haf-fyp-ranker:
+    image: ${HAF_FYP_PYTHON_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_fyp/python}:${HAF_FYP_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - haf-fyp
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: haf_fyp_owner
+      POSTGRES_DB: haf_block_log
+      REDIS_HOST: haf-fyp-redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://haf-fyp-redis:6379
+    networks:
+      haf-network:
+    restart: unless-stopped
+    # Dockerfile.python sets no ENTRYPOINT and no CMD -- it inherits python:3.11-slim's
+    # `python3` -- so both Python services spell out the whole command.
+    command: ["python", "-m", "haf_fyp.ranker_daemon"]
+    depends_on:
+      # `haf` explicitly, not just transitively through the install gate: starting this
+      # service on its own (after a completed install) would otherwise race PostgreSQL,
+      # and `restart: unless-stopped` turns that race into a crash loop rather than a
+      # wait.
+      haf:
+        condition: service_healthy
+      haf-fyp-install:
+        condition: service_completed_successfully
+      haf-fyp-redis:
+        condition: service_healthy
+  # The FastAPI overlay. THIS IS A WRITE-CAPABLE API and no sibling app in this repo ships
+  # one, so it is routed separately from the read API (/haf-fyp-admin/ on 7018, rather
+  # than /haf-fyp-api/ on 7017) and reviewers should decide deliberately whether it
+  # belongs on a node's public surface at all.
+  #
+  # It is not admin-only despite the prefix: POST/DELETE /v1/fyp/interests and
+  # POST /v1/fyp/events are what a front-end calls, and only /v1/fyp/admin/* is key-gated.
+  #
+  # ON CORS: this route has its own Caddy handler now, which COPIES @rest_apis'
+  # `Access-Control-Allow-Origin: *` rather than narrowing it -- a browser front-end is
+  # this app's main consumer and is cross-origin by construction. The admin calls need an
+  # X-Admin-Key header, which is not in the allowed-headers list, so a browser cannot
+  # make them cross-origin. POST /v1/fyp/events is a plain JSON POST with no signature
+  # and IS reachable that way, so any page a visitor loads can drive event writes as that
+  # visitor.
+  #
+  # NOTE THE INTERACTION WITH X-Real-IP, because it cuts the other way: per-caller
+  # buckets mean forged-telemetry throughput scales with the attacker page's audience
+  # (120 batches a minute EACH) where one shared bucket capped it node-wide. Accepted,
+  # because the shared bucket's own failure mode is a node-wide write outage caused by
+  # any single caller, which is worse -- but it is a trade, not a free improvement.
+  # Having its own handler is what would make a narrower CORS policy possible for this
+  # app alone, if that trade is judged the wrong way round.
+  #
+  # IT ALSO SERVES AN UNAUTHENTICATED /metrics, which reports internal database topology:
+  # which sibling schemas are readable (hivemind_app, hivesense_app, reptracker_app,
+  # hafbe_bal, hafd), global-feed cache state, and weeks of candidate volumes. That is
+  # useful to an operator and not something to publish, so the public route DENIES it in
+  # haproxy/30-proxies.cfg; monitoring reaches it directly on the app network.
+  # Its port is NOT published on the host -- haf_fyp's own compose binds 3002 to loopback
+  # so the edge cannot be bypassed, and on a node even that is unnecessary because HAProxy
+  # reaches it by service name.
+  #
+  # Like the ranker it connects DIRECT to haf, holding a long-lived psycopg pool, and so
+  # needs its own pg_hba row.
+  haf-fyp-api:
+    image: ${HAF_FYP_PYTHON_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_fyp/python}:${HAF_FYP_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - haf-fyp
+    # DELIBERATELY UNLABELLED, so it does not appear on the status page. An earlier
+    # revision gave it a row pointing at /haf-fyp-admin/openapi.json, which would have
+    # 404'd on any default deployment: haf_fyp serves its OpenAPI only when
+    # HAF_FYP_ENABLE_DOCS is set, and hive/haf_fyp#39 turned that off precisely to stop
+    # advertising the admin surface. Repairing the link by enabling docs would undo that
+    # decision, and status/app.js keeps a row whose link is dead (it only drops
+    # containers with no swagger.url at all) -- so the honest options were a broken row,
+    # a reopened surface, or no row. The route still exists and HAProxy still checks it;
+    # what is withdrawn is the advertisement.
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: haf_fyp_user
+      POSTGRES_DB: haf_block_log
+      REDIS_HOST: haf-fyp-redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://haf-fyp-redis:6379
+      # EMPTY DEFAULT ON PURPOSE. An unset key makes every admin call fail closed
+      # (`if not admin_key or not hmac.compare_digest(...)`), so the app ships locked
+      # rather than open. Set it to a long random value to use the admin endpoints.
+      ADMIN_API_KEY: ${HAF_FYP_ADMIN_API_KEY:-}
+      # SET THIS to the address HAProxy reaches this container from, or every caller
+      # shares one rate-limit bucket. It names the addresses whose X-Real-IP the app
+      # will believe, and X-Real-IP is the only header it reads -- it rejects
+      # X-Forwarded-For by design, because all three proxies append to that and its
+      # leftmost entry is whatever the client sent.
+      #
+      # This MR adds `header_up X-Real-IP {client_ip}` to Caddy -- in a handler of this
+      # app's OWN (@haf_fyp_apis), not on the shared @rest_apis stanza, which stays
+      # byte-identical to what it was so nothing changes for the other apps here.
+      # Without that line the header does not exist on this edge at all and the limits
+      # were one node-wide bucket -- 10 interest writes per MINUTE for the whole
+      # internet, any single caller able to exhaust it. hive/haf_fyp#59 records the
+      # analysis. ({client_ip}, not {remote_host}: the Caddyfile explains why, and two
+      # earlier revisions of THIS comment named the rejected one.)
+      #
+      # WHAT LEAVING IT EMPTY COSTS, since it ships empty: the shared bucket above, and
+      # a startup ERROR saying so. It is fail-closed against IP forgery and fail-open
+      # against availability. Empty is still the right DEFAULT -- the value is per-node
+      # and a wrong one is worse than none, because setting it also enables the
+      # pre-validation charging from hive/haf_fyp#28, which into a shared bucket is a
+      # denial of service ("twelve malformed POSTs claiming twelve different client IPs
+      # 429'd an innocent thirteenth caller who had sent nothing").
+      #
+      # WHAT TO SET IT TO: the compose network's SUBNET, in CIDR form -- not a container
+      # address. The app parses CIDRs for exactly this reason (_parse_trusted in api.py
+      # says so): Docker reassigns container addresses on recreate, THIS MR guarantees a
+      # recreate cycle, and a stale literal then degrades in silence to the one-bucket
+      # behaviour above with a single log.warning as the only signal. Pinning an address
+      # instead is not readily available -- `ipv4_address` needs a user-configured
+      # subnet and this repo lets compose allocate one. The cost of a subnet is that
+      # anything ON the node can claim a client IP here; that is the trade against a
+      # value that goes stale unnoticed, and it is the same trust boundary the
+      # unauthenticated redis below already sits inside.
+      TRUSTED_PROXY_IPS: ${HAF_FYP_TRUSTED_PROXY_IPS:-}
+      # The LOCAL hived, not a public node: this is what verifies posting-key signatures
+      # on interest writes, and a hostile RPC could otherwise authorise forged ones. If it
+      # cannot be reached the writes fail closed with 503.
+      HIVE_RPC_URL: ${HAF_FYP_HIVE_RPC_URL:-http://haf:8091}
+      # Serves /docs and /openapi.json when set. Forwarded explicitly because compose
+      # passes nothing that is not named here -- omitting it would make the app's own
+      # documented switch silently inert.
+      HAF_FYP_ENABLE_DOCS: ${HAF_FYP_ENABLE_DOCS:-}
+    networks:
+      haf-network:
+    restart: unless-stopped
+    # --root-path so the served OpenAPI describes the PUBLIC prefix. Varnish strips
+    # /haf-fyp-admin before the request arrives, so without this every documented path is
+    # wrong by that prefix. haf_fyp's own compose omits it because standalone has no
+    # prefix.
+    command: ["uvicorn", "haf_fyp.api:app", "--host", "0.0.0.0", "--port", "3002",
+              "--root-path", "/haf-fyp-admin"]
+    healthcheck:
+      # PYTHON, NOT WGET, and not by preference. Every other healthcheck in this repo
+      # shells out to `wget --spider`, because every other image has it; this image is
+      # python:3.11-slim, which ships no wget, no curl and no nc (verified inside the
+      # running container). A wget probe here is not a slower check, it is exit 127 on
+      # every run: the container reports unhealthy forever while serving perfectly.
+      # Nothing gates on this health -- HAProxy uses its own httpchk -- so it would have
+      # been a permanent false alarm on `docker ps` and in scripts/stack_status.sh.
+      # 2>/dev/null because urlopen RAISES on a non-200 or a refused connection rather
+      # than returning: the exit status is already right, but without this each failed
+      # probe writes a ten-line traceback into the container's health log where every
+      # sibling writes one wget line.
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3002/health', timeout=2).status == 200 else 1)\" 2>/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 1m
+    depends_on:
+      # `haf` explicitly, not just transitively through the install gate: starting this
+      # service on its own (after a completed install) would otherwise race PostgreSQL,
+      # and `restart: unless-stopped` turns that race into a crash loop rather than a
+      # wait.
+      haf:
+        condition: service_healthy
+      haf-fyp-install:
+        condition: service_completed_successfully
+      haf-fyp-redis:
+        # service_healthy, not service_started: this app builds its rate-limit storage
+        # from REDIS_URL at import time, so starting before redis accepts connections is
+        # a startup race. The redis healthcheck cycles in 10s.
+        condition: service_healthy
+  haf-fyp-postgrest:
+    image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/postgrest:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
+    # See note in hivemind.yaml — host containerd may default to nofile=1024
+    # soft, which postgrest can exhaust silently under load.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    profiles:
+      - haf-fyp
+    environment:
+      PGRST_SERVER_HOST: "::"
+      PGRST_ADMIN_SERVER_PORT: 3001
+      # Through pgbouncer, like every app here, and therefore with NO
+      # `options=-c statement_timeout=...` on the URI: PgBouncer rejects that startup
+      # parameter outright and PostgREST would never connect. A cap belongs in haf_fyp's
+      # installer as a role-level `ALTER ROLE haf_fyp_user SET statement_timeout`, which
+      # does arm through the pool. haf_stats.yaml carries the full analysis.
+      PGRST_DB_URI: postgresql://haf_fyp_user@pgbouncer:6432/haf_block_log?application_name=haf_fyp_postgrest
+      PGRST_DB_SCHEMA: haf_fyp_endpoints
+      PGRST_DB_ANON_ROLE: haf_fyp_user
+      # 8, where haf_fyp's own compose uses 20: that one pools straight to postgres, while
+      # here pgbouncer multiplexes behind it, so a large per-app pool buys nothing and
+      # costs server-side connections shared with every other app.
+      PGRST_DB_POOL: 8
+      PGRST_DB_ROOT_SPEC: root
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+      PGRST_LOG_LEVEL: ${HAF_FYP_SERVER_LOG_LEVEL:-error}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
+    networks:
+      haf-network:
+    depends_on:
+      # NOT gated on haf-fyp-block-processing: its healthcheck has a 72h start_period, so
+      # a health gate here would keep the API down for as long as a replay takes. The
+      # install gate is the actual prerequisite -- it is what creates the schemas.
+      haf-fyp-install:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
+  haf-fyp-postgrest-rewriter:
+    image: ${HAF_FYP_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_fyp/postgrest-rewriter}:${HAF_FYP_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - haf-fyp
+    labels:
+      # The public read API, and the row that puts haf_fyp on the status page at all.
+      # These belong with the route that makes them true -- a swagger.url pointing at a
+      # path nothing serves produces a status row whose link 404s -- which is why this MR
+      # carries the compose module, the check and the proxy entry together.
+      - "io.hive.swagger.url=/haf-fyp-api/"
+      - "io.hive.swagger.name=HAF FYP API"
+      - "io.hive.swagger.order=10"
+      - "io.hive.healthcheck.port=7017"
+    environment:
+      # REQUIRED even though the image's entrypoint defaults it to this exact value:
+      # nginx resolves a literal upstream at CONFIG-PARSE time with no resolver, so a
+      # wrong or absent name is not a 502 at request time -- openresty exits immediately
+      # with [emerg] host not found in upstream and stays exited.
+      #
+      # It also means recreating haf-fyp-postgrest can hand this container a stale IP,
+      # after which it 502s while STILL reporting healthy: its :81/health is an
+      # unconditional 204 that never touches the upstream. Restart the rewriter after
+      # anything that recreates PostgREST.
+      POSTGREST_HOST: haf-fyp-postgrest
+      # Pinned for the same reason as the host: the entrypoint's default happens to be
+      # right, and nginx still resolves the upstream once at config-parse time.
+      POSTGREST_PORT: 3000
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
+    depends_on:
+      haf-fyp-postgrest:
+        condition: service_healthy
+    networks:
+      - haf-network
+  # NAMED haf-fyp-redis, NOT redis, and that is load-bearing rather than tidy.
+  # jussi.yaml already defines a service called `redis`, included whenever
+  # JSONRPC_API_SERVER_NAME=jussi (compose.yml; the default is `drone`, so most nodes
+  # never see it). What a duplicate name does depends on the Compose version, and both
+  # outcomes are bad. MEASURED, by renaming this service to `redis` and rendering with
+  # jussi enabled on Compose v5.1.4: the two definitions MERGE and THIS file wins -- the
+  # merged service came out as redis:7-alpine running `--maxmemory-policy noeviction`
+  # with jussi's `--maxmemory 8G` GONE, both profiles unioned onto one container, so
+  # jussi's cache would lose its ceiling and grow unbounded. (An earlier version of this
+  # comment asserted the opposite, that haf_fyp would inherit jussi's allkeys-lru and
+  # lose its buckets to eviction. The render disproved it.) On v2 a duplicate service
+  # across included files is a hard error and the stack refuses to start instead. The
+  # rename avoids both. `noeviction` below declares the intent (without a `maxmemory`
+  # ceiling it never fires by itself).
+  #
+  # No volume, deliberately: this Redis holds rate-limit buckets and pub/sub only, and a
+  # generically-named volume collides the same way a generically-named service does.
+  #
+  # No password, matching jussi's redis and every other service on this network: it
+  # publishes no host port, so the trust boundary is the compose network itself, where
+  # anything -- including third-party images -- could FLUSHALL these buckets or publish
+  # on the channel the ranker subscribes to. Worth knowing before widening that network.
+  haf-fyp-redis:
+    image: redis:7-alpine
+    profiles:
+      - haf-fyp
+    command: redis-server --maxmemory-policy noeviction
+    networks:
+      haf-network:
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s

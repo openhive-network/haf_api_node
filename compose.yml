@@ -9,6 +9,7 @@ include:
   - reputation_tracker.yaml
   - nft_tracker.yaml
   - haf_stats.yaml
+  - haf_fyp.yaml
   - haf_block_explorer.yaml
   - varnish.yaml
   - ${JSONRPC_API_SERVER_NAME:-drone}.yaml

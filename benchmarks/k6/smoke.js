@@ -6,6 +6,7 @@ import http from "k6/http";
 import { check, group } from "k6";
 import {
   HAFAH_URL, HIVEMIND_URL, BALANCE_URL, REPUTATION_URL, HAFBE_URL, NFT_URL, HAF_STATS_URL,
+  HAF_FYP_URL,
   jsonRpc, JSON_HEADERS,
 } from "./config.js";
 
@@ -72,6 +73,13 @@ export default function () {
     const res = http.get(`${HAF_STATS_URL}/version`);
     check(res, {
       "haf_stats responds": (r) => r.status === 200,
+    });
+  });
+
+  group("haf_fyp", () => {
+    const res = http.get(`${HAF_FYP_URL}/version`);
+    check(res, {
+      "haf_fyp responds": (r) => r.status === 200,
     });
   });
 }
