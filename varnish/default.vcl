@@ -56,6 +56,16 @@ backend haf_stats {
     .port = "7016";
 }
 
+backend haf_fyp {
+    .host = "haproxy";
+    .port = "7017";
+}
+
+backend haf_fyp_admin {
+    .host = "haproxy";
+    .port = "7018";
+}
+
 backend proxy_whitelist {
     .host = "haproxy";
     .port = "7015";
@@ -177,6 +187,46 @@ sub vcl_recv {
         if (req.method == "POST") {
             call recv_cachable_post;
         }
+    } elseif (req.url ~ "^/haf-fyp-api/") {
+        # rewrite the URL to where PostgREST expects it
+        set req.url = regsub(req.url, "^/haf-fyp-api/(.*)$", "/\1");
+        set req.backend_hint = haf_fyp;
+
+        # Same reason as the admin branch below: recv_cachable_post, which unsets this,
+        # runs only for POSTs, so a GET carrying a forged X-Body-Len is turned into a
+        # POST at the backend. Closed on both of this app's routes rather than hoisted
+        # above the chain, which would change every sibling's behaviour in an MR that is
+        # supposed to add an app.
+        unset req.http.X-Body-Len;
+
+        if (req.method == "POST") {
+            call recv_cachable_post;
+        }
+    } elseif (req.url ~ "^/haf-fyp-admin/") {
+        set req.url = regsub(req.url, "^/haf-fyp-admin/(.*)$", "/\1");
+        set req.backend_hint = haf_fyp_admin;
+
+        # vcl_backend_fetch turns any request carrying X-Body-Len into a POST at the
+        # backend, and on a `pass` the client's headers reach bereq untouched -- so a
+        # forged header arrives at the app as a different verb than the client sent.
+        #
+        # recv_cachable_post unsets it, but the sibling routes call that helper only for
+        # POSTs, so a forged header on a GET is unguarded there too. That is a
+        # pre-existing repo-wide gap rather than something this route introduces; it is
+        # handled here because this is the one route where the app takes writes.
+        unset req.http.X-Body-Len;
+
+        # NO recv_cachable_post here. On the read path that helper lets a POST whose
+        # body is a query be cached; these POSTs are writes -- interests, events -- and
+        # caching or coalescing them would drop a user's action.
+        #
+        # `pass` explicitly rather than falling through to builtin vcl_recv. Writes are
+        # safe either way -- builtin passes non-GET/HEAD -- but a GET is cacheable in
+        # principle, and vcl_hash keys on the backend name with no header in the key.
+        # Nothing is cached today only because varnish.yaml runs with `-t 0`, a GLOBAL
+        # default rather than a property of this route: the day that changes, an
+        # authenticated GET on this write API would be served cross-caller from one entry.
+        return (pass);
     } elseif (req.url ~ "^/proxy-whitelist-api/") {
         # rewrite the URL to where PostgREST expects it
         set req.url = regsub(req.url, "^/proxy-whitelist-api/(.*)$", "/\1");
@@ -223,7 +273,7 @@ sub vcl_backend_fetch {
 }
 
 sub vcl_backend_response {
-    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense || bereq.backend == nft_tracker || bereq.backend == hivemind || bereq.backend == proxy_whitelist || bereq.backend == haf_stats) {
+    if (bereq.backend == hafah || bereq.backend == balance_tracker || bereq.backend == reputation_tracker || bereq.backend == haf_block_explorer || bereq.backend == hivemind_rtracker || bereq.backend == hivesense || bereq.backend == nft_tracker || bereq.backend == hivemind || bereq.backend == proxy_whitelist || bereq.backend == haf_stats || bereq.backend == haf_fyp) {
         # PostgREST generates invalid content-range headers, and varnish will refuse to cache/proxy calls because of it.
         # Until they fix it, just remove the header.  (see https://github.com/PostgREST/postgrest/issues/1089)
         unset beresp.http.Content-Range;
@@ -260,6 +310,10 @@ sub vcl_hash {
         hash_data("nft-tracker-api");
     } else if (req.backend_hint == haf_stats) {
         hash_data("haf-stats-api");
+    } else if (req.backend_hint == haf_fyp) {
+        hash_data("haf-fyp-api");
+    } else if (req.backend_hint == haf_fyp_admin) {
+        hash_data("haf-fyp-admin");
     } else if (req.backend_hint == proxy_whitelist) {
         hash_data("proxy-whitelist-api");
     } else if (req.backend_hint == hivemind) {

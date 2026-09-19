@@ -247,6 +247,73 @@ Disallow: /wallet/
     }
   }
 
+  # haf_fyp is handled here rather than on @rest_apis below, for ONE reason: the
+  # `header_up X-Real-IP` line. That line is what makes this app's per-client rate
+  # limiting work at all, and adding it to the shared handler would change what the other
+  # twelve apps on this node receive -- so the shared stanza stays byte-identical to what
+  # it was, and this block carries the change alone.
+  #
+  # The two matchers are disjoint (these paths appear here and in no other matcher), so
+  # the order of the two `handle` blocks does not matter. Everything below except the
+  # X-Real-IP line is a deliberate copy of @rest_apis' handler: keep them in step if that
+  # one changes.
+  @haf_fyp_apis {
+    path /haf-fyp-api/* /haf-fyp-admin/*
+  }
+
+  handle @haf_fyp_apis {
+    # Add CORS headers -- same as @rest_apis. Copied unchanged rather than tightened: a
+    # browser front-end is this app's main consumer and is cross-origin by construction.
+    # Having its own block is what would MAKE a narrower policy possible later without
+    # touching the siblings.
+    header {
+      Access-Control-Allow-Origin "*"
+      Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+      Access-Control-Allow-Headers "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range"
+      Access-Control-Max-Age "3600"
+    }
+    reverse_proxy http://varnish {
+      # The authoritative client address, and the whole reason this block exists. The
+      # chain is Caddy -> Varnish -> HAProxy, so by the time a request reaches the app
+      # the socket peer is HAProxy and every caller looks identical: haf_fyp's write
+      # limits (10 interest writes a MINUTE) were one bucket for the whole internet,
+      # which any single caller could exhaust.
+      #
+      # X-Forwarded-For cannot serve the purpose -- all three proxies append to it and
+      # its leftmost entry is whatever the client sent -- which is why the app reads
+      # X-Real-IP only. `header_up` REPLACES, so a client-supplied X-Real-IP cannot
+      # survive this hop.
+      #
+      # {client_ip}, not {remote_host}: identical when Caddy is the edge, but where Caddy
+      # itself sits behind another proxy -- the case `trusted_proxies static
+      # private_ranges` above is configured for -- {remote_host} is that proxy's address
+      # and every caller silently collapses into one bucket again, which is the exact
+      # failure this line exists to prevent. It is also what this file's own rate_limit
+      # directive keys on.
+      #
+      # One caveat this inherits rather than introduces: with `trusted_proxies static
+      # private_ranges` above, {client_ip} walks X-Forwarded-For whenever the socket peer
+      # is itself in a private range. This file's own rate_limit already keys on it, but
+      # this line is the first thing to make the value load-bearing for an APP-side
+      # control -- so a node fronted by another proxy on a private address should narrow
+      # CADDY_TRUSTED_PROXIES to that proxy.
+      #
+      # The app still has to name this edge in HAF_FYP_TRUSTED_PROXY_IPS before the
+      # header means anything to it; see .env.example.
+      header_up X-Real-IP {client_ip}
+      # Retry once on transient errors (same idle-keepalive race as the
+      # JSON-RPC handler above, against varnish/postgrest backends).
+      lb_try_duration 2s
+      lb_retries 1
+      # remove any CORS headers sent by the rest api servers so we don't have duplicates
+      # (right now, postgrest doesn't add any of these headers, this is just defensive)
+      header_down -Access-Control-Allow-Origin
+      header_down -Access-Control-Allow-Methods
+      header_down -Access-Control-Allow-Headers
+      header_down -Access-Control-Max-Age
+    }
+  }
+
   @rest_apis {
     path /hafah-api/* /balance-api/* /reputation-api/* /hafbe-api/* /hivesense-api/* /hivemind-api/* /nft-tracker-api/* /haf-stats-api/* /proxy-whitelist-api/* /hived-api/* /wallet-api/* /hafsql /hafsql/* /status-api/*
   }

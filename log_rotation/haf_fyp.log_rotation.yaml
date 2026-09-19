@@ -1,0 +1,25 @@
+services:
+  haf-fyp-install:
+    logging:
+      driver: local
+  haf-fyp-uninstall:
+    logging:
+      driver: local
+  haf-fyp-block-processing:
+    logging:
+      driver: local
+  haf-fyp-ranker:
+    logging:
+      driver: local
+  haf-fyp-api:
+    logging:
+      driver: local
+  haf-fyp-postgrest:
+    logging:
+      driver: local
+  haf-fyp-postgrest-rewriter:
+    logging:
+      driver: local
+  haf-fyp-redis:
+    logging:
+      driver: local

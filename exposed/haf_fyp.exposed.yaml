@@ -1,0 +1,13 @@
+services:
+  haf-fyp-postgrest-rewriter:
+    ports:
+      - "${HAF_API_NODE_EXPOSED_IPADDR:-0.0.0.0}:${HAF_API_NODE_EXPOSED_PORT_PREFIX:-1}7017:80"
+  # The write API is NOT exposed here, deliberately: it would put endpoints that accept
+  # writes (interests, events) and an admin surface whose only guard is ADMIN_API_KEY on
+  # a host port, straight past Caddy and HAProxy -- including the per-client rate
+  # limiting, which depends on a header only the edge sets. Reach it through the node's
+  # edge on /haf-fyp-admin/, or publish it deliberately in a local override.
+  #
+  # Not a claim that exposed/ is read-only as a rule -- haf_base and the JSON-RPC servers
+  # publish hived's 8090/8091 and :9000, which accept broadcasts. It is a claim about
+  # this API specifically.

@@ -9,7 +9,7 @@
 # `^10$`). Where they differ: a port bound v4 and v6 separately prints two lines, which
 # the floor tolerates and an exact count would not. When adding a port, raise the number
 # with it -- a floor lower than the list passes with a listener missing.
-[ "$(netstat -tln | grep -cE ':(7001|7002|7003|7004|7005|7009|7011|7013|7014|7015|7016)\b')" -ge 11 ] || exit 1
+[ "$(netstat -tln | grep -cE ':(7001|7002|7003|7004|7005|7009|7011|7013|7014|7015|7016|7017)\b')" -ge 12 ] || exit 1
 
 # The shed poller must be alive and publishing (file rewritten every poll;
 # stale mtime means the poller died — agent checks fail open to no shedding,
