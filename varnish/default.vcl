@@ -192,11 +192,8 @@ sub vcl_recv {
         set req.url = regsub(req.url, "^/haf-fyp-api/(.*)$", "/\1");
         set req.backend_hint = haf_fyp;
 
-        # Same reason as the admin branch below: recv_cachable_post, which unsets this,
-        # runs only for POSTs, so a GET carrying a forged X-Body-Len is turned into a
-        # POST at the backend. Closed on both of this app's routes rather than hoisted
-        # above the chain, which would change every sibling's behaviour in an MR that is
-        # supposed to add an app.
+        # Never let a client-supplied X-Body-Len turn a GET into a POST at the backend
+        # (recv_cachable_post only clears it for POSTs).
         unset req.http.X-Body-Len;
 
         if (req.method == "POST") {
@@ -206,26 +203,11 @@ sub vcl_recv {
         set req.url = regsub(req.url, "^/haf-fyp-admin/(.*)$", "/\1");
         set req.backend_hint = haf_fyp_admin;
 
-        # vcl_backend_fetch turns any request carrying X-Body-Len into a POST at the
-        # backend, and on a `pass` the client's headers reach bereq untouched -- so a
-        # forged header arrives at the app as a different verb than the client sent.
-        #
-        # recv_cachable_post unsets it, but the sibling routes call that helper only for
-        # POSTs, so a forged header on a GET is unguarded there too. That is a
-        # pre-existing repo-wide gap rather than something this route introduces; it is
-        # handled here because this is the one route where the app takes writes.
+        # Never let a client-supplied X-Body-Len turn a GET into a POST at the backend.
         unset req.http.X-Body-Len;
 
-        # NO recv_cachable_post here. On the read path that helper lets a POST whose
-        # body is a query be cached; these POSTs are writes -- interests, events -- and
-        # caching or coalescing them would drop a user's action.
-        #
-        # `pass` explicitly rather than falling through to builtin vcl_recv. Writes are
-        # safe either way -- builtin passes non-GET/HEAD -- but a GET is cacheable in
-        # principle, and vcl_hash keys on the backend name with no header in the key.
-        # Nothing is cached today only because varnish.yaml runs with `-t 0`, a GLOBAL
-        # default rather than a property of this route: the day that changes, an
-        # authenticated GET on this write API would be served cross-caller from one entry.
+        # Writes: never cached or coalesced, and pass explicitly so a GET on this API
+        # is never served cross-caller if the cache TTL is ever raised from 0.
         return (pass);
     } elseif (req.url ~ "^/proxy-whitelist-api/") {
         # rewrite the URL to where PostgREST expects it
