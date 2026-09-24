@@ -221,12 +221,7 @@ APPS=(
     "Balance Tracker|hafbe_bal|balance-tracker-block-processing-1"
     "Reputation Tracker|reptracker_app|reputation-tracker-block-processing-1"
     "NFT Tracker|nfttracker_app|nft-tracker-block-processing-1"
-    "HAF Stats|haf_stats_app|haf-stats-block-processing-1"
-    # The middle field is the HAF CONTEXT name, not the schema, and for this app they
-    # differ: context haf_fyp, schema haf_fyp_app. (The HAF Stats row above has the
-    # schema in that field and therefore always prints "Not installed" -- a real bug,
-    # filed as hive/haf_api_node#44, not fixed here because it is another app's line.
-    # Do not "make these consistent" by copying it.)
+    "HAF Stats|haf_stats|haf-stats-block-processing-1"
     "HAF FYP|haf_fyp|haf-fyp-block-processing-1"
     "Hivesense|hivesense_app|hivesense-sync-1"
     "HAfAH|hafah_app|"

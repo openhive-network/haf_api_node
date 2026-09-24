@@ -1,11 +1,7 @@
-# haf_stats. Gated on its own `haf-stats` profile rather than `apps` because the
-# conventional default -- registry.hive.blog/haf_stats:${HIVE_API_NODE_VERSION} -- does
-# not resolve yet: nothing is mirrored to registry.hive.blog (hive/haf_stats#93). It also
-# needs a haf_stats tag matching the node version, and haf_stats' first release tag is
-# 1.29.0-rc2 (hive/haf_stats#66), so node versions before that have none. Its CI publishes
-# commit-SHA tags, `latest` and release tags, to registry.gitlab.syncad.com only. Move
-# these services into `apps` once the mirror exists and the node version has a matching
-# haf_stats tag.
+# haf_stats: network and account analytics (hive/haf_stats). On its own `haf-stats`
+# profile rather than `apps` until registry.hive.blog carries a haf_stats tag matching
+# HIVE_API_NODE_VERSION; until then set HAF_STATS_IMAGE/HAF_STATS_REWRITER_IMAGE/
+# HAF_STATS_VERSION (see .env.example).
 services:
   haf-stats-install:
     image: ${HAF_STATS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
@@ -13,111 +9,39 @@ services:
       - haf-stats
     environment:
       POSTGRES_HOST: haf
-      # REQUIRED, unlike some siblings. install_app.sh's step 1 loads db/builtin_roles.sql,
-      # which CREATEs both app roles -- and haf_stats' scripts/common.sh defaults
-      # POSTGRES_USER to haf_stats_owner, a role that does not exist yet on a fresh node.
-      # (uninstall_app.sh self-defaults to haf_admin; install_app.sh does not.) Without
-      # this the install connects as haf_stats_owner, for which haf_base.yaml has no
-      # pg_hba row on this container: FATAL: no pg_hba.conf entry for host ..., user
-      # "haf_stats_owner". (Authentication runs before the role lookup, so that is the
-      # error you get here; on a stack with a permissive pg_hba the same slip surfaces
-      # as `role "haf_stats_owner" does not exist`, since step 1 is what creates it.)
+      # haf_admin: the install creates the app roles, so haf_stats_owner does not exist
+      # yet on a fresh node (and has no pg_hba row for this container anyway).
       POSTGRES_USER: haf_admin
-      # install_app.sh asserts the operation-type registry matches the chain and
-      # exits NON-ZERO on a mismatch -- deliberately not `|| true`. No sibling app
-      # has such a gate, and this service is a service_completed_successfully
-      # dependency for both block-processing and postgrest, so a tripped arm takes
-      # the whole app down. The escape hatch has to be reachable from compose:
-      # haf_stats' README prescribes `compose run --rm -e HAF_STATS_SKIP_OP_TYPE_ASSERT=1
-      # haf-stats-setup` as the escape hatch, and names adding the variable to the
-      # service's `environment:` as the better fix. Only the second works here: pg_hba on
-      # this node is keyed per container name, and a `run` container's name matches no
-      # row. (The README says nothing about pg_hba -- that constraint is this repo's.)
+      # The install asserts the operation-type registry matches the chain and exits
+      # non-zero on a mismatch, which keeps block-processing and postgrest from starting.
+      # Set this to 1 in .env to start anyway.
       HAF_STATS_SKIP_OP_TYPE_ASSERT: ${HAF_STATS_SKIP_OP_TYPE_ASSERT:-0}
     networks:
       haf-network:
     command:
       - install_app
-      # A RELATIVE PATH, not ${PUBLIC_HOSTNAME}. Until hive/haf_stats!87 (#70) merged on
-      # 2026-09-10 this flag was inert -- it SET a GUC on the installer's own psql
-      # session, which nothing read and nothing could read, since PostgREST connects
-      # later on its own pool. It is now persisted to haf_stats_app.app_config and read
-      # by haf_stats_endpoints.root(), which patches the OpenAPI `servers` entry.
-      #
-      # ${PUBLIC_HOSTNAME} is a bare hostname, which install_app rejects, falling back to
-      # the default and logging "WARNING: --swagger-url='...' is not an absolute path or
-      # an http(s) URL with a path". The published document was therefore correct by
-      # accident -- and the argument read as if it did something.
-      #
-      # The rejection is deliberate on haf_stats' side and worth understanding: a
-      # scheme-prefixed PUBLIC_HOSTNAME is legal here (CADDY_SITES defaults to it), and
-      # accepting a bare origin would have published `https://<host>` as the base URL --
-      # an origin this node does not route, since the app lives under /haf-stats-api/.
-      #
-      # A relative path is correct behind Caddy -> Varnish -> HAProxy regardless of
-      # hostname or scheme, and it is what install_app's own warning recommends for a
-      # node deployment. Varnish strips the prefix before the rewriter sees it
-      # (default.vcl), so this describes the PUBLIC base URL, not the internal one.
-      #
-      # Reported as hive/haf_api_node#43; fixed in this module rather than left as a
-      # follow-up because it is one line and this module is what introduced the flag.
+      # Relative path, not ${PUBLIC_HOSTNAME}: haf_stats patches the OpenAPI `servers`
+      # entry with this, and the app is served under this prefix whatever the hostname.
       - --swagger-url=/haf-stats-api
     depends_on:
       haf:
         condition: service_healthy
-  # Teardown. DESTRUCTIVE and has no undo -- it drops all three schemas CASCADE,
-  # including haf_stats_backend, whose rollups take hours to rebuild from a genesis
-  # replay. Run it deliberately and never as part of a normal up:
-  #
-  # Stop the app first -- uninstall_app.sh refuses while sessions are connected as a
-  # haf_stats role. The block processor's connection never idles out, and pooled
-  # haf_stats_user backends survive up to PGBOUNCER_SERVER_IDLE_TIMEOUT (600s) after
-  # postgrest stops, so either wait it out or restart pgbouncer:
+  # DESTRUCTIVE teardown: drops all haf_stats schemas CASCADE. The uninstall refuses while
+  # any session is connected as a haf_stats role, and pgbouncer holds pooled
+  # haf_stats_user backends for PGBOUNCER_SERVER_IDLE_TIMEOUT after postgrest stops, so:
   #
   #     docker compose stop haf-stats-block-processing haf-stats-postgrest pgbouncer
+  #     docker compose --profile core --profile haf-stats-uninstall up haf-stats-uninstall
   #
-  # pgbouncer is in that list and the rewriter is not, which looks backwards and is not.
-  # The rewriter is an nginx proxy and holds no database session at all. pgbouncer holds
-  # server-side connections authenticated AS haf_stats_user -- its `[databases]` line
-  # carries no `user=`, which is exactly why haf_base.yaml carries a haf_stats_user
-  # pg_hba row for the pgbouncer host. Stopping PostgREST closes only the client half;
-  # the pooled backends linger in pg_stat_activity for PGBOUNCER_SERVER_IDLE_TIMEOUT
-  # (600s). Skip pgbouncer and the teardown refuses for up to ten minutes, naming
-  # application_name=haf_stats_postgrest -- a container you already stopped. (Stopping
-  # pgbouncer briefly interrupts every app's PostgREST; they reconnect.)
-  #     docker compose --profile core --profile haf-stats-uninstall \
-  #                    up haf-stats-uninstall
-  #
-  # `up <service>`, NOT `run --rm`. haf_stats' README prescribes `run --rm` and is right
-  # THERE: its own compose profiles nothing, so `up` would also start haf-stats-setup
-  # (whose command is install_app) alongside the teardown, and it grants
-  # `host haf_block_log haf_stats_owner all trust`, so an ad-hoc container connects.
-  # Neither holds here. Upstream profiles every app service, so `up <service>` starts
-  # only that one -- and pg_hba is keyed per CONTAINER NAME, where `run` names its
-  # container <project>-haf-stats-uninstall-run-<slug>, matching no row in haf_base.yaml.
-  # The recipes are not interchangeable.
-  #
-  # --profile core is required: this service depends on `haf`, and haf is not in
-  # this profile, so without core the project fails to validate ("depends on
-  # undefined service haf"). Six of the seven sibling uninstall services behave the
-  # same way; block-explorer-uninstall is the exception -- and it is the exception
-  # because it uses the idiom rejected just below.
-  #
-  # Adding haf-stats-uninstall to `haf`'s own profile list -- the idiom haf uses for
-  # block-explorer-uninstall -- would make the extra flag unnecessary, and was tried
-  # and REJECTED: it also removes a guard. With haf in the profile, `--profile
-  # haf-stats-uninstall up -d`, service name omitted, VALIDATES and runs the
-  # teardown. For nft-tracker that one-token slip fails closed. Costing an operator
-  # one flag is worth keeping a destructive command fail-closed.
+  # `up <service>`, not `run --rm`: pg_hba (haf_base.yaml) is keyed by container name and
+  # a `run` container's name matches no row. `--profile core` because this depends on haf.
   haf-stats-uninstall:
     image: ${HAF_STATS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - haf-stats-uninstall
     environment:
       POSTGRES_HOST: haf
-      # haf_admin, not haf_stats_owner: the teardown drops roles, which needs CREATEROLE
-      # plus the ADMIN option on each, and a role cannot drop itself. The script refuses
-      # up front rather than discovering this after the schemas are gone.
+      # haf_admin: dropping the app roles needs CREATEROLE, and a role cannot drop itself.
       POSTGRES_USER: haf_admin
     networks:
       haf-network:
@@ -134,45 +58,16 @@ services:
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: haf_stats_owner
-      # The in-image check is
-      #     (last_active_at fresher than this AND later than this container's start)
-      #     OR hive.is_app_in_sync(context)
-      # so this window only binds while the app is BEHIND -- at the tip the OR arm
-      # reports healthy whatever this is set to. Raise it when a MASSIVE-mode batch runs
-      # longer than the window and reports unhealthy on a healthy replay; note the
-      # one-iteration lag means 300s tolerates iterations of roughly half that.
-      #
-      # Cosmetic in this stack: nothing gates on this health, and the agent-check
-      # (healthchecks/checks/haf_stats.sh, from !243) does NOT change that -- it
-      # measures other quantities (LIB age over psql, then the age of last_block_time
-      # from HTTP /sync-status, each against 60s) and never reads container health or
-      # this variable.
-      # It matters for `docker ps` and for whoever reads it.
+      # The container healthcheck passes if the loop iterated within this window or the
+      # app is in sync. Raise it if a massive-sync batch runs longer than this. Nothing
+      # routes on it; chain staleness is measured by the agent-check on 7016.
       HAF_STATS_HEALTHCHECK_MAX_AGE_SECONDS: ${HAF_STATS_HEALTHCHECK_MAX_AGE_SECONDS:-300}
-      # No LOG_FILE / /logs bind-mount, unlike balance_tracker. That pattern was copied
-      # here and then removed: `git grep LOG_FILE` in hive/haf_stats returns nothing, so
-      # the variable was inert and the mount stayed empty -- an operator following the
-      # comment to find logs after an incident would have found an empty directory.
-      # Container stdout is captured instead; see log_rotation/haf_stats.log_rotation.yaml.
     networks:
       haf-network:
     restart: on-failure
     command:
       - process_blocks
     healthcheck:
-      # In-image, and it connects as this service's own POSTGRES_USER. The obvious
-      # alternative -- psql -U haf_stats_user -c 'SELECT 1' -- proves only that
-      # PostgreSQL answers, and on a node whose pg_hba does not admit that role it
-      # cannot even do that: observed reporting unhealthy for two weeks while the app
-      # sat at the chain tip.
-      #
-      # It reads hafd.contexts.last_active_at, so it proves the loop is ITERATING. It
-      # does NOT prove the chain is advancing -- HAF commits that heartbeat before every
-      # early return in app_next_iteration, so a paused app or a stopped hived still
-      # ticks it. Chain staleness belongs to the agent-check,
-      # healthchecks/checks/haf_stats.sh (!243), which measures it over /sync-status. A
-      # haproxy-healthchecks image older than that (e.g. 1.28.6) has no such check, and
-      # nothing on such a node measures haf_stats' chain lag.
       test: ["CMD-SHELL","/app/block-processing-healthcheck.sh"]
       interval: 60s
       timeout: 10s
@@ -196,19 +91,9 @@ services:
     environment:
       PGRST_SERVER_HOST: "::"
       PGRST_ADMIN_SERVER_PORT: 3001
-      # NO statement_timeout on this URI. haf_stats' own compose carries
-      # `options=-c statement_timeout=30s` (its PostgREST pools straight to haf:5432),
-      # but here the connection goes through pgbouncer, and PgBouncer 1.25.1 with the
-      # stack's `ignore_startup_parameters = extra_float_digits` rejects the startup
-      # parameter outright:
-      #     FATAL: unsupported startup parameter in options: statement_timeout
-      # so PostgREST could never connect and the API never came up. Listing the
-      # parameter in ignore_startup_parameters makes the connection succeed but silently
-      # drops the timeout, and track_extra_parameters does not accept it either.
-      # What does arm through pgbouncer is a role-level setting, because the pool logs
-      # in AS haf_stats_user (verified on a fresh pool: ALTER ROLE haf_stats_user SET
-      # statement_timeout = '1s' cancels a 2s pg_sleep). That belongs in haf_stats'
-      # installer; until it lands, haf_stats runs uncapped here like every sibling.
+      # No `options=-c statement_timeout=...` on the URI (haf_stats' own compose has one):
+      # pgbouncer rejects that startup parameter and postgrest would never connect. A
+      # statement timeout for this app has to be set at the role level by its installer.
       PGRST_DB_URI: postgresql://haf_stats_user@pgbouncer:6432/haf_block_log?application_name=haf_stats_postgrest
       PGRST_DB_SCHEMA: haf_stats_endpoints
       PGRST_DB_ANON_ROLE: haf_stats_user
@@ -226,68 +111,27 @@ services:
     networks:
       haf-network:
     depends_on:
-      # NOT gated on haf-stats-block-processing. Its healthcheck reports a committed
-      # block-processing iteration, and with start_period: 48h a container that is
-      # merely slow to start reports `starting`, so a health gate here would keep the
-      # API down indefinitely. The install gate below is what guarantees the schemas
-      # exist, which is the actual prerequisite. Matches every other app here.
+      # Gated on the install (which creates the schemas), not on block-processing, whose
+      # 48h start_period would otherwise keep the API down for the length of a replay.
       haf-stats-install:
         condition: service_completed_successfully
       pgbouncer:
         condition: service_healthy
   haf-stats-postgrest-rewriter:
-    # postgrest-rewriter, the name every sibling app publishes (hive/haf_stats#83).
-    # haf_stats published it as haf_stats/rewriter until then. Its develop and release
-    # CI no longer publish that name (hive/haf_stats!101), but its images are kept, so a
-    # SHA from a haf_stats commit WITHOUT the rename (develop commits from 2026-08-02 up
-    # to d4e73b05; older ones have no rewriter image at all) still resolves -- only
-    # under the old name; commits after the retirement have it only under the new one.
-    # Pinning a pre-rename SHA needs
-    #   HAF_STATS_REWRITER_IMAGE=<registry>/haf_stats/rewriter
-    # with no tag in the value: HAF_STATS_VERSION supplies it, as for HAF_STATS_IMAGE.
     image: ${HAF_STATS_REWRITER_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats/postgrest-rewriter}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - haf-stats
     labels:
-      # for Swagger UI. status/app.js discards any container without swagger.url before
-      # any health logic runs (`if (!swaggerUrl) continue;`), so these are what put
-      # haf_stats on the status page at all. They go with the /haf-stats-api/ route
-      # (Caddy -> Varnish -> HAProxy:7016): a swagger.url pointing at a path nothing
-      # serves produces a status row whose link 404s.
-      #
-      # io.hive.healthcheck.port belongs here, next to the swagger labels: swagger.url is
-      # what puts the app on the status page, and the port label is what gives its row a
-      # health state. Without it the row reads `unknown` forever.
-      #
-      # status/app.js does not treat a refused connect as unknown:
-      #
-      #     let status = 'unknown';
-      #     if (healthPort) { status = isHealthy ? 'healthy' : 'unhealthy'; }
-      #
-      # The listener on 7016 is healthchecks/checks/haf_stats.sh, added by !243. A
-      # haproxy-healthchecks image older than that (e.g. 1.28.6) binds nothing on 7016, so
-      # on such a node this row reads `unhealthy` while the API serves perfectly -- a
-      # cosmetic false alarm, fixed by running a healthchecks image that carries the check
-      # (1.29.0-rc2 or later).
+      # for Swagger UI
       - "io.hive.swagger.url=/haf-stats-api/"
       - "io.hive.swagger.name=HAF Stats API"
       - "io.hive.swagger.order=9"
       - "io.hive.healthcheck.port=7016"
     environment:
-      # REQUIRED. rewriter_entrypoint.sh defaults POSTGREST_HOST to `haf-stats-api`,
-      # which is the service name in haf_stats' OWN docker/docker-compose.yml -- not
-      # this one. The template renders `proxy_pass http://$POSTGREST_HOST:3000`, and
-      # nginx resolves a literal upstream at CONFIG-PARSE time with no resolver
-      # directive. So a name that does not exist is not a 502 at request time:
-      # openresty exits immediately with [emerg] host not found in upstream. There
-      # is no restart policy, so it stays exited and the port-81 healthcheck never
-      # runs. haf_fyp's rewriter_entrypoint.sh documents this asymmetry and names
-      # haf_stats as the counter-example.
+      # The image's entrypoint defaults this to the service name in haf_stats' own
+      # compose file, and nginx resolves the upstream at config-parse time, so a wrong
+      # name makes the container exit immediately rather than 502.
       POSTGREST_HOST: haf-stats-postgrest
-    # Both label groups are set above, with the route that makes them true:
-    # swagger.url is the status page's gate, healthcheck.port alone changes nothing, and
-    # healthcheck.port without a listener on 7016 reads as unhealthy rather than unknown
-    # (see the note above the labels).
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
       interval: 10s

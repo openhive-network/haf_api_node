@@ -1,14 +1,7 @@
 #! /bin/sh
-# All agent-check listeners must be bound
-# `-ge`, not an exact count (develop's 9068fb6 had `-eq 10`; 7016, haf_stats, was added
-# since). netstat prints one line per listening SOCKET -- one per port here, since each
-# check binds a single dual-stack socket -- and only the ports listed below match. So
-# while the number equals the length of the list the two forms behave the same: both fail
-# when a listed port did not bind, and neither sees a listener outside the list (testapi
-# serves 7016 and 7017 from bind-mounted checks and stays healthy under the stock 10-port
-# `^10$`). Where they differ: a port bound v4 and v6 separately prints two lines, which
-# the floor tolerates and an exact count would not. When adding a port, raise the number
-# with it -- a floor lower than the list passes with a listener missing.
+# All agent-check listeners must be bound. A floor rather than an exact count, so an
+# image that binds extra listeners (or a port bound v4 and v6 separately) stays healthy;
+# when adding a port, add it to the list AND raise the number.
 [ "$(netstat -tln | grep -cE ':(7001|7002|7003|7004|7005|7009|7011|7013|7014|7015|7016|7017)\b')" -ge 12 ] || exit 1
 
 # The shed poller must be alive and publishing (file rewritten every poll;

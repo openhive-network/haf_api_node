@@ -4,11 +4,9 @@ services:
     profiles:
       - servers
       - apps
-      # haf_stats is gated on its own profile rather than `apps` (see haf_stats.yaml and
-      # .env.example), so `--profile core --profile haf-stats` has to bring the pooler
-      # with it. Same idiom as `haf` carrying `block-explorer-uninstall`.
+      # haf_stats and haf_fyp are on their own profiles rather than `apps`, so those
+      # profiles have to bring the pooler with them.
       - haf-stats
-      # Same idiom for haf_fyp, which is gated on its own profile for the same reasons.
       - haf-fyp
     environment:
       # Users allowed to connect through PgBouncer (space-separated list)
