@@ -10,12 +10,18 @@ const HEALTHCHECK_TIMEOUT = parseInt(process.env.HEALTHCHECK_TIMEOUT) || 2000;
 const UPDATE_INTERVAL = parseInt(process.env.UPDATE_INTERVAL) || 10000;
 const PROJECT_NAME = process.env.PROJECT_NAME || null;
 
+// Build version, set by the Dockerfile from the CI build args: the release tag when
+// building a tag, otherwise the short commit hash (matches what the sibling apps
+// inject into their OpenAPI documents).
+const APP_VERSION = process.env.APP_VERSION
+  || (process.env.APP_COMMIT ? process.env.APP_COMMIT.substring(0, 8) : '0.0.0-dev');
+
 // OpenAPI specification
 const openApiSpec = {
   openapi: '3.1.0',
   info: {
     title: 'HAF API Node Status',
-    version: '1.0.0',
+    version: APP_VERSION,
     description: 'Provides health status for all configured HAF API services'
   },
   servers: [
