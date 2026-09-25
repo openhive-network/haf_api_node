@@ -126,6 +126,13 @@ services:
         host    haf_block_log    hafsql_user      ${COMPOSE_PROJECT_NAME}-hafsql-1.${NETWORK_NAME}                              trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafsql-uninstall-1.${NETWORK_NAME}                    trust\n
         "
+      # Default role for psql sessions run inside this container (`docker compose exec haf psql ...`).
+      # Without it psql falls back to peer authentication as the container's OS user, i.e. the
+      # unprivileged `hived` role, so administrative one-liners such as `psql -c checkpoint`
+      # fail with "Only roles with privileges of the pg_checkpoint role may execute this
+      # command" -- and quietly, when their output is piped. pg_hba already trusts haf_admin on
+      # the local socket (the image's own entrypoint relies on it for its maintenance commands).
+      PGUSER: haf_admin
       SHM_DIR: /home/hived/shm_dir
       ROCKSDB_DIR: /home/hived/rocksdb_dir
       WAL_DIR: /home/hived/wal_dir
