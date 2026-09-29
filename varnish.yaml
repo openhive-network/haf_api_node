@@ -14,6 +14,11 @@ services:
       - VARNISH_SIZE=2G
     command:
       - -t 0
+      # once the cache is full, a fetch may evict at most nuke_limit objects to make
+      # room; the default (50) is too few for a ~200 KB response, and the failed
+      # fetch is sent to the client as a 200 with a truncated body
+      - -p
+      - nuke_limit=5000
     depends_on:
       haproxy:
         condition: service_healthy
