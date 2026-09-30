@@ -92,6 +92,7 @@ services:
       HAF_FYP_HEALTH_URL: "${HAF_FYP_HEALTH_URL:-http://haf-fyp-postgrest-rewriter:80/sync-status}"
       PROXY_WHITELIST_HEALTH_URL: "${PROXY_WHITELIST_HEALTH_URL:-http://proxy-whitelist-postgrest-rewriter:80/sync-status}"
       HTTP_CHECK_TIMEOUT: "${HTTP_CHECK_TIMEOUT:-5}"
+      PSQL_CHECK_TIMEOUT: "${PSQL_CHECK_TIMEOUT:-5}"
       # Load-shed configuration (see healthchecks/checks/shed_poller.sh).
       # SHED_ARMED=false (the default) is log-only: overload is detected and
       # logged, but the agent responses always report the normal maxconn.
