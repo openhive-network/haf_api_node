@@ -10,10 +10,35 @@
 #
 #     docker compose --profile core --profile haf-fyp up -d
 #
-# hivemind and hivesense are soft dependencies: without them the app installs and syncs,
-# but feeds come back empty while every health signal reads green. Cross-schema grants
-# are also lost whenever hivemind recreates its views; re-run haf_fyp's
-# scripts/grant_cross_schema.sh when /v1/fyp/global starts returning 401.
+# hivemind and hivesense are soft dependencies, of different weight:
+#   - hivemind: feeds are built from its posts. Without it the app installs and syncs,
+#     but every feed comes back empty while every health signal reads green. Where
+#     hivemind is enabled, haf-fyp-install waits for hivemind-install (see its
+#     depends_on).
+#   - hivesense: without it feeds are still served, ranked on recency, engagement and
+#     credibility with no personalization (/metrics reports ranking_no_personalization).
+# Cross-schema grants are also lost whenever hivemind recreates its views; re-run
+# haf_fyp's scripts/grant_cross_schema.sh when /v1/fyp/global starts returning 401.
+#
+# Uninstalling and reinstalling hivemind under a running haf_fyp. haf_fyp's own schemas
+# and synced data are untouched: nothing of haf_fyp's depends on hivemind_app in the
+# catalog, and HAF drops the haf_fyp -> hivemind_app dependency when hivemind is
+# unregistered (with a WARNING that haf_fyp is "no longer gated by it"). What changes:
+#   1. While hivemind is absent, /v1/fyp/feed/{username} raises for a user with a cached
+#      feed (it reads hivemind_app.hive_accounts), and /v1/fyp/global raises for any
+#      page holding a post that is not in haf_fyp's own post_bridge_cache.
+#   2. hivemind-install is SKIPPED (exit 0) while haf-fyp-block-processing runs, because
+#      that processor holds the shared `hivemind` lock it took at start; hivesense's
+#      does too. Stop both before reinstalling hivemind.
+#   3. haf_fyp stays ungated until haf-fyp-install runs again, which restores the grants
+#      and re-declares the dependency. That install skips itself (exit 0) while
+#      haf-fyp-block-processing OR haf-fyp-ranker runs, so stop both first. Once the
+#      dependency is back, HAF hands haf_fyp no block until hivemind's completed block
+#      reaches haf_fyp's own -- for the length of hivemind's resync if it is declared
+#      straight away, which is what a plain `docker compose up -d` does with the
+#      processors stopped: haf-fyp-install runs as soon as hivemind-install exits.
+#   4. Posts haf_fyp ingested while hivemind was absent or behind have no hivemind id;
+#      run `CALL haf_fyp_app.run_hive_post_id_backfill()` once hivemind has caught up.
 services:
   haf-fyp-install:
     image: ${HAF_FYP_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_fyp/sql}:${HAF_FYP_VERSION:-${HIVE_API_NODE_VERSION}}
@@ -35,6 +60,24 @@ services:
     depends_on:
       haf:
         condition: service_healthy
+      # After hivemind's install, where hivemind is enabled (hive/haf_fyp#79). haf_fyp
+      # declares hivemind_app a HAF dependency only if hivemind is registered when this
+      # runs. With no ordering, a fresh node ran this first, and haf_fyp's processor --
+      # which, in the 1.28.8-rc3 image, takes the shared `hivemind` lock whether or not
+      # hivemind exists -- held it before hivemind did: hivemind-install skipped itself,
+      # hivemind's processor and hivesense's install failed, and `up` aborted. Later
+      # haf_fyp images take that lock only where hivemind's tables exist
+      # (hive/haf_fyp!94), which removes the deadlock but not the order.
+      #
+      # required: false keeps the haf-fyp profile usable without hivemind's: compose
+      # orders the two whenever hivemind-install is part of the project and ignores the
+      # dependency when it is not. hivesense-install-schema waits on it too.
+      #
+      # Side effect: `up <one haf-fyp service>` now also runs hivemind-install and the
+      # installs it depends on. Pass --no-deps to restart a single service.
+      hivemind-install:
+        condition: service_completed_successfully
+        required: false
   # DESTRUCTIVE teardown: drops haf_fyp's schemas and roles CASCADE. The uninstall
   # refuses while any session is connected as a haf_fyp role, and pgbouncer holds pooled
   # haf_fyp_user backends for PGBOUNCER_SERVER_IDLE_TIMEOUT after postgrest stops, so:
