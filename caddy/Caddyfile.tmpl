@@ -273,6 +273,22 @@ Disallow: /wallet/
     }
   }
 
+  # haf_fyp telemetry arrives by navigator.sendBeacon with a JSON body, which browsers
+  # send with credentials; they refuse a preflight answered with Allow-Origin "*". For
+  # this one path, echo the caller's origin and allow credentials instead. Deferred, so
+  # it overrides the headers @cors_preflight sets above wherever that handler sits.
+  @haf_fyp_events_preflight {
+    method OPTIONS
+    path /haf-fyp-admin/v1/fyp/events
+    header Origin *
+  }
+  header @haf_fyp_events_preflight {
+    defer
+    Access-Control-Allow-Origin "{http.request.header.Origin}"
+    Access-Control-Allow-Credentials "true"
+    +Vary "Origin"
+  }
+
   # haf_fyp has its own handler because of the X-Real-IP line below; everything else is
   # a copy of the @rest_apis handler, so keep them in step.
   @haf_fyp_apis {
