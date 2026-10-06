@@ -180,7 +180,7 @@ services:
       retries: 10
       start_period: 72h
   hive-openapi-spec:
-    image: ${HIVE_OPENAPI_SPEC_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hive/openapi-spec}:${HIVE_VERSION:-${HIVE_API_NODE_VERSION}}
+    image: ${HIVE_OPENAPI_SPEC_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hive/openapi-spec}:${HIVE_OPENAPI_VERSION:-${HIVE_VERSION:-${HIVE_API_NODE_VERSION}}}
     profiles:
       - servers
     networks:
