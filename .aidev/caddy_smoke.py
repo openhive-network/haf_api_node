@@ -21,6 +21,7 @@ the response by its `Content-Encoding` before comparing bodies, so a check holds
 whether or not Caddy compresses. What each response was encoded with, and its
 size on the wire, is printed and recorded in the case's system-out.
 """
+
 from __future__ import annotations
 
 import gzip
@@ -35,9 +36,9 @@ import threading
 import time
 import traceback
 import zlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Callable
 from xml.sax.saxutils import escape, quoteattr
 
 import zstandard
@@ -69,12 +70,14 @@ def js_body(path: str) -> bytes:
 
 
 def html_body(stub: str, path: str) -> bytes:
-    row = f"<div class=\"row\"><span>{stub}</span><a href=\"{path}\">{path}</a></div>\n"
+    row = f'<div class="row"><span>{stub}</span><a href="{path}">{path}</a></div>\n'
     return f"<!doctype html><html><head><title>{stub}</title></head><body>\n{row * 300}</body></html>\n".encode()
 
 
 def json_body(stub: str, path: str) -> bytes:
-    return ('{"stub": "%s", "path": "%s", "items": [%s]}\n' % (stub, path, ", ".join(['{"n": 1}'] * 2000))).encode()
+    return (
+        f'{{"stub": "{stub}", "path": "{path}", "items": [{", ".join(['{"n": 1}'] * 2000)}]}}\n'
+    ).encode()
 
 
 def expected_response(stub: str, path: str) -> tuple[str, bytes]:
@@ -100,7 +103,9 @@ def make_stub(name: str) -> type[BaseHTTPRequestHandler]:
             self.send_header("Content-Type", content_type)
             self.send_header("X-Stub", name)
             self.send_header("X-Stub-Path", self.path)
-            self.send_header("X-Stub-Accept-Encoding", self.headers.get("Accept-Encoding", ""))
+            self.send_header(
+                "X-Stub-Accept-Encoding", self.headers.get("Accept-Encoding", "")
+            )
             if self.path == PRECOMPRESSED_PATH:
                 body = gzip.compress(body)
                 self.send_header("Content-Encoding", "gzip")
@@ -132,7 +137,9 @@ def point_upstreams_at_stubs(caddyfile: str) -> None:
     with open(caddyfile, encoding="utf-8") as handle:
         text = handle.read()
     for name, port in UPSTREAMS.items():
-        text, count = re.subn(rf"http://{re.escape(name)}(?=[\s{{])", f"http://127.0.0.1:{port}", text)
+        text, count = re.subn(
+            rf"http://{re.escape(name)}(?=[\s{{])", f"http://127.0.0.1:{port}", text
+        )
         if count == 0:
             raise RuntimeError(f"the rendered Caddyfile proxies to no http://{name}")
     with open(caddyfile, "w", encoding="utf-8") as handle:
@@ -170,7 +177,9 @@ class Response:
 def decode(wire: bytes, content_encoding: str) -> bytes:
     """Undo Content-Encoding (applied in the order listed) like a browser would."""
     data = wire
-    for coding in reversed([c.strip() for c in content_encoding.split(",") if c.strip()]):
+    for coding in reversed(
+        [c.strip() for c in content_encoding.split(",") if c.strip()]
+    ):
         if coding == "gzip":
             data = gzip.decompress(data)
         elif coding == "zstd":
@@ -180,13 +189,25 @@ def decode(wire: bytes, content_encoding: str) -> bytes:
     return data
 
 
-def request(method: str, path: str, body: bytes | None = None, headers: dict[str, str] | None = None) -> Response:
+def request(
+    method: str,
+    path: str,
+    body: bytes | None = None,
+    headers: dict[str, str] | None = None,
+) -> Response:
     conn = http.client.HTTPConnection("localhost", CADDY_PORT, timeout=10)
     try:
-        conn.request(method, path, body=body, headers={"Accept-Encoding": ACCEPT_ENCODING, **(headers or {})})
+        conn.request(
+            method,
+            path,
+            body=body,
+            headers={"Accept-Encoding": ACCEPT_ENCODING, **(headers or {})},
+        )
         raw = conn.getresponse()
         wire = raw.read()
-        response = Response(raw.status, {k.lower(): v for k, v in raw.getheaders()}, wire)
+        response = Response(
+            raw.status, {k.lower(): v for k, v in raw.getheaders()}, wire
+        )
     finally:
         conn.close()
     response.body = decode(response.wire, response.encoding)
@@ -203,7 +224,9 @@ def wait_ready(caddy: subprocess.Popen[bytes]) -> None:
                 return
         except OSError:
             time.sleep(0.2)
-    raise RuntimeError(f"caddy did not listen on {CADDY_PORT} within {READY_TIMEOUT_S}s")
+    raise RuntimeError(
+        f"caddy did not listen on {CADDY_PORT} within {READY_TIMEOUT_S}s"
+    )
 
 
 # --- checks -----------------------------------------------------------------
@@ -223,10 +246,16 @@ def check_proxied(stub: str, path: str) -> Callable[[], str]:
     def check() -> str:
         response = request("GET", path)
         assert response.status == 200, f"status {response.status}"
-        assert response.headers.get("x-stub") == stub, f"answered by {response.headers.get('x-stub')!r}, not {stub!r}"
-        assert response.headers.get("x-stub-path") == path, f"upstream saw {response.headers.get('x-stub-path')!r}"
+        assert response.headers.get("x-stub") == stub, (
+            f"answered by {response.headers.get('x-stub')!r}, not {stub!r}"
+        )
+        assert response.headers.get("x-stub-path") == path, (
+            f"upstream saw {response.headers.get('x-stub-path')!r}"
+        )
         content_type, body = expected_response(stub, path)
-        assert response.headers.get("content-type") == content_type, response.headers.get("content-type")
+        assert response.headers.get("content-type") == content_type, (
+            response.headers.get("content-type")
+        )
         assert response.body == body, "decoded body differs from what the upstream sent"
         return describe(path, response)
 
@@ -237,16 +266,24 @@ def check_rest_api() -> str:
     path = "/hafah-api/version"
     summary = check_proxied("varnish", path)()
     response = request("GET", path)
-    assert response.headers.get("access-control-allow-origin") == "*", "no CORS header on a REST API response"
+    assert response.headers.get("access-control-allow-origin") == "*", (
+        "no CORS header on a REST API response"
+    )
     return summary
 
 
 def check_jsonrpc_post() -> str:
     payload = b'{"jsonrpc":"2.0","method":"condenser_api.get_dynamic_global_properties","params":[],"id":1}'
-    response = request("POST", "/", body=payload, headers={"Content-Type": "application/json"})
+    response = request(
+        "POST", "/", body=payload, headers={"Content-Type": "application/json"}
+    )
     assert response.status == 200, f"status {response.status}"
-    assert response.headers.get("x-stub") == "drone", f"answered by {response.headers.get('x-stub')!r}"
-    assert response.headers.get("access-control-allow-origin") == "*", "no CORS header on a JSON-RPC response"
+    assert response.headers.get("x-stub") == "drone", (
+        f"answered by {response.headers.get('x-stub')!r}"
+    )
+    assert response.headers.get("access-control-allow-origin") == "*", (
+        "no CORS header on a JSON-RPC response"
+    )
     assert response.body == expected_response("drone", "/")[1]
     return describe("POST /", response)
 
@@ -270,21 +307,35 @@ def check_precompressed_passthrough() -> str:
     response = request("GET", PRECOMPRESSED_PATH)
     assert response.status == 200, f"status {response.status}"
     assert response.headers.get("x-stub") == "denser-blog"
-    assert response.encoding == "gzip", f"content-encoding {response.encoding!r}, expected the upstream's gzip"
-    assert response.body == expected_response("denser-blog", PRECOMPRESSED_PATH)[1], "body is not the upstream's"
+    assert response.encoding == "gzip", (
+        f"content-encoding {response.encoding!r}, expected the upstream's gzip"
+    )
+    assert response.body == expected_response("denser-blog", PRECOMPRESSED_PATH)[1], (
+        "body is not the upstream's"
+    )
     return describe(PRECOMPRESSED_PATH, response)
 
 
-def check_compressed(stub: str, path: str, accept: str, encoding: str) -> Callable[[], str]:
+def check_compressed(
+    stub: str, path: str, accept: str, encoding: str
+) -> Callable[[], str]:
     """With `Accept-Encoding: accept`, `path` comes back `encoding`-encoded, at most a third of its size."""
 
     def check() -> str:
         response = request("GET", path, headers={"Accept-Encoding": accept})
         assert response.status == 200, f"status {response.status}"
-        assert response.headers.get("x-stub") == stub, f"answered by {response.headers.get('x-stub')!r}, not {stub!r}"
-        assert response.encoding == encoding, f"content-encoding {response.encoding!r}, expected {encoding!r}"
-        assert response.body == expected_response(stub, path)[1], "decoded body differs from what the upstream sent"
-        assert len(response.wire) * 3 <= len(response.body), f"{len(response.wire)}B on the wire for {len(response.body)}B"
+        assert response.headers.get("x-stub") == stub, (
+            f"answered by {response.headers.get('x-stub')!r}, not {stub!r}"
+        )
+        assert response.encoding == encoding, (
+            f"content-encoding {response.encoding!r}, expected {encoding!r}"
+        )
+        assert response.body == expected_response(stub, path)[1], (
+            "decoded body differs from what the upstream sent"
+        )
+        assert len(response.wire) * 3 <= len(response.body), (
+            f"{len(response.wire)}B on the wire for {len(response.body)}B"
+        )
         return describe(path, response)
 
     return check
@@ -294,29 +345,77 @@ def check_rest_api_not_compressed() -> str:
     path = "/hafah-api/version"
     response = request("GET", path)
     assert response.status == 200, f"status {response.status}"
-    assert response.encoding == "", f"content-encoding {response.encoding!r} on a REST API response"
+    assert response.encoding == "", (
+        f"content-encoding {response.encoding!r} on a REST API response"
+    )
     return describe(path, response)
 
 
 CHECKS: list[tuple[str, Callable[[], str]]] = [
     ("blog root", check_proxied("denser-blog", "/blog")),
     ("blog page", check_proxied("denser-blog", "/blog/trending")),
-    ("blog js asset", check_proxied("denser-blog", "/blog/_next/static/chunks/9007-053f889d0a75a024.js")),
+    (
+        "blog js asset",
+        check_proxied(
+            "denser-blog", "/blog/_next/static/chunks/9007-053f889d0a75a024.js"
+        ),
+    ),
     ("wallet root", check_proxied("denser-wallet", "/wallet")),
-    ("wallet js asset", check_proxied("denser-wallet", "/wallet/_next/static/chunks/main-app.js")),
+    (
+        "wallet js asset",
+        check_proxied("denser-wallet", "/wallet/_next/static/chunks/main-app.js"),
+    ),
     ("explorer root", check_proxied("block-explorer-ui", "/explorer")),
-    ("explorer js asset", check_proxied("block-explorer-ui", "/explorer/_next/static/chunks/app.js")),
+    (
+        "explorer js asset",
+        check_proxied("block-explorer-ui", "/explorer/_next/static/chunks/app.js"),
+    ),
     ("rest api via varnish", check_rest_api),
     ("json-rpc post to root", check_jsonrpc_post),
     ("fallback to swagger", check_proxied("swagger", "/")),
     ("robots.txt", check_robots),
     ("cors preflight", check_cors_preflight),
     ("upstream-encoded response passes through", check_precompressed_passthrough),
-    ("blog js compressed", check_compressed("denser-blog", "/blog/_next/static/chunks/9007-053f889d0a75a024.js", ACCEPT_ENCODING, "zstd")),
-    ("blog js gzip for gzip-only client", check_compressed("denser-blog", "/blog/_next/static/chunks/3737-2496fbddf4b51e75.js", "gzip", "gzip")),
-    ("blog page compressed", check_compressed("denser-blog", "/blog/trending", ACCEPT_ENCODING, "zstd")),
-    ("wallet js compressed", check_compressed("denser-wallet", "/wallet/_next/static/chunks/main-app.js", ACCEPT_ENCODING, "zstd")),
-    ("explorer js compressed", check_compressed("block-explorer-ui", "/explorer/_next/static/chunks/app.js", ACCEPT_ENCODING, "zstd")),
+    (
+        "blog js compressed",
+        check_compressed(
+            "denser-blog",
+            "/blog/_next/static/chunks/9007-053f889d0a75a024.js",
+            ACCEPT_ENCODING,
+            "zstd",
+        ),
+    ),
+    (
+        "blog js gzip for gzip-only client",
+        check_compressed(
+            "denser-blog",
+            "/blog/_next/static/chunks/3737-2496fbddf4b51e75.js",
+            "gzip",
+            "gzip",
+        ),
+    ),
+    (
+        "blog page compressed",
+        check_compressed("denser-blog", "/blog/trending", ACCEPT_ENCODING, "zstd"),
+    ),
+    (
+        "wallet js compressed",
+        check_compressed(
+            "denser-wallet",
+            "/wallet/_next/static/chunks/main-app.js",
+            ACCEPT_ENCODING,
+            "zstd",
+        ),
+    ),
+    (
+        "explorer js compressed",
+        check_compressed(
+            "block-explorer-ui",
+            "/explorer/_next/static/chunks/app.js",
+            ACCEPT_ENCODING,
+            "zstd",
+        ),
+    ),
     ("rest api not compressed", check_rest_api_not_compressed),
 ]
 
@@ -351,7 +450,10 @@ def run_checks() -> list[tuple[str, float, str, str | None]]:
             out, failure = check(), None
             print(f"PASS {name}: {out}")
         except Exception as error:  # noqa: BLE001 - every failure is a case's result
-            out, failure = "", f"{type(error).__name__}: {error}\n{traceback.format_exc()}"
+            out, failure = (
+                "",
+                f"{type(error).__name__}: {error}\n{traceback.format_exc()}",
+            )
             print(f"FAIL {name}: {type(error).__name__}: {error}")
         results.append((name, time.monotonic() - started, out, failure))
     return results
@@ -365,19 +467,31 @@ def main(out_dir: str) -> int:
     env = caddy_env(os.path.join(out_dir, "caddy-smoke-xdg"))
     caddy = None
     try:
-        subprocess.run([os.path.join(REPO, ".aidev", "caddy-render.sh"), conf], env=env, check=True)
+        subprocess.run(
+            [os.path.join(REPO, ".aidev", "caddy-render.sh"), conf], env=env, check=True
+        )
         caddyfile = os.path.join(conf, "Caddyfile")
         point_upstreams_at_stubs(caddyfile)
         start_stubs()
         with open(os.path.join(out_dir, "caddy.log"), "wb") as log:
             caddy = subprocess.Popen(
                 ["caddy", "run", "--config", caddyfile, "--adapter", "caddyfile"],
-                cwd=conf, env=env, stdout=log, stderr=subprocess.STDOUT,
+                cwd=conf,
+                env=env,
+                stdout=log,
+                stderr=subprocess.STDOUT,
             )
         wait_ready(caddy)
         results = run_checks()
     except Exception:  # noqa: BLE001 - a setup failure is reported as one failing case
-        results = [("caddy starts with the rendered Caddyfile", 0.0, "", traceback.format_exc())]
+        results = [
+            (
+                "caddy starts with the rendered Caddyfile",
+                0.0,
+                "",
+                traceback.format_exc(),
+            )
+        ]
         print(results[0][3], file=sys.stderr)
     finally:
         if caddy is not None and caddy.poll() is None:
