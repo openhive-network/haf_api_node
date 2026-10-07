@@ -66,7 +66,7 @@ run_shellcheck() {
 CADDY_VARIANTS=(
     "defaults CADDY_SITES=api.example.test"
     "public-tls CADDY_SITES=api.example.test,www.example.test CADDY_TLS_SELF_SIGNED=false CADDY_ADMIN_LOCAL_ONLY=true CADDY_ADMIN_ALLOWED_IPS=192.168.1.0/24 DOCKER_GATEWAY_IP6=fd00::1 CADDY_PROXY_PROTOCOL_ALLOW=10.0.0.0/8 CADDY_TRUSTED_PROXIES=private_ranges"
-    "no-limits CADDY_SITES=api.example.test CADDY_RATE_LIMIT_ENABLED=false CADDY_ADMIN_LOCAL_ONLY=false CADDY_TRUSTED_PROXIES="
+    "no-limits CADDY_SITES=api.example.test CADDY_RATE_LIMIT_ENABLED=false CADDY_ADMIN_LOCAL_ONLY=false CADDY_TRUSTED_PROXIES= CADDY_COMPRESSION=off"
     "legacy-snippet-vars CADDY_SITES=api.example.test TLS_SELF_SIGNED_SNIPPET=caddy/self-signed.snippet LOCAL_ADMIN_ONLY_SNIPPET=caddy/local-admin-only.snippet"
     "postgres-public CADDY_SITES=api.example.test"
 )
