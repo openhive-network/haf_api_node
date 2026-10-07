@@ -53,21 +53,26 @@ basicauth @admin_password {
 }
 ```
 
-## Enable compression
+## Compression
 
+Caddy compresses every response of 1 KB or more by default: the UI apps
+(`/blog`, `/wallet`, `/explorer`), the REST APIs, JSON-RPC, swagger and the
+admin pages. It sends zstd to clients that accept it and gzip to the rest.
 Most of the data the API serves up compresses well.  Calls like get_block()
-generate a lot of data, and will typically compress 3x or better.  You can
-decrease your bandwidth (and your user's bandwidth) by enabling compression,
-at the expense of higher CPU usage on your server.  To do this, drop code
-like this in a file called, say, `compression.snippet`:
+generate a lot of data, and will typically compress 3x or better, which cuts
+your bandwidth (and your users').  Responses an upstream has already encoded
+(with a `Content-Encoding` header) are passed through unchanged.
 
+Compression costs CPU on your server.  To turn it off, set this in your `.env`
+file and restart Caddy:
 ```
-encode {
-  zstd
-  gzip
-  minimum_length 1024
-}
+CADDY_COMPRESSION=off
 ```
+
+If you added a `compression.snippet` here to enable compression back when it
+was opt-in, it is now redundant but harmless: responses are still encoded only
+once.  You can delete it.  Note that it keeps compressing even with
+`CADDY_COMPRESSION=off`, so delete it if you want compression off.
 
 ## Enable HSTS (HTTP Strict Transport Security)
 

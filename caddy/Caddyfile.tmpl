@@ -45,6 +45,19 @@
   # User-provided snippets (from gitignored caddy/snippets/ directory)
   import snippets/*.snippet
 
+{{/* Compression of every route, on unless CADDY_COMPRESSION=off */}}
+{{- $compression := getenv "CADDY_COMPRESSION" "on" -}}
+{{ if ne $compression "off" }}
+  # Compress responses of 1 KB or more: the UI apps' Next servers don't compress
+  # (denser sets `compress: false`), and the API's JSON typically shrinks 3x or more.
+  # Responses that already carry a Content-Encoding pass through unchanged.
+  encode {
+    zstd
+    gzip
+    minimum_length 1024
+  }
+{{ end }}
+
   # Block known abusers
   @blacklisted_ips remote_ip 185.238.72.170 185.130.44.60 24.209.251.17
   handle @blacklisted_ips {
@@ -194,13 +207,6 @@ Disallow: /wallet/
     root * /etc/caddy/admin_html
     file_server
   }
-
-  # The UI apps' Next servers don't compress (denser sets `compress: false`), so
-  # compress here. API responses are left alone; compressing those is the opt-in
-  # snippet in snippets/README.md. Responses that already carry a Content-Encoding
-  # pass through unchanged.
-  @ui_apps path /explorer /explorer/* /blog /blog/* /wallet /wallet/*
-  encode @ui_apps zstd gzip
 
   handle /explorer {
       reverse_proxy http://block-explorer-ui

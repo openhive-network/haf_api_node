@@ -35,6 +35,8 @@ services:
       CADDY_RATE_LIMIT_ENABLED: ${CADDY_RATE_LIMIT_ENABLED:-true}
       CADDY_RATE_LIMIT_EVENTS: ${CADDY_RATE_LIMIT_EVENTS:-600}
       CADDY_RATE_LIMIT_WINDOW: ${CADDY_RATE_LIMIT_WINDOW:-1m}
+      # Response compression (zstd/gzip, >= 1 KB); "off" disables it
+      CADDY_COMPRESSION: ${CADDY_COMPRESSION:-on}
     volumes:
       - type: bind
         source: ./caddy/Caddyfile.tmpl

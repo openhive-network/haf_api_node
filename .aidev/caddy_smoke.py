@@ -8,16 +8,19 @@ stub upstreams.
 Renders the template with .aidev/caddy-render.sh, points the upstreams it names
 (denser-blog, denser-wallet, block-explorer-ui, varnish, swagger, the JSON-RPC
 server) at stub HTTP servers on 127.0.0.1, starts `caddy run`, and checks each
-route. Then does the same with the site-wide `compression.snippet` from
-caddy/snippets/README.md added, and checks every response is still encoded exactly
-once (cases prefixed `compression.snippet: `). Writes OUT_DIR/caddy-smoke.xml (one
+route, including that responses of 1 KB or more are compressed and smaller ones are
+not. Then does the same with `CADDY_COMPRESSION=off`, and checks nothing is compressed
+(cases prefixed `compression off: `), and with the site-wide `compression.snippet`
+that caddy/snippets/README.md used to recommend added, and checks every response is
+still encoded exactly once (cases prefixed `compression.snippet: `). Writes OUT_DIR/caddy-smoke.xml (one
 junit case per check) and each caddy's log to OUT_DIR/caddy-<variant>.log. Runs
 without a network: everything is on the loopback.
 
 Each stub answers with headers naming itself and the path it received, and a body
 that depends only on the path: compressible JavaScript for `*.js`, HTML otherwise,
-JSON for the API stubs. `/blog/precompressed.js` comes back already gzip-encoded,
-as an upstream that compresses its own responses would send it.
+JSON for the API stubs (a few bytes of it for `/hafah-api/small`).
+`/blog/precompressed.js` and `/hafah-api/precompressed` come back already
+gzip-encoded, as an upstream that compresses its own responses would send them.
 
 Every request is sent with a browser's `Accept-Encoding`, and every check decodes
 the response by its `Content-Encoding` before comparing bodies, so a check holds
@@ -63,7 +66,9 @@ UPSTREAMS = {
     "swagger": 18105,
 }
 
-PRECOMPRESSED_PATH = "/blog/precompressed.js"
+PRECOMPRESSED_PATHS = ("/blog/precompressed.js", "/hafah-api/precompressed")
+# Below the template's `minimum_length 1024`.
+SMALL_PATH = "/hafah-api/small"
 
 
 def js_body(path: str) -> bytes:
@@ -86,6 +91,8 @@ def json_body(stub: str, path: str) -> bytes:
 def expected_response(stub: str, path: str) -> tuple[str, bytes]:
     """(content type, body) the stub `stub` answers `path` with, before any encoding."""
     clean = path.split("?", 1)[0]
+    if clean == SMALL_PATH:
+        return "application/json", f'{{"stub": "{stub}", "path": "{clean}"}}\n'.encode()
     if stub in ("varnish", "drone"):
         return "application/json", json_body(stub, clean)
     if clean.endswith(".js"):
@@ -109,7 +116,7 @@ def make_stub(name: str) -> type[BaseHTTPRequestHandler]:
             self.send_header(
                 "X-Stub-Accept-Encoding", self.headers.get("Accept-Encoding", "")
             )
-            if self.path == PRECOMPRESSED_PATH:
+            if self.path in PRECOMPRESSED_PATHS:
                 body = gzip.compress(body)
                 self.send_header("Content-Encoding", "gzip")
                 self.send_header("Vary", "Accept-Encoding")
@@ -275,11 +282,20 @@ def check_rest_api() -> str:
     return summary
 
 
-def check_jsonrpc_post() -> str:
-    payload = b'{"jsonrpc":"2.0","method":"condenser_api.get_dynamic_global_properties","params":[],"id":1}'
-    response = request(
-        "POST", "/", body=payload, headers={"Content-Type": "application/json"}
+JSONRPC_PAYLOAD = b'{"jsonrpc":"2.0","method":"condenser_api.get_dynamic_global_properties","params":[],"id":1}'
+
+
+def request_jsonrpc(accept: str = ACCEPT_ENCODING) -> Response:
+    return request(
+        "POST",
+        "/",
+        body=JSONRPC_PAYLOAD,
+        headers={"Content-Type": "application/json", "Accept-Encoding": accept},
     )
+
+
+def check_jsonrpc_post() -> str:
+    response = request_jsonrpc()
     assert response.status == 200, f"status {response.status}"
     assert response.headers.get("x-stub") == "drone", (
         f"answered by {response.headers.get('x-stub')!r}"
@@ -305,18 +321,29 @@ def check_cors_preflight() -> str:
     return describe("OPTIONS /hafah-api/version", response)
 
 
-def check_precompressed_passthrough() -> str:
+def check_precompressed_passthrough(stub: str, path: str) -> Callable[[], str]:
     """An upstream's own gzip reaches the client encoded once, not twice."""
-    response = request("GET", PRECOMPRESSED_PATH)
-    assert response.status == 200, f"status {response.status}"
-    assert response.headers.get("x-stub") == "denser-blog"
-    assert response.encoding == "gzip", (
-        f"content-encoding {response.encoding!r}, expected the upstream's gzip"
-    )
-    assert response.body == expected_response("denser-blog", PRECOMPRESSED_PATH)[1], (
-        "body is not the upstream's"
-    )
-    return describe(PRECOMPRESSED_PATH, response)
+
+    def check() -> str:
+        response = request("GET", path)
+        assert response.status == 200, f"status {response.status}"
+        assert response.headers.get("x-stub") == stub
+        assert response.encoding == "gzip", (
+            f"content-encoding {response.encoding!r}, expected the upstream's gzip"
+        )
+        assert response.body == expected_response(stub, path)[1], (
+            "body is not the upstream's"
+        )
+        return describe(path, response)
+
+    return check
+
+
+def fetch(path: str, accept: str) -> Response:
+    """GET `path`, or the JSON-RPC call for `POST /`."""
+    if path == "POST /":
+        return request_jsonrpc(accept)
+    return request("GET", path, headers={"Accept-Encoding": accept})
 
 
 def check_compressed(
@@ -325,7 +352,7 @@ def check_compressed(
     """With `Accept-Encoding: accept`, `path` comes back `encoding`-encoded, at most a third of its size."""
 
     def check() -> str:
-        response = request("GET", path, headers={"Accept-Encoding": accept})
+        response = fetch(path, accept)
         assert response.status == 200, f"status {response.status}"
         assert response.headers.get("x-stub") == stub, (
             f"answered by {response.headers.get('x-stub')!r}, not {stub!r}"
@@ -333,7 +360,7 @@ def check_compressed(
         assert response.encoding == encoding, (
             f"content-encoding {response.encoding!r}, expected {encoding!r}"
         )
-        assert response.body == expected_response(stub, path)[1], (
+        assert response.body == expected_response(stub, upstream_path(path))[1], (
             "decoded body differs from what the upstream sent"
         )
         assert len(response.wire) * 3 <= len(response.body), (
@@ -344,25 +371,36 @@ def check_compressed(
     return check
 
 
-def check_rest_api_not_compressed() -> str:
-    path = "/hafah-api/version"
-    response = request("GET", path)
-    assert response.status == 200, f"status {response.status}"
-    assert response.encoding == "", (
-        f"content-encoding {response.encoding!r} on a REST API response"
-    )
-    return describe(path, response)
+def check_not_compressed(stub: str, path: str) -> Callable[[], str]:
+    """`path` comes back without a Content-Encoding, as the upstream sent it."""
+
+    def check() -> str:
+        response = fetch(path, ACCEPT_ENCODING)
+        assert response.status == 200, f"status {response.status}"
+        assert response.headers.get("x-stub") == stub, (
+            f"answered by {response.headers.get('x-stub')!r}, not {stub!r}"
+        )
+        assert response.encoding == "", f"content-encoding {response.encoding!r}"
+        assert response.wire == expected_response(stub, upstream_path(path))[1], (
+            "body differs from what the upstream sent"
+        )
+        return describe(path, response)
+
+    return check
+
+
+def upstream_path(path: str) -> str:
+    return "/" if path == "POST /" else path
+
+
+BLOG_JS = "/blog/_next/static/chunks/9007-053f889d0a75a024.js"
+REST_API = "/hafah-api/version"
 
 
 CHECKS: list[tuple[str, Callable[[], str]]] = [
     ("blog root", check_proxied("denser-blog", "/blog")),
     ("blog page", check_proxied("denser-blog", "/blog/trending")),
-    (
-        "blog js asset",
-        check_proxied(
-            "denser-blog", "/blog/_next/static/chunks/9007-053f889d0a75a024.js"
-        ),
-    ),
+    ("blog js asset", check_proxied("denser-blog", BLOG_JS)),
     ("wallet root", check_proxied("denser-wallet", "/wallet")),
     (
         "wallet js asset",
@@ -378,15 +416,17 @@ CHECKS: list[tuple[str, Callable[[], str]]] = [
     ("fallback to swagger", check_proxied("swagger", "/")),
     ("robots.txt", check_robots),
     ("cors preflight", check_cors_preflight),
-    ("upstream-encoded response passes through", check_precompressed_passthrough),
+    (
+        "upstream-encoded ui response passes through",
+        check_precompressed_passthrough("denser-blog", PRECOMPRESSED_PATHS[0]),
+    ),
+    (
+        "upstream-encoded api response passes through",
+        check_precompressed_passthrough("varnish", PRECOMPRESSED_PATHS[1]),
+    ),
     (
         "blog js compressed",
-        check_compressed(
-            "denser-blog",
-            "/blog/_next/static/chunks/9007-053f889d0a75a024.js",
-            ACCEPT_ENCODING,
-            "zstd",
-        ),
+        check_compressed("denser-blog", BLOG_JS, ACCEPT_ENCODING, "zstd"),
     ),
     (
         "blog js gzip for gzip-only client",
@@ -419,12 +459,48 @@ CHECKS: list[tuple[str, Callable[[], str]]] = [
             "zstd",
         ),
     ),
-    ("rest api not compressed", check_rest_api_not_compressed),
+    (
+        "rest api compressed",
+        check_compressed("varnish", REST_API, ACCEPT_ENCODING, "zstd"),
+    ),
+    (
+        "rest api gzip for gzip-only client",
+        check_compressed("varnish", REST_API, "gzip", "gzip"),
+    ),
+    (
+        "json-rpc compressed",
+        check_compressed("drone", "POST /", ACCEPT_ENCODING, "zstd"),
+    ),
+    (
+        "json-rpc gzip for gzip-only client",
+        check_compressed("drone", "POST /", "gzip", "gzip"),
+    ),
+    (
+        "swagger compressed",
+        check_compressed("swagger", "/", ACCEPT_ENCODING, "zstd"),
+    ),
+    (
+        "rest api under 1 KB not compressed",
+        check_not_compressed("varnish", SMALL_PATH),
+    ),
 ]
 
-# The site-wide `encode` an operator can add as caddy/snippets/compression.snippet
-# (caddy/snippets/README.md, "Enable compression"). With it, the UI routes pass
-# through two `encode` handlers; each response must still be encoded exactly once.
+OFF_CHECKS: list[tuple[str, Callable[[], str]]] = [
+    ("blog js not compressed", check_not_compressed("denser-blog", BLOG_JS)),
+    ("blog page not compressed", check_not_compressed("denser-blog", "/blog/trending")),
+    ("rest api not compressed", check_not_compressed("varnish", REST_API)),
+    ("json-rpc not compressed", check_not_compressed("drone", "POST /")),
+    ("swagger not compressed", check_not_compressed("swagger", "/")),
+    (
+        "upstream-encoded response passes through",
+        check_precompressed_passthrough("denser-blog", PRECOMPRESSED_PATHS[0]),
+    ),
+]
+
+# The site-wide `encode` caddy/snippets/README.md told operators to add as
+# caddy/snippets/compression.snippet before compression was on by default. With it,
+# every route passes through two `encode` handlers; each response must still be
+# encoded exactly once.
 COMPRESSION_SNIPPET = """encode {
   zstd
   gzip
@@ -435,12 +511,7 @@ COMPRESSION_SNIPPET = """encode {
 SNIPPET_CHECKS: list[tuple[str, Callable[[], str]]] = [
     (
         "blog js compressed once",
-        check_compressed(
-            "denser-blog",
-            "/blog/_next/static/chunks/9007-053f889d0a75a024.js",
-            ACCEPT_ENCODING,
-            "zstd",
-        ),
+        check_compressed("denser-blog", BLOG_JS, ACCEPT_ENCODING, "zstd"),
     ),
     (
         "blog js gzip once for gzip-only client",
@@ -473,17 +544,44 @@ SNIPPET_CHECKS: list[tuple[str, Callable[[], str]]] = [
             "zstd",
         ),
     ),
-    ("upstream-encoded response passes through", check_precompressed_passthrough),
     (
-        "rest api compressed once by the snippet",
-        check_compressed("varnish", "/hafah-api/version", ACCEPT_ENCODING, "zstd"),
+        "upstream-encoded ui response passes through",
+        check_precompressed_passthrough("denser-blog", PRECOMPRESSED_PATHS[0]),
+    ),
+    (
+        "upstream-encoded api response passes through",
+        check_precompressed_passthrough("varnish", PRECOMPRESSED_PATHS[1]),
+    ),
+    (
+        "rest api compressed once",
+        check_compressed("varnish", REST_API, ACCEPT_ENCODING, "zstd"),
+    ),
+    (
+        "rest api gzip once for gzip-only client",
+        check_compressed("varnish", REST_API, "gzip", "gzip"),
+    ),
+    (
+        "json-rpc compressed once",
+        check_compressed("drone", "POST /", ACCEPT_ENCODING, "zstd"),
+    ),
+    (
+        "rest api under 1 KB not compressed",
+        check_not_compressed("varnish", SMALL_PATH),
     ),
 ]
 
-# (name prefix, snippet files to add to caddy/snippets, checks)
-VARIANTS: list[tuple[str, dict[str, str], list[tuple[str, Callable[[], str]]]]] = [
-    ("", {}, CHECKS),
-    ("compression.snippet: ", {"compression.snippet": COMPRESSION_SNIPPET}, SNIPPET_CHECKS),
+# (name prefix, environment overrides, snippet files to add to caddy/snippets, checks)
+VARIANTS: list[
+    tuple[str, dict[str, str], dict[str, str], list[tuple[str, Callable[[], str]]]]
+] = [
+    ("", {}, {}, CHECKS),
+    ("compression off: ", {"CADDY_COMPRESSION": "off"}, {}, OFF_CHECKS),
+    (
+        "compression.snippet: ",
+        {},
+        {"compression.snippet": COMPRESSION_SNIPPET},
+        SNIPPET_CHECKS,
+    ),
 ]
 
 
@@ -532,20 +630,23 @@ def run_checks(
 def run_variant(
     out_dir: str,
     prefix: str,
+    env_overrides: dict[str, str],
     snippets: dict[str, str],
     checks: list[tuple[str, Callable[[], str]]],
 ) -> list[tuple[str, float, str, str | None]]:
-    """Render the template with `snippets` added, start caddy on it, and run `checks`."""
-    label = prefix.rstrip(": ") or "default"
+    """Render the template under `env_overrides` with `snippets` added, start caddy on it, and run `checks`."""
+    label = prefix.rstrip(": ").replace(" ", "-") or "default"
     conf = os.path.join(out_dir, f"caddy-smoke-etc-{label}")
-    env = caddy_env(os.path.join(out_dir, "caddy-smoke-xdg"))
+    env = {**caddy_env(os.path.join(out_dir, "caddy-smoke-xdg")), **env_overrides}
     caddy = None
     try:
         subprocess.run(
             [os.path.join(REPO, ".aidev", "caddy-render.sh"), conf], env=env, check=True
         )
         for name, text in snippets.items():
-            with open(os.path.join(conf, "snippets", name), "w", encoding="utf-8") as handle:
+            with open(
+                os.path.join(conf, "snippets", name), "w", encoding="utf-8"
+            ) as handle:
                 handle.write(text)
         caddyfile = os.path.join(conf, "Caddyfile")
         point_upstreams_at_stubs(caddyfile)
@@ -577,8 +678,8 @@ def main(out_dir: str) -> int:
     os.makedirs(out_dir, exist_ok=True)
     start_stubs()
     results = []
-    for prefix, snippets, checks in VARIANTS:
-        results += run_variant(out_dir, prefix, snippets, checks)
+    for prefix, env_overrides, snippets, checks in VARIANTS:
+        results += run_variant(out_dir, prefix, env_overrides, snippets, checks)
     write_junit(os.path.join(out_dir, "caddy-smoke.xml"), results)
     return 1 if any(result[3] is not None for result in results) else 0
 
