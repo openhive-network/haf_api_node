@@ -275,6 +275,29 @@ def check_precompressed_passthrough() -> str:
     return describe(PRECOMPRESSED_PATH, response)
 
 
+def check_compressed(stub: str, path: str, accept: str, encoding: str) -> Callable[[], str]:
+    """With `Accept-Encoding: accept`, `path` comes back `encoding`-encoded, at most a third of its size."""
+
+    def check() -> str:
+        response = request("GET", path, headers={"Accept-Encoding": accept})
+        assert response.status == 200, f"status {response.status}"
+        assert response.headers.get("x-stub") == stub, f"answered by {response.headers.get('x-stub')!r}, not {stub!r}"
+        assert response.encoding == encoding, f"content-encoding {response.encoding!r}, expected {encoding!r}"
+        assert response.body == expected_response(stub, path)[1], "decoded body differs from what the upstream sent"
+        assert len(response.wire) * 3 <= len(response.body), f"{len(response.wire)}B on the wire for {len(response.body)}B"
+        return describe(path, response)
+
+    return check
+
+
+def check_rest_api_not_compressed() -> str:
+    path = "/hafah-api/version"
+    response = request("GET", path)
+    assert response.status == 200, f"status {response.status}"
+    assert response.encoding == "", f"content-encoding {response.encoding!r} on a REST API response"
+    return describe(path, response)
+
+
 CHECKS: list[tuple[str, Callable[[], str]]] = [
     ("blog root", check_proxied("denser-blog", "/blog")),
     ("blog page", check_proxied("denser-blog", "/blog/trending")),
@@ -289,6 +312,12 @@ CHECKS: list[tuple[str, Callable[[], str]]] = [
     ("robots.txt", check_robots),
     ("cors preflight", check_cors_preflight),
     ("upstream-encoded response passes through", check_precompressed_passthrough),
+    ("blog js compressed", check_compressed("denser-blog", "/blog/_next/static/chunks/9007-053f889d0a75a024.js", ACCEPT_ENCODING, "zstd")),
+    ("blog js gzip for gzip-only client", check_compressed("denser-blog", "/blog/_next/static/chunks/3737-2496fbddf4b51e75.js", "gzip", "gzip")),
+    ("blog page compressed", check_compressed("denser-blog", "/blog/trending", ACCEPT_ENCODING, "zstd")),
+    ("wallet js compressed", check_compressed("denser-wallet", "/wallet/_next/static/chunks/main-app.js", ACCEPT_ENCODING, "zstd")),
+    ("explorer js compressed", check_compressed("block-explorer-ui", "/explorer/_next/static/chunks/app.js", ACCEPT_ENCODING, "zstd")),
+    ("rest api not compressed", check_rest_api_not_compressed),
 ]
 
 
