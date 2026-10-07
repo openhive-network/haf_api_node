@@ -8,8 +8,11 @@ stub upstreams.
 Renders the template with .aidev/caddy-render.sh, points the upstreams it names
 (denser-blog, denser-wallet, block-explorer-ui, varnish, swagger, the JSON-RPC
 server) at stub HTTP servers on 127.0.0.1, starts `caddy run`, and checks each
-route. Writes OUT_DIR/caddy-smoke.xml (one junit case per check) and the caddy log
-to OUT_DIR/caddy.log. Runs without a network: everything is on the loopback.
+route. Then does the same with the site-wide `compression.snippet` from
+caddy/snippets/README.md added, and checks every response is still encoded exactly
+once (cases prefixed `compression.snippet: `). Writes OUT_DIR/caddy-smoke.xml (one
+junit case per check) and each caddy's log to OUT_DIR/caddy-<variant>.log. Runs
+without a network: everything is on the loopback.
 
 Each stub answers with headers naming itself and the path it received, and a body
 that depends only on the path: compressible JavaScript for `*.js`, HTML otherwise,
@@ -419,6 +422,70 @@ CHECKS: list[tuple[str, Callable[[], str]]] = [
     ("rest api not compressed", check_rest_api_not_compressed),
 ]
 
+# The site-wide `encode` an operator can add as caddy/snippets/compression.snippet
+# (caddy/snippets/README.md, "Enable compression"). With it, the UI routes pass
+# through two `encode` handlers; each response must still be encoded exactly once.
+COMPRESSION_SNIPPET = """encode {
+  zstd
+  gzip
+  minimum_length 1024
+}
+"""
+
+SNIPPET_CHECKS: list[tuple[str, Callable[[], str]]] = [
+    (
+        "blog js compressed once",
+        check_compressed(
+            "denser-blog",
+            "/blog/_next/static/chunks/9007-053f889d0a75a024.js",
+            ACCEPT_ENCODING,
+            "zstd",
+        ),
+    ),
+    (
+        "blog js gzip once for gzip-only client",
+        check_compressed(
+            "denser-blog",
+            "/blog/_next/static/chunks/3737-2496fbddf4b51e75.js",
+            "gzip",
+            "gzip",
+        ),
+    ),
+    (
+        "blog page compressed once",
+        check_compressed("denser-blog", "/blog/trending", ACCEPT_ENCODING, "zstd"),
+    ),
+    (
+        "wallet js compressed once",
+        check_compressed(
+            "denser-wallet",
+            "/wallet/_next/static/chunks/main-app.js",
+            ACCEPT_ENCODING,
+            "zstd",
+        ),
+    ),
+    (
+        "explorer js compressed once",
+        check_compressed(
+            "block-explorer-ui",
+            "/explorer/_next/static/chunks/app.js",
+            ACCEPT_ENCODING,
+            "zstd",
+        ),
+    ),
+    ("upstream-encoded response passes through", check_precompressed_passthrough),
+    (
+        "rest api compressed once by the snippet",
+        check_compressed("varnish", "/hafah-api/version", ACCEPT_ENCODING, "zstd"),
+    ),
+]
+
+# (name prefix, snippet files to add to caddy/snippets, checks)
+VARIANTS: list[tuple[str, dict[str, str], list[tuple[str, Callable[[], str]]]]] = [
+    ("", {}, CHECKS),
+    ("compression.snippet: ", {"compression.snippet": COMPRESSION_SNIPPET}, SNIPPET_CHECKS),
+]
+
 
 # --- runner -----------------------------------------------------------------
 
@@ -442,9 +509,12 @@ def write_junit(path: str, results: list[tuple[str, float, str, str | None]]) ->
         handle.write("\n".join(lines) + "\n")
 
 
-def run_checks() -> list[tuple[str, float, str, str | None]]:
+def run_checks(
+    checks: list[tuple[str, Callable[[], str]]], prefix: str
+) -> list[tuple[str, float, str, str | None]]:
     results = []
-    for name, check in CHECKS:
+    for short_name, check in checks:
+        name = prefix + short_name
         started = time.monotonic()
         try:
             out, failure = check(), None
@@ -459,21 +529,27 @@ def run_checks() -> list[tuple[str, float, str, str | None]]:
     return results
 
 
-def main(out_dir: str) -> int:
-    out_dir = os.path.abspath(out_dir)
-    os.makedirs(out_dir, exist_ok=True)
-    junit = os.path.join(out_dir, "caddy-smoke.xml")
-    conf = os.path.join(out_dir, "caddy-smoke-etc")
+def run_variant(
+    out_dir: str,
+    prefix: str,
+    snippets: dict[str, str],
+    checks: list[tuple[str, Callable[[], str]]],
+) -> list[tuple[str, float, str, str | None]]:
+    """Render the template with `snippets` added, start caddy on it, and run `checks`."""
+    label = prefix.rstrip(": ") or "default"
+    conf = os.path.join(out_dir, f"caddy-smoke-etc-{label}")
     env = caddy_env(os.path.join(out_dir, "caddy-smoke-xdg"))
     caddy = None
     try:
         subprocess.run(
             [os.path.join(REPO, ".aidev", "caddy-render.sh"), conf], env=env, check=True
         )
+        for name, text in snippets.items():
+            with open(os.path.join(conf, "snippets", name), "w", encoding="utf-8") as handle:
+                handle.write(text)
         caddyfile = os.path.join(conf, "Caddyfile")
         point_upstreams_at_stubs(caddyfile)
-        start_stubs()
-        with open(os.path.join(out_dir, "caddy.log"), "wb") as log:
+        with open(os.path.join(out_dir, f"caddy-{label}.log"), "wb") as log:
             caddy = subprocess.Popen(
                 ["caddy", "run", "--config", caddyfile, "--adapter", "caddyfile"],
                 cwd=conf,
@@ -482,17 +558,11 @@ def main(out_dir: str) -> int:
                 stderr=subprocess.STDOUT,
             )
         wait_ready(caddy)
-        results = run_checks()
+        return run_checks(checks, prefix)
     except Exception:  # noqa: BLE001 - a setup failure is reported as one failing case
-        results = [
-            (
-                "caddy starts with the rendered Caddyfile",
-                0.0,
-                "",
-                traceback.format_exc(),
-            )
-        ]
-        print(results[0][3], file=sys.stderr)
+        failure = traceback.format_exc()
+        print(failure, file=sys.stderr)
+        return [(f"{prefix}caddy starts with the rendered Caddyfile", 0.0, "", failure)]
     finally:
         if caddy is not None and caddy.poll() is None:
             caddy.send_signal(signal.SIGTERM)
@@ -500,7 +570,16 @@ def main(out_dir: str) -> int:
                 caddy.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 caddy.kill()
-    write_junit(junit, results)
+
+
+def main(out_dir: str) -> int:
+    out_dir = os.path.abspath(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
+    start_stubs()
+    results = []
+    for prefix, snippets, checks in VARIANTS:
+        results += run_variant(out_dir, prefix, snippets, checks)
+    write_junit(os.path.join(out_dir, "caddy-smoke.xml"), results)
     return 1 if any(result[3] is not None for result in results) else 0
 
 
