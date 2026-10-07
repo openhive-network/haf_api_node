@@ -8,3 +8,6 @@ docker-compose.override.yml
 compose.override.yaml
 docker-compose.override.yaml
 .reduce_writebacks.original
+
+# AIDEV check reports (.aidev/run-checks.sh)
+test-results/

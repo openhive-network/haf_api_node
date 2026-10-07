@@ -165,3 +165,12 @@ sudo ./reduce_writebacks.sh      # Reduce disk writebacks
 /admin/           # PgAdmin
 /version/         # Container version info
 ```
+
+## Working in AIDEV
+
+AIDEV verifies changes through the slots in `.aidev/project.yaml`; `.aidev/README.md`
+describes each check. Run `aidev test run --slot quick` after your last edit, and
+`aidev test run --slot full` for any change under `caddy/` (it adds the Caddy smoke
+test, `.aidev/caddy_smoke.py`, which serves the rendered `caddy/Caddyfile.tmpl` with
+stub upstreams). When a change alters what Caddy does on a route, add a check for it
+to `CHECKS` in `.aidev/caddy_smoke.py`. GitLab CI doesn't run for AIDEV branches.

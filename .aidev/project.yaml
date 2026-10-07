@@ -1,0 +1,85 @@
+# Profile for hive/haf_api_node, written by `aidev project scaffold` (#13561).
+#
+# Schema reference: docs/architecture/project-profile.md
+# Onboarding procedure: the `onboard-external-project` skill.
+# Guide: docs/operations/onboarding-an-external-project.md
+#
+# The generator writes a starting point, not a governed answer: every
+# binding below is the command a maintainer said this project runs, and it
+# is reviewed and edited like any other declaration.
+version: 2
+project: haf-api-node
+
+gitlab:
+  host: "gitlab.syncad.com"
+  path: "hive/haf_api_node"
+  id: 444
+
+# A single-branch topology: this is both what work integrates into and what
+# ships. `stable` is omitted rather than declared equal to it — declaring
+# them equal is a typo, omitting one is a topology. Add `stable:` when this
+# project genuinely promotes to a second branch.
+# AIDEV integrates into its own branch; people merge it into develop through
+# merge requests (as in hive/denser), so `stable` is omitted and `aidev release`
+# never moves develop or master.
+branches:
+  integration: "aidev/integration"
+
+# How this project's suites execute (#13892): one kind, stated once.
+environment:
+  kind: "container"
+  # Built by .aidev/runtime/build.sh from .aidev/runtime/Dockerfile (its only input).
+  image: "registry.gitlab.syncad.com/hive/haf_api_node/aidev-tests@sha256:e74628ce8a30cc6431b380da1b2f8a2ac62063764443f9dc36ca76f60cd5aadc"
+  inputs: [".aidev/runtime/Dockerfile"]
+
+issues:
+  intake_label: todo
+  taxonomy: ".aidev/labels.yaml"
+  decompose:
+    # `never` is where an external project starts: nothing marks work
+    # approved on this project's behalf until there is a track record.
+    auto_todo: never
+  # Reports about this project's work are filed against this project.
+  watcher_reports: self
+
+# Verification slots. Each binding is what this project genuinely runs for
+# that slot — never one selection repeated under seven names, which makes
+# seven gates report on the same evidence while claiming to check seven
+# different things.
+#
+# This is an infrastructure repository (compose files, Caddy, shell), so the
+# slots are its CI's cheap checks plus Caddy: see .aidev/README.md. CI's HAF
+# replay and API tests need block_log data and a docker daemon, and aren't bound.
+# There is no coverage measurement; `coverage` runs the tree-wide checks.
+verification:
+  quick:
+    adapter: command
+    args: [".aidev/run-checks.sh", "quick", "compose-lint", "shellcheck", "log-rotation", "caddy-validate"]
+    artifacts: ["test-results/quick/"]
+  full:
+    adapter: command
+    args: [".aidev/run-checks.sh", "full", "compose-lint", "shellcheck", "log-rotation", "caddy-validate", "caddy-smoke"]
+    artifacts: ["test-results/full/"]
+  baseline:
+    adapter: command
+    args: [".aidev/run-checks.sh", "baseline", "caddy-validate", "caddy-smoke"]
+    artifacts: ["test-results/baseline/"]
+  canary:
+    adapter: command
+    args: [".aidev/run-checks.sh", "canary", "compose-lint", "shellcheck", "log-rotation", "caddy-validate", "caddy-smoke"]
+    artifacts: ["test-results/canary/"]
+  static:
+    adapter: command
+    args: [".aidev/run-checks.sh", "static", "compose-lint", "shellcheck", "log-rotation", "caddy-validate"]
+    artifacts: ["test-results/static/"]
+  coverage:
+    adapter: command
+    args: [".aidev/run-checks.sh", "coverage", "compose-lint", "shellcheck", "log-rotation", "caddy-validate"]
+    artifacts: ["test-results/coverage/"]
+  system:
+    adapter: command
+    args: [".aidev/run-checks.sh", "system", "caddy-validate", "caddy-smoke"]
+    artifacts: ["test-results/system/"]
+
+# Capability grants for target-side code. Empty until this project needs one.
+capabilities: []

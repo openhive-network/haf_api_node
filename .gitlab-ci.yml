@@ -33,6 +33,18 @@ variables:
 
   # Other settings
 
+# AIDEV branches (ai/*, session/*) and pushes to aidev/integration run no
+# pipeline: AIDEV verifies them through .aidev/project.yaml. A pipeline started
+# from the web UI or the API still runs on aidev/integration (e.g. for its MR).
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(ai|session)\//
+      when: never
+    - if: $CI_COMMIT_BRANCH == "aidev/integration" && $CI_PIPELINE_SOURCE !~ /^(web|api)$/
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH
+
 include:
   - template: Workflows/Branch-Pipelines.gitlab-ci.yml
   - project: hive/common-ci-configuration
