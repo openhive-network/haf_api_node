@@ -47,15 +47,16 @@ echo "$REPOSITORY:$TAG is not in the registry; building it" >&2
 context="$(mktemp -d)"
 trap 'rm -rf "$context"' EXIT
 
-# The buildx builder that fetches registry.gitlab.syncad.com through the region's
-# image cache (:5001), so FROM stays canonical and the build doesn't compete for
-# the uplink (aidev's `aidev project scaffold` snippet, docs/operations/
-# onboarding-an-external-project.md "Images"). AIDEV_IMAGE_CACHE_BY_REGION
-# (region=host:port,...) replaces the default map. Prints the builder name, or
-# nothing when no cache serves this host's region.
+# Optionally build through a pull-through registry cache near the build host, so FROM
+# stays canonical and the build doesn't compete for the uplink. Set
+# AIDEV_IMAGE_CACHE_BY_REGION to region=host:port pairs (comma-separated); a pair
+# applies when its region is one of the labels of this host's FQDN, and a `*` pair
+# applies to any other host. Unset (the default), the image is built straight from
+# registry.gitlab.syncad.com. Prints the builder name, or nothing when no cache applies.
 region_builder() {
-    local cache_map="${AIDEV_IMAGE_CACHE_BY_REGION:-pl=session24.pl.syncad.com:5001,us=steem-17.syncad.com:5001}"
-    local region=us label entry cache="" builder config
+    local cache_map="${AIDEV_IMAGE_CACHE_BY_REGION:-}"
+    local region="*" label entry cache="" builder config
+    [ -n "$cache_map" ] || return 0
     for label in $( (hostname -f 2>/dev/null || hostname) | tr 'A-Z.' 'a-z '); do
         for entry in ${cache_map//,/ }; do
             if [ "${entry%%=*}" = "$label" ]; then region="$label"; fi
@@ -65,7 +66,7 @@ region_builder() {
         if [ "${entry%%=*}" = "$region" ]; then cache="${entry#*=}"; fi
     done
     if [ -z "$cache" ]; then
-        echo "no image cache serves region $region; building straight from registry.gitlab.syncad.com" >&2
+        echo "no image cache applies to this host; building straight from registry.gitlab.syncad.com" >&2
         return
     fi
     builder="aidev-region-build-${cache//[.:]/-}"
