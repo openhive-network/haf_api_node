@@ -644,7 +644,9 @@ def run_variant(
             [os.path.join(REPO, ".aidev", "caddy-render.sh"), conf], env=env, check=True
         )
         for name, text in snippets.items():
-            with open(os.path.join(conf, "snippets", name), "w", encoding="utf-8") as handle:
+            with open(
+                os.path.join(conf, "snippets", name), "w", encoding="utf-8"
+            ) as handle:
                 handle.write(text)
         caddyfile = os.path.join(conf, "Caddyfile")
         point_upstreams_at_stubs(caddyfile)
