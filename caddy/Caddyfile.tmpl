@@ -195,6 +195,13 @@ Disallow: /wallet/
     file_server
   }
 
+  # The UI apps' Next servers don't compress (denser sets `compress: false`), so
+  # compress here. API responses are left alone; compressing those is the opt-in
+  # snippet in snippets/README.md. Responses that already carry a Content-Encoding
+  # pass through unchanged.
+  @ui_apps path /explorer /explorer/* /blog /blog/* /wallet /wallet/*
+  encode @ui_apps zstd gzip
+
   handle /explorer {
       reverse_proxy http://block-explorer-ui
   }
