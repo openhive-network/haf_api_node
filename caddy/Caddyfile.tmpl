@@ -45,6 +45,19 @@
   # User-provided snippets (from gitignored caddy/snippets/ directory)
   import snippets/*.snippet
 
+  # Don't advertise which software (and versions) answered: the PostgREST
+  # rewriters send "Server: openresty/x.y.z", swagger "Server: nginx/x.y.z",
+  # Varnish "Via: ... (Varnish/x.y)", drone "Drone-Version" and the status
+  # API "X-Powered-By: Express".  Nothing in the stack consumes these.
+  # Deletions are deferred by Caddy until the response is written, so this
+  # applies to proxied responses on every route.
+  header {
+    -Server
+    -Via
+    -Drone-Version
+    -X-Powered-By
+  }
+
 {{/* Compression of every route, on unless CADDY_COMPRESSION=off */}}
 {{- $compression := getenv "CADDY_COMPRESSION" "on" -}}
 {{ if ne $compression "off" }}
