@@ -7,6 +7,10 @@
   servers {
 {{- if ne $trustedProxies "" }}
     trusted_proxies static {{ $trustedProxies }}
+    # Read X-Forwarded-For right to left and stop at the first untrusted address.
+    # Without this Caddy takes the leftmost entry, which the client controls (Cloudflare
+    # and most proxies append to the header the client sent), so client_ip is spoofable.
+    trusted_proxies_strict
 {{- end }}
 {{- if ne $proxyProtocolAllow "" }}
     # Accept the PROXY protocol header from the listed proxy CIDR(s) so the real client
@@ -72,7 +76,7 @@
 {{ end }}
 
   # Block known abusers
-  @blacklisted_ips remote_ip 185.238.72.170 185.130.44.60 24.209.251.17
+  @blacklisted_ips client_ip 185.238.72.170 185.130.44.60 24.209.251.17
   handle @blacklisted_ips {
     respond 403
   }
@@ -123,11 +127,12 @@ Disallow: /wallet/
   {{- $adminLocalOnly = strings.Contains $oldAdminVar "local-admin-only.snippet" -}}
 {{- end -}}
 {{ if $adminLocalOnly }}
-  # Restrict admin to localhost and Docker host (IPv4 and IPv6)
+  # Restrict admin to localhost and Docker host (IPv4 and IPv6). client_ip, not remote_ip,
+  # so the allow-list sees the real client behind a proxy in CADDY_TRUSTED_PROXIES.
   @admin_blocked {
     path /admin /admin/*
     not {
-      remote_ip 127.0.0.1 ::1 {{ getenv "DOCKER_GATEWAY_IP" }}{{ if getenv "DOCKER_GATEWAY_IP6" }} {{ getenv "DOCKER_GATEWAY_IP6" }}{{ end }}{{ if getenv "CADDY_ADMIN_ALLOWED_IPS" }} {{ getenv "CADDY_ADMIN_ALLOWED_IPS" }}{{ end }}
+      client_ip 127.0.0.1 ::1 {{ getenv "DOCKER_GATEWAY_IP" }}{{ if getenv "DOCKER_GATEWAY_IP6" }} {{ getenv "DOCKER_GATEWAY_IP6" }}{{ end }}{{ if getenv "CADDY_ADMIN_ALLOWED_IPS" }} {{ getenv "CADDY_ADMIN_ALLOWED_IPS" }}{{ end }}
     }
   }
   handle @admin_blocked {
