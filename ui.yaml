@@ -31,6 +31,8 @@ services:
       REACT_APP_EXPLORER_DOMAIN: https://${PUBLIC_HOSTNAME}/explorer
       REACT_APP_AI_DOMAIN: https://${PUBLIC_HOSTNAME}
       REACT_APP_BASE_PATH: /blog
+      # lite-account gateway the blog relays /api/lite-reply to (see 'Lite accounts' in .env.example)
+      DENSER_SERVER_LITE_GATEWAY_URL: ${LITE_GATEWAY_URL:-https://api.hive.blog/lite-gateway-api}
     deploy:
       resources:
         limits:
