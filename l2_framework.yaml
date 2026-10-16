@@ -1,0 +1,37 @@
+# L2 framework: temporal L1 authority tracking + the L2 transaction driver (always syncs from genesis)
+# Part of the lite stack (profile `lite`): l2_framework -> lite_account -> lite_posts ->
+# lite_gateway. See .env.example ("Lite accounts") for the variables.
+services:
+  l2-framework-install:
+    image: ${L2_FRAMEWORK_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/l2_framework/l2-framework}:${L2_FRAMEWORK_VERSION:-latest}
+    profiles:
+      - lite
+      - l2-framework
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    command:
+      - install_app
+      - --is_forking=${L2_FRAMEWORK_IS_FORKING:-${IS_FORKING:-TRUE}}
+    depends_on:
+      haf:
+        condition: service_healthy
+  l2-framework-block-processing:
+    image: ${L2_FRAMEWORK_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/l2_framework/l2-framework}:${L2_FRAMEWORK_VERSION:-latest}
+    profiles:
+      - lite
+      - l2-framework
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: l2_framework_owner
+    networks:
+      haf-network:
+    restart: on-failure
+    command:
+      - process_blocks
+    depends_on:
+      haf:
+        condition: service_healthy
+      l2-framework-install:
+        condition: service_completed_successfully

@@ -9,6 +9,11 @@ backend hafah {
     .port = "7003";
 }
 
+backend lite_gateway {
+    .host = "haproxy";
+    .port = "7017";
+}
+
 backend reputation_tracker {
     .host = "haproxy";
     .port = "7009";
@@ -221,6 +226,13 @@ sub vcl_recv {
         # rewrite the URL for status API
         set req.url = regsub(req.url, "^/status-api/(.*)$", "/\1");
         set req.backend_hint = status;
+    } elseif (req.url ~ "^/lite-gateway-api/") {
+        # lite gateway (Node service): every POST is a write (broadcast) -> never cached
+        set req.url = regsub(req.url, "^/lite-gateway-api/(.*)$", "/\1");
+        set req.backend_hint = lite_gateway;
+        if (req.method == "POST") {
+            return (pass);
+        }
     } elseif (req.url == "/hivemind-api/") {
         set req.url = "/";
         set req.backend_hint = hivemind;
@@ -278,6 +290,8 @@ sub vcl_hash {
     # Add the name of the backend to the hash to prevent this
     if (req.backend_hint == hafah) {
         hash_data("hafah-api");
+    } else if (req.backend_hint == lite_gateway) {
+        hash_data("lite-gateway-api");
     } else if (req.backend_hint == balance_tracker) {
         hash_data("balance-api");
     } else if (req.backend_hint == reputation_tracker) {

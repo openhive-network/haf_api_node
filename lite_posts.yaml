@@ -1,0 +1,43 @@
+# Lite posts: disavowed gate comments index + lite attestations (consumer of l2_framework + lite_account)
+# Part of the lite stack (profile `lite`): l2_framework -> lite_account -> lite_posts ->
+# lite_gateway. See .env.example ("Lite accounts") for the variables.
+services:
+  lite-posts-install:
+    image: ${LITE_POSTS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_posts/lite-posts}:${LITE_POSTS_VERSION:-latest}
+    profiles:
+      - lite
+      - lite-posts
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    command:
+      - install_app
+      - --app-id=${LITE_POSTS_APP_ID:-lite_posts}
+      - --start-block=${LITE_START_BLOCK:-1}
+      - --is_forking=${LITE_POSTS_IS_FORKING:-${IS_FORKING:-TRUE}}
+    depends_on:
+      haf:
+        condition: service_healthy
+      lite-account-install:
+        condition: service_completed_successfully
+  lite-posts-block-processing:
+    image: ${LITE_POSTS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_posts/lite-posts}:${LITE_POSTS_VERSION:-latest}
+    profiles:
+      - lite
+      - lite-posts
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: haf_admin
+    networks:
+      haf-network:
+    restart: on-failure
+    command:
+      - process_blocks
+    depends_on:
+      haf:
+        condition: service_healthy
+      lite-posts-install:
+        condition: service_completed_successfully
+      lite-account-block-processing:
+        condition: service_started

@@ -1,0 +1,43 @@
+# Lite accounts: did:lite account registry + authority layer (consumer of the l2_framework)
+# Part of the lite stack (profile `lite`): l2_framework -> lite_account -> lite_posts ->
+# lite_gateway. See .env.example ("Lite accounts") for the variables.
+services:
+  lite-account-install:
+    image: ${LITE_ACCOUNT_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_account/lite-account}:${LITE_ACCOUNT_VERSION:-latest}
+    profiles:
+      - lite
+      - lite-account
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    command:
+      - install_app
+      - --app-id=${LITE_ACCOUNT_APP_ID:-lite_account}
+      - --start-block=${LITE_START_BLOCK:-1}
+      - --is_forking=${LITE_ACCOUNT_IS_FORKING:-${IS_FORKING:-TRUE}}
+    depends_on:
+      haf:
+        condition: service_healthy
+      l2-framework-install:
+        condition: service_completed_successfully
+  lite-account-block-processing:
+    image: ${LITE_ACCOUNT_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_account/lite-account}:${LITE_ACCOUNT_VERSION:-latest}
+    profiles:
+      - lite
+      - lite-account
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: haf_admin
+    networks:
+      haf-network:
+    restart: on-failure
+    command:
+      - process_blocks
+    depends_on:
+      haf:
+        condition: service_healthy
+      lite-account-install:
+        condition: service_completed_successfully
+      l2-framework-block-processing:
+        condition: service_started

@@ -77,6 +77,17 @@ services:
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-uninstall-1.${NETWORK_NAME}                     trust\n
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hafah-install-1.${NETWORK_NAME}                       trust\n
+        \n
+        # Lite stack (profile `lite`): l2_framework / lite_account / lite_posts installers + processors, gateway installer + service\n
+        host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-l2-framework-install-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    l2_framework_owner   ${COMPOSE_PROJECT_NAME}-l2-framework-block-processing-1.${NETWORK_NAME}   trust\n
+        host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-account-install-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-account-block-processing-1.${NETWORK_NAME}   trust\n
+        host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-posts-install-1.${NETWORK_NAME}              trust\n
+        host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-posts-block-processing-1.${NETWORK_NAME}     trust\n
+        host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-gateway-install-1.${NETWORK_NAME}            trust\n
+        host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-gateway-uninstall-1.${NETWORK_NAME}          trust\n
+        host    haf_block_log    lite_gateway_owner   ${COMPOSE_PROJECT_NAME}-lite-gateway-1.${NETWORK_NAME}                    trust\n
 
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-block-explorer-install-schema-1.${NETWORK_NAME}       trust\n
