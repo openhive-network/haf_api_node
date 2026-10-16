@@ -11,7 +11,7 @@ backend hafah {
 
 backend lite_gateway {
     .host = "haproxy";
-    .port = "7017";
+    .port = "7019";
 }
 
 backend reputation_tracker {
