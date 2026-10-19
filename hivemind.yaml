@@ -111,6 +111,12 @@ services:
       retries: 10
       start_period: 15m
     depends_on:
+      # lite_posts' installer sets a database-level GUC (hivemind.lite_intercept) that a
+      # pooled connection only sees when it is opened; start PostgREST after it so the seam is
+      # live from the first request. Optional: stacks without the lite apps still start.
+      lite-posts-install:
+        condition: service_completed_successfully
+        required: false
       hivemind-install:
         condition: service_completed_successfully
       pgbouncer:
