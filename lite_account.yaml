@@ -1,11 +1,12 @@
 # Lite accounts: did:lite account registry + authority layer (consumer of the l2_framework)
-# Part of the lite stack (profile `lite`): l2_framework -> lite_account -> lite_posts ->
-# lite_gateway. See .env.example ("Lite accounts") for the variables.
+# One of the lite HAF apps (profiles `apps` and `lite`): l2_framework -> lite_account ->
+# lite_posts; the `lite` profile adds the gateway. See .env.example ("Lite accounts").
 services:
   lite-account-install:
     image: ${LITE_ACCOUNT_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_account/lite-account}:${LITE_ACCOUNT_VERSION:-latest}
     profiles:
       - lite
+      - apps
       - lite-account
     environment:
       POSTGRES_HOST: haf
@@ -25,6 +26,7 @@ services:
     image: ${LITE_ACCOUNT_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_account/lite-account}:${LITE_ACCOUNT_VERSION:-latest}
     profiles:
       - lite
+      - apps
       - lite-account
     environment:
       POSTGRES_HOST: haf
