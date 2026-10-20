@@ -33,6 +33,10 @@ services:
       REACT_APP_BASE_PATH: /blog
       # lite-account gateway the blog relays /api/lite-reply to (see 'Lite accounts' in .env.example)
       DENSER_SERVER_LITE_GATEWAY_URL: ${LITE_GATEWAY_URL:-https://api.hive.blog/lite-gateway-api}
+      # API nodes the blog fails over across when this node's API is down (server renders and the
+      # browser alike). Default: this node only, so a lite-aware node never silently degrades to a
+      # public node without the lite.* methods. Space-separated; see .env.example.
+      REACT_APP_ALLOWED_HIVE_API_NODES: ${DENSER_ALLOWED_HIVE_API_NODES:-https://${PUBLIC_HOSTNAME}}
     deploy:
       resources:
         limits:
