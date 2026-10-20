@@ -37,6 +37,9 @@ services:
       # browser alike). Default: this node only, so a lite-aware node never silently degrades to a
       # public node without the lite.* methods. Space-separated; see .env.example.
       REACT_APP_ALLOWED_HIVE_API_NODES: ${DENSER_ALLOWED_HIVE_API_NODES:-https://${PUBLIC_HOSTNAME}}
+      # Secret that seals the blog's login session cookie (iron-session, >= 32 chars). Unset =
+      # logged-in features fail with "iron-session: Bad usage. Missing password." See .env.example.
+      DENSER_SERVER_SECRET_COOKIE_PASSWORD: ${DENSER_SECRET_COOKIE_PASSWORD:-}
     deploy:
       resources:
         limits:
@@ -65,6 +68,7 @@ services:
       REACT_APP_BASE_PATH: /wallet
       REACT_APP_WALLET_ENDPOINT: https://${PUBLIC_HOSTNAME}/wallet
       REACT_APP_BLOG_DOMAIN: https://${PUBLIC_HOSTNAME}/blog
+      DENSER_SERVER_SECRET_COOKIE_PASSWORD: ${DENSER_SECRET_COOKIE_PASSWORD:-}
     healthcheck:
       test:
       - CMD-SHELL
