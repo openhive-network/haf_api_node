@@ -15,7 +15,7 @@ services:
     command:
       - install_app
       - --app-id=${LITE_ACCOUNT_APP_ID:-lite_account}
-      - --start-block=${LITE_START_BLOCK:-1}
+      - --start-block=${LITE_START_BLOCK:-110000000}
       - --is_forking=${LITE_ACCOUNT_IS_FORKING:-${IS_FORKING:-TRUE}}
     depends_on:
       haf:
