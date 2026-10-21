@@ -9,7 +9,8 @@
 #   - compose-lint    dclint on every compose file, with the rules and globs of CI's
 #                     lint-docker-compose job
 #   - shellcheck      ShellCheck as the lint-shellcheck CI job runs it (the agent-check
-#                     scripts in healthchecks/), plus the scripts under .aidev/
+#                     scripts in healthchecks/ and early-app-start/), plus the scripts
+#                     under .aidev/
 #   - log-rotation    log_rotation/sync_log_rotation.py --check (CI's check-log-rotation)
 #   - caddy-validate  caddy/Caddyfile.tmpl rendered the way caddy/entrypoint.sh does,
 #                     under each environment in CADDY_VARIANTS below, then
@@ -58,7 +59,7 @@ compose_lint() {
 
 run_shellcheck() {
     shellcheck --version | head -2
-    shellcheck -f gcc healthchecks/checks/*.sh healthchecks/*.sh .aidev/*.sh .aidev/runtime/*.sh
+    shellcheck -f gcc healthchecks/checks/*.sh healthchecks/*.sh early-app-start/*.sh .aidev/*.sh .aidev/runtime/*.sh
 }
 
 # Environments the template is rendered under: name, then VAR=value words (no spaces

@@ -146,7 +146,7 @@ lint-shellcheck:
     # image; a mangled expansion there fails at runtime, not at parse time
     # (see !241), so lint them. .shellcheckrc at the repo root follows the
     # sourced libs (source-path=SCRIPTDIR) so callers are checked in context.
-    - shellcheck -f gcc healthchecks/checks/*.sh healthchecks/*.sh
+    - shellcheck -f gcc healthchecks/checks/*.sh healthchecks/*.sh early-app-start/*.sh
   tags:
     - public-runner-docker
 
