@@ -24,6 +24,7 @@ services:
         source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/apps
         target: /logs
     init: true
+    restart: on-failure
     networks:
       haf-network:
     depends_on:

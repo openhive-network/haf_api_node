@@ -30,6 +30,7 @@ services:
         target: /logs
     command: >
       process_blocks ${PROXY_WHITELIST_SYNC_ARGS:-}
+    restart: on-failure
     networks:
       haf-network:
     healthcheck:
@@ -63,6 +64,7 @@ services:
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_DB_ROOT_SPEC: root
       PGRST_DB_EXTRA_SEARCH_PATH: proxy_whitelist_app
+    restart: on-failure
     networks:
       haf-network:
     healthcheck:
@@ -95,5 +97,6 @@ services:
     depends_on:
       proxy-whitelist-postgrest:
         condition: service_healthy
+    restart: on-failure
     networks:
       haf-network:

@@ -26,6 +26,7 @@ services:
       - OLLAMA_KEEP_ALIVE=-1
       - OLLAMA_MODELS=/tmp/ollama
     tty: true
+    restart: on-failure
     networks:
       haf-network:
     volumes:
@@ -78,6 +79,7 @@ services:
       --embeddings
       -c ${HIVESENSE_LLAMA_CPU_CTX:-8192} -b 8192 -ub 8192
       --host 0.0.0.0 --port 8080
+    restart: on-failure
     networks:
       haf-network:
     volumes:
@@ -167,6 +169,7 @@ services:
     depends_on:
       hivesense-postgrest:
         condition: service_healthy
+    restart: on-failure
     networks:
       - haf-network
   hivesense-postgrest:
@@ -190,6 +193,7 @@ services:
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_DB_ROOT_SPEC: root
       PGRST_DB_EXTRA_SEARCH_PATH: hivesense_app
+    restart: on-failure
     networks:
       haf-network:
     healthcheck:
