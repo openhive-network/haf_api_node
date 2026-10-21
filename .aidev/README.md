@@ -1,8 +1,9 @@
 # haf_api_node under AIDEV
 
 AIDEV verifies changes to this repository through the slots in `project.yaml`,
-integrates them into `aidev/integration`, and people merge that into `develop`
-through merge requests (as in hive/denser). GitLab CI doesn't run for AIDEV branches
+integrates them into `aidev/integration`, and hands that off to `develop` by merge request
+(`aidev handoff haf-api-node --session <name>`, `branches.handoff`): it merges `develop` into
+the session first, so neither branch is rewritten, then opens the merge request and arms auto-merge. GitLab CI doesn't run for AIDEV branches
 (`ai/*`, `session/*`, pushes to `aidev/integration`); see `.gitlab-ci.yml` `workflow:`.
 
 ## Suites
