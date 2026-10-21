@@ -1,0 +1,89 @@
+# Early app start: run the HAF apps' installs and block processing while hived
+# replays, instead of after HAF is fully up.  Off unless this file is added to
+# COMPOSE_FILE in .env:
+#    COMPOSE_FILE=compose.yml:early-app-start/compose.early-app-start.yml
+# Needs HAF and app versions that support the keep-monotonic massive-sync index
+# policy; see "Early app start" in README.md.
+#
+# Only the services listed here change.  Each moves from `haf: service_healthy`
+# (hived's API answers) to `haf-db-ready: service_completed_successfully` (the
+# HAF database is ready); the app then waits inside its own container until HAF
+# reports block-processing readiness.  PostgREST/API servers, uninstalls and the
+# apps that have not adopted early readiness keep waiting for a healthy haf.
+
+x-early-app-start-depends-on: &early-depends-on
+  haf:
+    condition: service_started
+  haf-db-ready:
+    condition: service_completed_successfully
+
+services:
+  haf:
+    command: "${ARGUMENTS:-} --psql-massive-index-policy=keep-monotonic"
+    environment:
+      PG_ACCESS_EARLY_APP_START: "
+        host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-haf-db-ready-1.${NETWORK_NAME}                        trust\n
+        "
+
+  haf-db-ready:
+    image: ${HAF_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf}:${HAF_VERSION:-${HIVE_API_NODE_VERSION}}
+    profiles:
+      - core
+      - block-explorer-uninstall
+    networks:
+      - haf-network
+    entrypoint: ["/bin/bash", "/haf-db-ready.sh"]
+    environment:
+      PGHOST: haf
+      PGUSER: haf_admin
+      PGDATABASE: haf_block_log
+      PGCONNECT_TIMEOUT: 5
+    volumes:
+      - type: bind
+        source: ./early-app-start/haf-db-ready.sh
+        target: /haf-db-ready.sh
+        read_only: true
+    depends_on:
+      haf:
+        condition: service_started
+
+  hafah-install:
+    depends_on: *early-depends-on
+
+  reputation-tracker-install:
+    depends_on: *early-depends-on
+  reputation-tracker-block-processing:
+    depends_on: *early-depends-on
+
+  hivemind-install:
+    depends_on: *early-depends-on
+  hivemind-block-processing:
+    depends_on: *early-depends-on
+
+  balance-tracker-install:
+    depends_on: *early-depends-on
+  balance-tracker-block-processing:
+    depends_on: *early-depends-on
+
+  block-explorer-install-balance-tracker:
+    depends_on: *early-depends-on
+  block-explorer-install-schema:
+    depends_on: *early-depends-on
+  block-explorer-block-processing:
+    depends_on: *early-depends-on
+
+  nft-tracker-install:
+    depends_on: *early-depends-on
+  nft-tracker-block-processing:
+    depends_on: *early-depends-on
+
+  hivesense-install-schema:
+    depends_on: *early-depends-on
+  # Defined only by hivesense-local.yaml (HIVESENSE_CONFIGURATION=local).  The
+  # never-enabled profile is merged into its profiles there, which changes
+  # nothing; under any other configuration it leaves this image-less stub
+  # disabled instead of turning it into a broken service.
+  hivesense-block-processing:
+    profiles:
+      - early-app-start-hivesense-local-only
+    depends_on: *early-depends-on

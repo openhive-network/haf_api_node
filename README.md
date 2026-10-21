@@ -154,6 +154,39 @@ ARGUMENTS="--replay-blockchain"
 
 Once the replay has finished, you can revert the `ARGUMENTS` line to the empty string
 
+###### Early app start: syncing the apps while hived replays
+
+By default the HAF apps don't start until HAF is fully up (hived's API answers), so on a fresh
+replay the apps' own massive syncs only begin after hived's replay and HAF's index restore have
+finished.  Early app start lets them overlap.  It is **off by default**; to turn it on, add the
+early-app-start compose file to `COMPOSE_FILE` in your `.env`:
+
+```bash
+COMPOSE_FILE=compose.yml:early-app-start/compose.early-app-start.yml
+```
+
+(append it if you already set `COMPOSE_FILE`, e.g. for postgres-public).  With it on:
+
+- hived runs with `--psql-massive-index-policy=keep-monotonic`: during a massive sync (a replay, or
+  the initial sync from the p2p network) HAF keeps the indexes the apps' block processing reads and
+  defers only the others, so apps can process blocks while hived is still replaying.
+- a one-shot `haf-db-ready` service waits until the HAF database is ready (PostgreSQL accepts
+  connections, the HAF extension is installed, the events queue has been written and hived is
+  connected), or until hived's API answers, whichever comes first.
+- the install and block-processing services of hafah, hivemind, reputation tracker, balance
+  tracker, HAF block explorer, NFT tracker and hivesense start once `haf-db-ready` has finished,
+  instead of waiting for hived's API.  Each app then waits inside its own container until HAF
+  reports that it is ready for block processing.
+- nothing else changes: the API servers (PostgREST, rewriters), haproxy, drone, uninstall services,
+  hivesense-sync and the apps that don't support early block processing yet (haf_stats, haf_fyp,
+  proxy_whitelist, HafSQL) still wait for HAF to be fully up.
+
+It needs a HAF version that has the `psql-massive-index-policy` option (older hived refuses to
+start with `unrecognised option`) and app versions that wait for HAF's block-processing readiness
+rather than full readiness to gain anything: an app that predates that waits inside its
+block-processing container until HAF is fully up, as it does without early start.  The block-processing healthchecks' start periods (48h, 72h for
+hivemind) count from the container's start, which is now the start of the replay.
+
 ###### Reducing Writebacks
 
 You can tune your system to reduce how often the kernel flushes dirty pages to disk.  This
