@@ -119,6 +119,7 @@ services:
     depends_on:
       block-explorer-postgrest:
         condition: service_healthy
+    restart: on-failure
     networks:
       - haf-network
   block-explorer-postgrest:
@@ -144,6 +145,7 @@ services:
       PGRST_DB_EXTRA_SEARCH_PATH: hafbe_bal, reptracker_app
       # PGRST_OPENAPI_SERVER_PROXY_URI: http://${PUBLIC_HOSTNAME}/hafbe_api/
       PGRST_LOG_LEVEL: ${BLOCK_EXPLORER_SERVER_LOG_LEVEL:-error}
+    restart: on-failure
     networks:
       haf-network:
     healthcheck:

@@ -3,6 +3,7 @@ services:
     profiles:
       - hafsql
     image: ${HAFSQL_IMAGE:-mahdiyari/hafsql}:${HAFSQL_VERSION:-2.6.1}
+    restart: on-failure
     networks:
       - haf-network
     tty: true

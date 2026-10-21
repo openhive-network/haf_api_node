@@ -24,6 +24,7 @@ services:
     profiles:
       - apps
       - hivemind
+    restart: on-failure
     networks:
       haf-network:
     command:
@@ -55,6 +56,7 @@ services:
     image: ${HIVEMIND_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivemind}:${HIVEMIND_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - legacy-hivemind-server
+    restart: on-failure
     networks:
       haf-network:
     command:
@@ -80,6 +82,7 @@ services:
     profiles:
       - apps
       - hivemind
+    restart: on-failure
     networks:
       haf-network:
     environment:
@@ -136,6 +139,7 @@ services:
     depends_on:
       hivemind-postgrest-server:
         condition: service_healthy
+    restart: on-failure
     networks:
       - haf-network
 

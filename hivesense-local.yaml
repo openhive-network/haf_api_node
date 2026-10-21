@@ -15,6 +15,7 @@ services:
         target: /logs
     command: >
       process_blocks ${HIVESENSE_SYNC_ARGS:-}
+    restart: on-failure
     networks:
       haf-network:
     healthcheck:

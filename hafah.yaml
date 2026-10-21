@@ -53,6 +53,7 @@ services:
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_OPENAPI_SERVER_PROXY_URI: http://127.0.0.1:3000
       PGRST_LOG_LEVEL: ${HAFAH_SERVER_LOG_LEVEL:-error}
+    restart: on-failure
     networks:
       haf-network:
     healthcheck:
@@ -87,5 +88,6 @@ services:
     depends_on:
       hafah-postgrest:
         condition: service_healthy
+    restart: on-failure
     networks:
       - haf-network

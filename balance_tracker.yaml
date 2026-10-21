@@ -96,6 +96,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 1m
+    restart: on-failure
     networks:
       haf-network:
     depends_on:
@@ -128,5 +129,6 @@ services:
     depends_on:
       balance-tracker-postgrest:
         condition: service_healthy
+    restart: on-failure
     networks:
       - haf-network
