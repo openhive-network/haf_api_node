@@ -1,0 +1,57 @@
+# Lite social: the lite-account social graph (follows, mutes, blacklists, reblogs,
+# subscriptions, profiles, lite-granular community moderation) — consumer of l2_framework,
+# lite_account, lite_posts AND hivemind (its community moderation ops are validated against
+# hivemind's roles at index time, so its loop is gated on hivemind in HAF's application
+# registry). One of the lite HAF apps (profiles `apps` and `lite`): l2_framework ->
+# lite_account -> lite_posts -> lite_social. See .env.example ("Lite accounts").
+services:
+  lite-social-install:
+    image: ${LITE_SOCIAL_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_social/lite-social}:${LITE_SOCIAL_VERSION:-latest}
+    profiles:
+      - lite
+      - apps
+      - lite-social
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    # The install refuses until hivemind has registered itself with HAF's application
+    # registry, which hivemind does when its sync starts (not at its install), so retry
+    # until it has: compose restarts a one-shot service on a non-zero exit.
+    restart: on-failure
+    command:
+      - install_app
+      - --app-id=${LITE_SOCIAL_APP_ID:-lite_social}
+      - --start-block=${LITE_START_BLOCK:-110000000}
+      - --is_forking=${LITE_SOCIAL_IS_FORKING:-${IS_FORKING:-TRUE}}
+      # hivemind's PostgREST role: gets the grants on lite_social's serving extension
+      # (registered with lite_posts' dispatcher, so lite.* serves the social graph).
+      - --hivemind-role=${LITE_SOCIAL_HIVEMIND_ROLE:-${LITE_POSTS_HIVEMIND_ROLE:-hivemind_user}}
+    depends_on:
+      haf:
+        condition: service_healthy
+      lite-posts-install:
+        condition: service_completed_successfully
+      hivemind-block-processing:
+        condition: service_started
+  lite-social-block-processing:
+    image: ${LITE_SOCIAL_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_social/lite-social}:${LITE_SOCIAL_VERSION:-latest}
+    profiles:
+      - lite
+      - apps
+      - lite-social
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: haf_admin
+    networks:
+      haf-network:
+    restart: on-failure
+    command:
+      - process_blocks
+    depends_on:
+      haf:
+        condition: service_healthy
+      lite-social-install:
+        condition: service_completed_successfully
+      lite-posts-block-processing:
+        condition: service_started
