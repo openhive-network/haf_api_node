@@ -85,6 +85,8 @@ services:
         host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-account-block-processing-1.${NETWORK_NAME}   trust\n
         host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-posts-install-1.${NETWORK_NAME}              trust\n
         host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-posts-block-processing-1.${NETWORK_NAME}     trust\n
+        host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-social-install-1.${NETWORK_NAME}             trust\n
+        host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-social-block-processing-1.${NETWORK_NAME}    trust\n
         host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-gateway-install-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    haf_admin            ${COMPOSE_PROJECT_NAME}-lite-gateway-uninstall-1.${NETWORK_NAME}          trust\n
         host    haf_block_log    lite_gateway_owner   ${COMPOSE_PROJECT_NAME}-lite-gateway-1.${NETWORK_NAME}                    trust\n
