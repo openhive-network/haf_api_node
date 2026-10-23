@@ -116,7 +116,8 @@ services:
       #
       # READ_REFRESH_MAX_PER_CYCLE is not here: its default is computed from two of the
       # others (MAX_USERS_PER_CYCLE x READER_CYCLE_SHARE, at most 300), so it has no
-      # value to copy. To set it, add it to this service in a compose override.
+      # value to copy. To set it, add it to this service in a compose override (see
+      # .env.example).
       MAX_USERS_PER_CYCLE: ${HAF_FYP_MAX_USERS_PER_CYCLE:-200}
       READER_CYCLE_SHARE: ${HAF_FYP_READER_CYCLE_SHARE:-0.5}
       READER_WINDOW_SECONDS: ${HAF_FYP_READER_WINDOW_SECONDS:-86400}
