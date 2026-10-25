@@ -1,4 +1,4 @@
-FROM node:alpine
+FROM node:24.21.0-alpine
 
 RUN mkdir -p /home/node/app
 COPY app.js package.json package-lock.json /home/node/app/
