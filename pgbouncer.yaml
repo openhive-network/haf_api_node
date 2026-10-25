@@ -44,6 +44,7 @@ services:
       PGBOUNCER_STATS_PERIOD: 60
     networks:
       haf-network:
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U haf_admin -d haf_block_log || exit 1"]
       interval: 10s

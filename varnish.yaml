@@ -22,6 +22,7 @@ services:
     depends_on:
       haproxy:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -T2 -nv -t1 --spider http://127.0.0.1/varnishcheck || exit 1"]
       interval: 10s
