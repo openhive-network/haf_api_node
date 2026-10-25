@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.5
-FROM registry.gitlab.syncad.com/hive/haf_api_node/docker:26.1.4-cli
+FROM registry.gitlab.syncad.com/hive/common-ci-configuration/mirrors/docker-29.9.2-cli
 
 ENV TOP_LEVEL_DATASET_MOUNTPOINT=/haf-pool/haf-datadir \
     COMPOSE_PROFILES="core,admin,hafah,hivemind,servers" \

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7-labs
-FROM registry.gitlab.syncad.com/hive/haf_api_node/docker:26.1.4-dind
+FROM registry.gitlab.syncad.com/hive/common-ci-configuration/mirrors/docker-29.9.2-dind
 
 ENV TOP_LEVEL_DATASET_MOUNTPOINT=/haf-pool/haf-datadir
 
