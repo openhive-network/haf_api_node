@@ -315,6 +315,12 @@ Currently available profiles are:
 - `apps`: core HAF apps: hivemind, HAfAH, haf-block-explorer
 - `servers`: services for routing/caching API calls: haproxy, jussi,varnish
 
+The front-end services (caddy, haproxy, haproxy-healthchecks, varnish, drone,
+pgbouncer) use `restart: unless-stopped`: if one of them exits — for example
+haproxy after its worker process crashes — Docker starts it again, and it also
+comes back when the Docker daemon or host restarts. A service you stop yourself
+with `docker compose stop` stays stopped.
+
 ## Networking: IPv6 and the p2p port
 
 By default, the stack runs hived dual-stack and exposes its p2p port:

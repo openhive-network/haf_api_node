@@ -68,6 +68,7 @@ services:
       - type: volume
         source: caddy_config
         target: /config
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -T2 -nv -t1 --spider http://127.0.0.1:2019/reverse_proxy/upstreams || exit 1"]
       interval: 10s

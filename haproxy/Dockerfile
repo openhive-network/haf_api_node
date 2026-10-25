@@ -6,8 +6,12 @@ FROM haproxy:3.2.21-alpine
 # This is just the stock haproxy docker image with the socat utility added, which allows
 # you to interact with the admin socket
 USER root
-RUN apk add --no-cache socat su-exec && mkdir -p /run/haproxy && chown haproxy:haproxy /run/haproxy
+RUN apk add --no-cache socat su-exec tini && mkdir -p /run/haproxy && chown haproxy:haproxy /run/haproxy
 COPY docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 # Note: We start as root so entrypoint can start syslogd, then drop to haproxy user
 
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+# tini is PID 1 so the haproxy master is not: the master only exits once
+# waitpid() reports no children left, so it must not inherit syslogd, and as
+# PID 1 it would also adopt every orphan. tini forwards signals (SIGTERM stop,
+# SIGUSR2 reload) to the master and exits with the master's exit code.
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/entrypoint.sh"]

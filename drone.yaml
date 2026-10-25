@@ -17,5 +17,6 @@ services:
     depends_on:
       haproxy:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - haf-network

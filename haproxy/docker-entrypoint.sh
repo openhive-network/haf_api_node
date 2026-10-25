@@ -13,7 +13,11 @@ if [ -d "$(dirname "$LOGFILE")" ] && [ "$(id -u)" = "0" ]; then
   # -n = don't daemonize (but we background it)
   # -O = output to file
   # -S = smaller (no remote logging)
-  syslogd -n -O "$LOGFILE" -S &
+  # Started from a subshell so it is reparented to tini rather than becoming a
+  # child of the haproxy master we exec below: the master waits for all of its
+  # children before exiting, so a surviving syslogd would keep it alive with
+  # no worker after a worker crash (and stall every docker stop until SIGKILL).
+  ( syslogd -n -O "$LOGFILE" -S & )
 fi
 
 # nuke any stale overlay from previous runs

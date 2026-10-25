@@ -58,6 +58,7 @@ services:
         target: /var/log/haproxy
     networks:
       - haf-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q -T 2 --spider http://127.0.0.1:8001/ || exit 1"]
       interval: 10s
@@ -122,6 +123,7 @@ services:
       HAF_STATS_SHED_MAXCONNS: "${HAF_STATS_SHED_MAXCONNS:-32 8 4}"
       HAF_FYP_SHED_MAXCONNS: "${HAF_FYP_SHED_MAXCONNS:-32 8 4}"
       PROXY_WHITELIST_SHED_MAXCONNS: "${PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "/healthcheck_healthcheck.sh || exit 1"]
       interval: 10s
