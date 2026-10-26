@@ -45,6 +45,9 @@ if [ -z "$GIT_LAST_COMMIT_DATE" ]; then
   fi
 fi
 
+# Node.js version from hive/common-ci-configuration (templates/base.gitlab-ci.yml)
+: "${NODE_IMAGE_VERSION:?set NODE_IMAGE_VERSION to common-ci-configuration's Node image version}"
+
 exec docker build \
   --tag=registry.gitlab.syncad.com/hive/haf_api_node/version-display:latest \
   --build-arg BUILD_TIME="$BUILD_TIME" \
@@ -53,4 +56,5 @@ exec docker build \
   --build-arg GIT_LAST_LOG_MESSAGE="$GIT_LAST_LOG_MESSAGE" \
   --build-arg GIT_LAST_COMMITTER="$GIT_LAST_COMMITTER" \
   --build-arg GIT_LAST_COMMIT_DATE="$GIT_LAST_COMMIT_DATE" \
+  --build-arg NODE_VERSION="$NODE_IMAGE_VERSION" \
   .

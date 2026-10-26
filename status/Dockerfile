@@ -1,4 +1,7 @@
-FROM node:24.21.0-alpine
+# Node comes from hive/common-ci-configuration: CI passes its NODE_IMAGE_VERSION
+# (see docker-bake.hcl), so this file names no version of its own.
+ARG NODE_VERSION
+FROM node:${NODE_VERSION}-alpine
 
 RUN mkdir -p /home/node/app
 COPY app.js package.json package-lock.json /home/node/app/

@@ -73,7 +73,9 @@ docker compose down              # Stop all services
 
 ### Building Images
 ```bash
-docker buildx bake --file=docker-bake.hcl --progress="plain" "pipeline-images"
+# NODE_IMAGE_VERSION: the Node.js version common-ci-configuration's
+# templates/base.gitlab-ci.yml exports (CI sets it automatically)
+NODE_IMAGE_VERSION=<ccc Node version> docker buildx bake --file=docker-bake.hcl --progress="plain" "pipeline-images"
 ```
 
 ### Linting Docker Compose Files
