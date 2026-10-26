@@ -134,7 +134,7 @@ services:
       hivemind-install:
         condition: service_completed_successfully
   # to uninstall Hivesense, shut down the stack and run a command like:
-  #   docker compose --profile core --profile block-explorer-uninstall up -d
+  #   docker compose --profile core --profile hivesense-uninstall up hivesense-uninstall
   hivesense-uninstall:
     image: ${HIVESENSE_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/hivesense}:${HIVESENSE_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:

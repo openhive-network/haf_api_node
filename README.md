@@ -406,10 +406,45 @@ scratch, which is required for some upgrades.
 To delete the data:
 
 - stop Hivemind, but leave the rest of the stack running: `docker compose down hivemind-install hivemind-block-processing hivemind-server`
-- run the uninstall script: `docker compose --profile=hivemind-uninstall up`
+- run the uninstall script: `docker compose --profile core --profile hivemind-uninstall up hivemind-uninstall`
 - you'll see the results of a few sql statements scroll by, and it should exit after a few seconds
 
 The Hivemind data is now gone.
+
+### Run install and uninstall services with `up`, not `run`
+
+Start an install or uninstall service with `docker compose up <service>`, never with
+`docker compose run`. HAF's PostgreSQL trusts each install/uninstall role only from that
+service's own container, matched by its DNS name `<project>-<service>-1.<network>` (the
+`PG_ACCESS` rules in `haf_base.yaml`). A `compose run` container is named
+`<project>-<service>-run-<id>` instead, matches no rule, and fails with
+`fe_sendauth: no password supplied`. `--no-deps` works with `up` just as with `run`.
+
+`--profile core` is needed because each uninstall service depends on `haf`. Stop the app's
+block-processing and API services first, as shown above for Hivemind. The uninstall
+command for each app:
+
+| App | Command |
+|---|---|
+| Hivemind | `docker compose --profile core --profile hivemind-uninstall up hivemind-uninstall` |
+| HAfAH | `docker compose --profile core --profile hafah-uninstall up hafah-uninstall` |
+| Balance Tracker (standalone) | `docker compose --profile core --profile balance-tracker-standalone-uninstall up balance-tracker-uninstall` |
+| Reputation Tracker | `docker compose --profile core --profile reputation-tracker-uninstall up reputation-tracker-uninstall` |
+| NFT Tracker | `docker compose --profile core --profile nft-tracker-uninstall up nft-tracker-uninstall` |
+| HAF Block Explorer (and its balance tracker schema) | `docker compose --profile core --profile block-explorer-uninstall up block-explorer-uninstall-balance-tracker` |
+| HAF Stats | `docker compose --profile core --profile haf-stats-uninstall up haf-stats-uninstall` |
+| HAF FYP | `docker compose --profile core --profile haf-fyp-uninstall up haf-fyp-uninstall` |
+| Hivesense | `docker compose --profile core --profile hivesense-uninstall up hivesense-uninstall` |
+| HafSQL | `docker compose --profile core --profile hafsql-uninstall up hafsql-uninstall` |
+
+The HAF Block Explorer command runs `block-explorer-uninstall` first, as a dependency.
+HAF Stats and HAF FYP refuse to uninstall while pgbouncer still holds connections for their
+roles; the comments above their uninstall services in `haf_stats.yaml` and `haf_fyp.yaml`
+list the services to stop first.
+
+Install services run on their own when you `docker compose up -d` with the app's profile.
+To rerun one by hand, likewise use `up`, e.g.
+`docker compose --profile core --profile hivemind up hivemind-install`.
 
 If you're uninstalling Hivemind permanently, then remember to remove the `hivemind` profile from your `.env` file's `COMPOSE_PROFILES` line so it doesn't start automatically next time you do a `docker compose up -d`.
 
