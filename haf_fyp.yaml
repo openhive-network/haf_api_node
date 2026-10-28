@@ -152,7 +152,7 @@ services:
       REDIS_URL: redis://haf-fyp-redis:6379
       # The ranker's settings (haf_fyp README, "How fresh a feed is" and "Retention and
       # maintenance"), each from a HAF_FYP_ name in .env. The default after :- is
-      # haf_fyp's own (as of haf_fyp 01fa5bce), copied so that every value the ranker
+      # haf_fyp's own (as of haf_fyp 558dae4c), copied so that every value the ranker
       # gets is a number: a haf_fyp image from before haf_fyp!101 (1.28.8 among them)
       # reads an EMPTY value with int() and restarts forever. If haf_fyp changes a
       # default, change it here too.
@@ -166,12 +166,15 @@ services:
       READER_WINDOW_SECONDS: ${HAF_FYP_READER_WINDOW_SECONDS:-86400}
       READ_REFRESH_MIN_AGE_SECONDS: ${HAF_FYP_READ_REFRESH_MIN_AGE_SECONDS:-600}
       READ_REFRESH_BATCH_SECONDS: ${HAF_FYP_READ_REFRESH_BATCH_SECONDS:-30}
+      READER_ACTIVE_WITHIN_DAYS: ${HAF_FYP_READER_ACTIVE_WITHIN_DAYS:-0}
+      FEED_SESSION_SECONDS: ${HAF_FYP_FEED_SESSION_SECONDS:-900}
       FEED_EVENTS_MAINT_SECONDS: ${HAF_FYP_FEED_EVENTS_MAINT_SECONDS:-3600}
       FEED_EVENTS_RETAIN_DAYS: ${HAF_FYP_FEED_EVENTS_RETAIN_DAYS:-14}
       FEED_EVENTS_MAX_ROWS: ${HAF_FYP_FEED_EVENTS_MAX_ROWS:-20000000}
       EMBEDDING_COVERAGE_DAYS: ${HAF_FYP_EMBEDDING_COVERAGE_DAYS:-14}
       ACTIVE_USERS_MAX_EVICTIONS: ${HAF_FYP_ACTIVE_USERS_MAX_EVICTIONS:-1000}
       ACTIVE_USERS_EVICT_SYNC_LAG_BLOCKS: ${HAF_FYP_ACTIVE_USERS_EVICT_SYNC_LAG_BLOCKS:-1000}
+      FEED_CACHE_UNREAD_RETENTION_DAYS: ${HAF_FYP_FEED_CACHE_UNREAD_RETENTION_DAYS:-30}
     networks:
       haf-network:
     restart: unless-stopped
