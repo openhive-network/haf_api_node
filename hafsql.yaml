@@ -2,7 +2,7 @@ services:
   hafsql:
     profiles:
       - hafsql
-    image: ${HAFSQL_IMAGE:-mahdiyari/hafsql}:${HAFSQL_VERSION:-2.6.1}
+    image: ${HAFSQL_IMAGE:-mahdiyari/hafsql}:${HAFSQL_VERSION:-2.7.4}
     restart: on-failure
     networks:
       - haf-network
@@ -10,19 +10,6 @@ services:
     stdin_open: true
     environment:
       HAFSQL_PGHOST: haf
-      # Can disable parts of hafsql if not needed
-      HAFSQL_BALANCES: true
-      HAFSQL_ACCOUNTS: true
-      HAFSQL_FOLLOWS: true # follows, mutes, blacklists
-      HAFSQL_COMMUNITIES: true
-      HAFSQL_RC_DELEGATIONS: true
-      HAFSQL_DELEGATIONS: true
-      HAFSQL_PROPOSALS: true
-      HAFSQL_COMMENTS: true
-      HAFSQL_REBLOGS: true # depends on HAFSQL_COMMENTS
-      HAFSQL_REWARDS: true # depends on HAFSQL_COMMENTS
-      HAFSQL_REPUTATIONS: true # depends on HAFSQL_COMMENTS
-      HAFSQL_MARKET: true
       HAFSQL_PUBLICUSER: true
       HAFSQL_PUBLICUSERNAME: ${HAFSQL_PUBLIC_USERNAME:-hafsql_public}
       HAFSQL_PUBLICPASSWORD: ${HAFSQL_PUBLIC_PASSWORD:-hafsql_public}
@@ -30,13 +17,14 @@ services:
       HAFSQL_PUBLIC_WORK_MEM: ${HAFSQL_PUBLIC_WORK_MEM:-}
       HAFSQL_PUBLIC_TEMP_FILE_LIMIT: ${HAFSQL_PUBLIC_TEMP_FILE_LIMIT:-256MB}
       API_PREFIX: /hafsql
+    # HafSQL 2.7 reads hafbe_bal.*, hafbe_app.*, reptracker_app.* and hivemind_app.*,
+    # so the block explorer (apps/hafbe profile), hivemind and reputation tracker are required
     depends_on:
-      balance-tracker-install:
-        condition: service_completed_successfully
-        required: false
       block-explorer-install-balance-tracker:
         condition: service_completed_successfully
-        required: false
+        required: true
+      block-explorer-install-schema:
+        condition: service_completed_successfully
       haf:
         condition: service_healthy
       hivemind-install:
@@ -52,7 +40,7 @@ services:
   hafsql-uninstall:
     profiles:
       - hafsql-uninstall
-    image: ${HAFSQL_IMAGE:-mahdiyari/hafsql}:${HAFSQL_VERSION:-2.6.1}
+    image: ${HAFSQL_IMAGE:-mahdiyari/hafsql}:${HAFSQL_VERSION:-2.7.4}
     networks:
       - haf-network
     tty: true

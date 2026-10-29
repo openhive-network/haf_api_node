@@ -454,6 +454,22 @@ If you're upgrading to a new version of hivemind:
 - run `docker compose up -d` to bring up all services.  This should run hivemind's install, then launch the block processing container.
 - you can monitor Hivemind's sync process by watching the logs from `docker compose logs -f hivemind-block-processing`.  In a few short days, your Hivemind app should be fully synced and ready to handle API requests.
 
+## HafSQL
+
+HafSQL (the `hafsql` profile, `hafsql.yaml`) reads tables that other apps in this stack own:
+`hafbe_bal.*` and `hafbe_app.*` from the HAF Block Explorer, `reptracker_app.*` from the
+Reputation Tracker and `hivemind_app.*` from Hivemind.  Enable it together with the `apps`
+profile (or `hafbe`, `hivemind` and `reputation-tracker`); with the block explorer missing,
+`docker compose up` refuses to start it with a dependency error.  It no longer has per-module
+switches: since 2.7.0 it always syncs everything.
+
+Upgrading a database last run by HafSQL 2.6.1 or older to 2.7.x is not instant.  On first
+start, 2.7.x drops `hafsql.comments_table` and resyncs comments, deleted comments and
+paid/pending rewards from block 0, which takes more than a day on mainnet; HafSQL's comment
+data is incomplete until it catches up.  It also repairs account metadata and comment titles
+in place.  Operations, accounts and indexes are kept, so this is far shorter than a fresh
+install.
+
 ## Advisory-lock coordination between installers and block-processors
 
 When you bring the stack up in pieces — `docker compose up` for one profile, then later for another — Docker Compose will re-run install services that are transitive dependencies of the newly-added profile's services. Some installers (notably hivemind's) perform destructive schema operations (e.g. `DROP TYPE`/`CREATE TYPE`) that would race destructively with an actively-running block-processor against the same schema.
