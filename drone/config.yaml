@@ -47,6 +47,9 @@ translate_to_appbase:
 # the order they appear in this file doesn't matter
 urls:
   bridge: hivemind
+  # lite.* (hive/lite_posts serving wrappers behind hivemind's PostgREST dispatch seam) is
+  # answered by hivemind's PostgREST; the dispatcher routes it to lite_posts.intercept.
+  lite: hivemind
   search-api: hivemind
   hive: hivemind
   hived: hived
@@ -156,12 +159,20 @@ ttls:
   bridge.get_community: 12
   bridge.get_trending_topics: 30
   bridge.does_user_follow_any_lists: 3
+  # lite.* mirrors the bridge methods it wraps; get_info is a per-node capability probe
+  lite: NO_CACHE
+  lite.get_info: 30
+  lite.get_discussion: 6
+  lite.get_account_posts: 12
+  lite.get_post: 6
+  lite.get_ranked_posts: 6
   search-api: NO_CACHE
   search-api.find_text: 30
 
 # how long to wait for the backend to respond before giving up
 timeouts:
   bridge: 30
+  lite: 30
   search-api: 30
   hive: 30
   hived: 5

@@ -1,0 +1,99 @@
+# Lite gateway: the relay service that posts for lite (L2) accounts through its pool of L1
+# gate accounts, with the lite_posts/lite_account state read from HAF. A Node service (like
+# status-api): one container, Swagger labels, a haproxy port, a varnish route.
+# Part of the lite stack (profile `lite`); see .env.example ("Lite accounts").
+services:
+  lite-gateway-install:
+    image: ${LITE_GATEWAY_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_gateway}:${LITE_GATEWAY_VERSION:-latest}
+    profiles:
+      - lite
+      - lite-gateway
+    environment:
+      POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
+    command:
+      - install_app
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+      lite-posts-install:
+        condition: service_completed_successfully
+  lite-gateway-uninstall:
+    image: ${LITE_GATEWAY_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_gateway}:${LITE_GATEWAY_VERSION:-latest}
+    profiles:
+      - lite-gateway-uninstall
+    environment:
+      POSTGRES_URL: postgresql://haf_admin@haf/haf_block_log
+    command:
+      - uninstall_app
+    networks:
+      haf-network:
+    depends_on:
+      haf:
+        condition: service_healthy
+  lite-gateway:
+    image: ${LITE_GATEWAY_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_gateway}:${LITE_GATEWAY_VERSION:-latest}
+    profiles:
+      - lite
+      - lite-gateway
+    labels:
+      # for Swagger UI
+      - "io.hive.swagger.url=/lite-gateway-api/"
+      - "io.hive.swagger.name=Lite Gateway API"
+      - "io.hive.swagger.order=9"
+    environment:
+      # direct connection (small pool of its own; not through pgbouncer)
+      LITE_GATEWAY_DB_URL: postgresql://lite_gateway_owner@haf/haf_block_log?application_name=lite_gateway
+      LITE_GATEWAY_HIVE_API: ${LITE_GATEWAY_HIVE_API:-http://haf:8091}
+      LITE_GATEWAY_CHAIN_ID: ${LITE_GATEWAY_CHAIN_ID:-beeab0de00000000000000000000000000000000000000000000000000000000}
+      LITE_GATEWAY_ACCOUNT_APP: ${LITE_ACCOUNT_APP_ID:-lite_account}
+      LITE_GATEWAY_POSTS_APP: ${LITE_POSTS_APP_ID:-lite_posts}
+      LITE_GATEWAY_KEYS_FILE: /run/secrets/lite_gateway_keys
+      LITE_GATEWAY_PUBLIC_URL: https://${PUBLIC_HOSTNAME}/lite-gateway-api
+      LITE_GATEWAY_CAPTCHA: ${LITE_GATEWAY_CAPTCHA:-none}
+      LITE_GATEWAY_TURNSTILE_SECRET: ${LITE_GATEWAY_TURNSTILE_SECRET:-}
+      LITE_GATEWAY_ENABLE_EDITS: ${LITE_GATEWAY_ENABLE_EDITS:-true}
+      LITE_GATEWAY_RATE_LIMIT_IP: ${LITE_GATEWAY_RATE_LIMIT_IP:-20}
+      LITE_GATEWAY_RATE_LIMIT_CLIENT: ${LITE_GATEWAY_RATE_LIMIT_CLIENT:-5}
+      LITE_GATEWAY_RATE_LIMIT_WINDOW_S: ${LITE_GATEWAY_RATE_LIMIT_WINDOW_S:-600}
+      LITE_GATEWAY_ROOT_QUEUE_DEPTH: ${LITE_GATEWAY_ROOT_QUEUE_DEPTH:-50}
+      LITE_GATEWAY_ROOT_QUEUE_MAX_WAIT_S: ${LITE_GATEWAY_ROOT_QUEUE_MAX_WAIT_S:-3600}
+      LITE_GATEWAY_QUEUE_SIGN_WINDOW_S: ${LITE_GATEWAY_QUEUE_SIGN_WINDOW_S:-120}
+      LITE_GATEWAY_LOG_LEVEL: ${LITE_GATEWAY_LOG_LEVEL:-info}
+      # Graduation (lite_gateway#15): the creator account's ACTIVE key creates graduated accounts and,
+      # as an active account-authority the operator gives it on each pool account, signs the treasury
+      # ops. Both stay off without LITE_GATEWAY_CREATOR_ACCOUNT/_ACTIVE_WIF and GRADUATION_ENABLED=true.
+      LITE_GATEWAY_CREATOR_ACCOUNT: ${LITE_GATEWAY_CREATOR_ACCOUNT:-}
+      LITE_GATEWAY_CREATOR_ACTIVE_WIF: ${LITE_GATEWAY_CREATOR_ACTIVE_WIF:-}
+      LITE_GATEWAY_GRADUATION_ENABLED: ${LITE_GATEWAY_GRADUATION_ENABLED:-false}
+      LITE_GATEWAY_GRADUATION_POLICY: ${LITE_GATEWAY_GRADUATION_POLICY:-rewards}
+      LITE_GATEWAY_GRADUATION_THRESHOLD_HBD: ${LITE_GATEWAY_GRADUATION_THRESHOLD_HBD:-}
+      LITE_GATEWAY_GRADUATION_ALLOWLIST: ${LITE_GATEWAY_GRADUATION_ALLOWLIST:-}
+      LITE_GATEWAY_GRADUATION_DAILY_CAP: ${LITE_GATEWAY_GRADUATION_DAILY_CAP:-20}
+      LITE_GATEWAY_GRADUATION_RC_DELEGATION: ${LITE_GATEWAY_GRADUATION_RC_DELEGATION:-10000000000}
+      LITE_GATEWAY_TREASURY_INTERVAL_S: ${LITE_GATEWAY_TREASURY_INTERVAL_S:-3600}
+      LITE_GATEWAY_TREASURY_BUFFER_FEES: ${LITE_GATEWAY_TREASURY_BUFFER_FEES:-100}
+      LITE_GATEWAY_TREASURY_LOW_WATER_FEES: ${LITE_GATEWAY_TREASURY_LOW_WATER_FEES:-20}
+      LITE_GATEWAY_TREASURY_WORKING_BALANCE_HIVE: ${LITE_GATEWAY_TREASURY_WORKING_BALANCE_HIVE:-5}
+    secrets:
+      - lite_gateway_keys
+    networks:
+      haf-network:
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
+    depends_on:
+      lite-gateway-install:
+        condition: service_completed_successfully
+      lite-posts-block-processing:
+        condition: service_started
+
+secrets:
+  # JSON file with the pool accounts' POSTING keys ({"accounts":[{"account":...,"posting_wif":...,"pool":"default"}]});
+  # never in the environment. Default: lite_gateway_keys.json next to .env (chmod 600).
+  lite_gateway_keys:
+    file: ${LITE_GATEWAY_KEYS_FILE:-./lite_gateway_keys.json}

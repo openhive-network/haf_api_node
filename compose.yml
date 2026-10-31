@@ -25,6 +25,11 @@ include:
   - ui.yaml
   - status.yaml
   - hive.yaml
+  - l2_framework.yaml
+  - lite_account.yaml
+  - lite_posts.yaml
+  - lite_social.yaml
+  - lite_gateway.yaml
 
 networks:
   haf-network:

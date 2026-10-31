@@ -1,0 +1,54 @@
+# Lite posts: disavowed gate comments index + lite attestations (consumer of l2_framework + lite_account)
+# One of the lite HAF apps (profiles `apps` and `lite`): l2_framework -> lite_account ->
+# lite_posts; the `lite` profile adds the gateway. See .env.example ("Lite accounts").
+services:
+  lite-posts-install:
+    image: ${LITE_POSTS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_posts/lite-posts}:${LITE_POSTS_VERSION:-latest}
+    profiles:
+      - lite
+      - apps
+      - lite-posts
+    environment:
+      POSTGRES_HOST: haf
+    networks:
+      haf-network:
+    command:
+      - install_app
+      - --app-id=${LITE_POSTS_APP_ID:-lite_posts}
+      - --start-block=${LITE_START_BLOCK:-110000000}
+      - --is_forking=${LITE_POSTS_IS_FORKING:-${IS_FORKING:-TRUE}}
+      # hivemind's PostgREST role: gets the grants on lite_posts and turns hivemind's serving
+      # seam on (hivemind.lite_intercept), so stock bridge.* calls render lite posts in compat
+      # mode and lite.* serves native output. Empty = no grants, seam left alone.
+      - --hivemind-role=${LITE_POSTS_HIVEMIND_ROLE:-hivemind_user}
+    depends_on:
+      haf:
+        condition: service_healthy
+      lite-account-install:
+        condition: service_completed_successfully
+      # the role above exists once hivemind is installed; optional so a lite-only stack
+      # (no hivemind) still starts
+      hivemind-install:
+        condition: service_completed_successfully
+        required: false
+  lite-posts-block-processing:
+    image: ${LITE_POSTS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_posts/lite-posts}:${LITE_POSTS_VERSION:-latest}
+    profiles:
+      - lite
+      - apps
+      - lite-posts
+    environment:
+      POSTGRES_HOST: haf
+      POSTGRES_USER: haf_admin
+    networks:
+      haf-network:
+    restart: on-failure
+    command:
+      - process_blocks
+    depends_on:
+      haf:
+        condition: service_healthy
+      lite-posts-install:
+        condition: service_completed_successfully
+      lite-account-block-processing:
+        condition: service_started

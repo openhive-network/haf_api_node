@@ -31,6 +31,18 @@ services:
       REACT_APP_EXPLORER_DOMAIN: https://${PUBLIC_HOSTNAME}/explorer
       REACT_APP_AI_DOMAIN: https://${PUBLIC_HOSTNAME}
       REACT_APP_BASE_PATH: /blog
+      # lite-account gateway the blog relays /api/lite-reply to (see 'Lite accounts' in .env.example)
+      DENSER_SERVER_LITE_GATEWAY_URL: ${LITE_GATEWAY_URL:-https://api.hive.blog/lite-gateway-api}
+      # passkey signer origins the blog offers for securing a lite account (denser#1309); Denser's
+      # own default is signer.hive.blog, a test node points at the test signer (see .env.example)
+      REACT_APP_PASSKEY_SIGNERS: ${PASSKEY_SIGNERS:-https://signer.hive.blog}
+      # API nodes the blog fails over across when this node's API is down (server renders and the
+      # browser alike). Default: this node only, so a lite-aware node never silently degrades to a
+      # public node without the lite.* methods. Space-separated; see .env.example.
+      REACT_APP_ALLOWED_HIVE_API_NODES: ${DENSER_ALLOWED_HIVE_API_NODES:-https://${PUBLIC_HOSTNAME}}
+      # Secret that seals the blog's login session cookie (iron-session, >= 32 chars). Unset =
+      # logged-in features fail with "iron-session: Bad usage. Missing password." See .env.example.
+      DENSER_SERVER_SECRET_COOKIE_PASSWORD: ${DENSER_SECRET_COOKIE_PASSWORD:-}
     deploy:
       resources:
         limits:
@@ -59,6 +71,7 @@ services:
       REACT_APP_BASE_PATH: /wallet
       REACT_APP_WALLET_ENDPOINT: https://${PUBLIC_HOSTNAME}/wallet
       REACT_APP_BLOG_DOMAIN: https://${PUBLIC_HOSTNAME}/blog
+      DENSER_SERVER_SECRET_COOKIE_PASSWORD: ${DENSER_SECRET_COOKIE_PASSWORD:-}
     healthcheck:
       test:
       - CMD-SHELL
