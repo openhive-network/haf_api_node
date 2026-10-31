@@ -52,3 +52,25 @@ services:
         condition: service_completed_successfully
       lite-account-block-processing:
         condition: service_started
+  # Swagger's "Lite JSON-RPC API" entry: the lite.* spec, served at /lite-api/ (varnish, via haproxy)
+  lite-openapi-spec:
+    image: ${LITE_OPENAPI_SPEC_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_posts/openapi-spec}:${LITE_OPENAPI_SPEC_VERSION:-${LITE_POSTS_VERSION:-latest}}
+    profiles:
+      - lite
+      - apps
+      - lite-posts
+    networks:
+      haf-network:
+    healthcheck:
+      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:80/openapi.json || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 1m
+    labels:
+      - "io.hive.swagger.url=/lite-api/"
+      - "io.hive.swagger.name=Lite JSON-RPC API"
+      - "io.hive.swagger.interceptor=jsonrpc"
+      - "io.hive.swagger.order=10"
+      # lite.* is served by hivemind
+      - "io.hive.healthcheck.port=7002"

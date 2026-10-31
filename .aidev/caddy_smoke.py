@@ -412,6 +412,7 @@ CHECKS: list[tuple[str, Callable[[], str]]] = [
         check_proxied("block-explorer-ui", "/explorer/_next/static/chunks/app.js"),
     ),
     ("rest api via varnish", check_rest_api),
+    ("lite json-rpc spec via varnish", check_proxied("varnish", "/lite-api/")),
     ("json-rpc post to root", check_jsonrpc_post),
     ("fallback to swagger", check_proxied("swagger", "/")),
     ("robots.txt", check_robots),
