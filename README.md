@@ -470,7 +470,8 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    - the image pins of HAF and of every app that installs into the database (`HIVE_API_NODE_VERSION`,
      `HAF_VERSION`, `HIVEMIND_VERSION`, ...) to the source's values: the database was built by those
      versions.  If the source runs apps through compose additions of its own, bring those over too
-     (including their `pg_hba` rows in `PG_ACCESS`).
+     (including their `pg_hba` rows in `PG_ACCESS`).  Image pins that the source keeps in compose files
+     (e.g. a pins file in its `COMPOSE_FILE`) belong in a compose file here, added to `COMPOSE_FILE`.
 
    Hostnames, TLS/proxy settings, `COMPOSE_PROFILES` and other site settings stay the target's own.
    Then check it (copy the source's env file over as e.g. `source.env` so the image check can run):
@@ -480,7 +481,12 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    ```
    `check` shows the copy's datasets and whether they are mounted, every directory the new
    configuration bind-mounts that the copy lacks (target-only directories), image mismatches, and the
-   names of the settings that differ from the live `.env`.  `prepare` mounts the copy, copies the
+   names of the settings that differ from the live `.env`.  Every step renders the stack the way
+   `docker compose` does here with that env file, `COMPOSE_FILE` included (`check` lists the files);
+   a file the live or new configuration names that does not exist is an error.  The source's
+   `COMPOSE_FILE` may name files this host lacks: `check` leaves them out and lists them.  For an exact
+   comparison, save the source's images instead (`docker compose config --images > source.images` on
+   the source) and pass `--source-images=source.images`.  `prepare` mounts the copy, copies the
    target-only directories from the live datadir (creating them empty when the live datadir lacks them
    too) and checks again.  Both fail if any service of the new configuration would still mount the
    live datadir.
@@ -489,7 +495,8 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    sudo ./switch_zfs_datasets.sh --new-env=.env.new --source-env=source.env boot-check
    ```
    This starts HAF alone on the copy as a separate compose project (`<PROJECT_NAME>-boot-check`, with
-   its own network and the p2p port published on 127.0.0.1 only), waits up to `--boot-timeout`
+   its own network and the p2p port published on 127.0.0.1 only, whatever other ports the
+   configuration's compose files give HAF), waits up to `--boot-timeout`
    (default 1 hour) for it to become healthy, failing at once on hived's shared-memory/RocksDB
    inconsistency error, then stops it cleanly and removes the project.  HAF may sync a few blocks
    meanwhile; that is fine.
@@ -515,7 +522,9 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
 
 `ci/scripts/test-zfs-transfer.sh` exercises the transfer end to end on two throwaway file-backed
 pools (run it as root on a host with ZFS; it skips, naming the reason, elsewhere).  CI does not run
-it: its runners have no ZFS.
+it: its runners have no ZFS.  `ci/scripts/test-switch-compose-files.sh` checks that every step of
+`switch_zfs_datasets.sh` uses the compose files each env file's `COMPOSE_FILE` selects; it needs only
+`docker compose` (no daemon, no ZFS, no root).
 
 ## Deleting Hivemind data from your database (or a similar app's data)
 

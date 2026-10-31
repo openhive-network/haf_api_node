@@ -14,6 +14,9 @@ The new configuration is a copy of this node's live .env with TOP_LEVEL_DATASET 
 received copy and the image pins of the source node (HAF and every app that installs into the
 database).  Every step but rollback takes it as --new-env.
 
+Every docker compose command uses the compose files the env file selects, as docker compose does
+from this directory: its COMPOSE_FILE, or compose.yml (and compose.override.yml) when unset.
+
   check       print the plan without changing anything: the copy's datasets and mount state,
               directories the new configuration bind-mounts that are missing from the copy
               (target-only directories), image differences, and the settings that change
@@ -29,7 +32,10 @@ database).  Every step but rollback takes it as --new-env.
 Options:
   --env-file=file        the live env file (default: .env)
   --new-env=file         the new configuration (required except for rollback)
-  --source-env=file      the source node's env file: HAF and installer images must match it
+  --source-env=file      the source node's env file: HAF and installer images must match it.
+                         Files its COMPOSE_FILE names that are not here are left out (and listed)
+  --source-images=file   the source's images, one per line as "docker compose config --images"
+                         prints them there: compared instead of the ones --source-env resolves to here
   --boot-timeout=SECONDS how long boot-check waits for HAF to become healthy (default 3600)
   --restore-from=file    rollback: restore this env file instead of the newest backup
   --force, -f            don't ask for confirmation; turn image mismatches into warnings
@@ -43,7 +49,7 @@ die() {
 
 REPO_DIR=$(cd "$(dirname "$0")" && pwd)
 
-if ! OPTIONS=$(getopt -o he:f --long help,env-file:,new-env:,source-env:,boot-timeout:,restore-from:,force -n "$0" -- "$@"); then
+if ! OPTIONS=$(getopt -o he:f --long help,env-file:,new-env:,source-env:,source-images:,boot-timeout:,restore-from:,force -n "$0" -- "$@"); then
   print_help
   exit 1
 fi
@@ -51,6 +57,7 @@ fi
 LIVE_ENV=.env
 NEW_ENV=""
 SOURCE_ENV=""
+SOURCE_IMAGES=""
 BOOT_TIMEOUT=3600
 RESTORE_FROM=""
 FORCE=0
@@ -62,6 +69,7 @@ while true; do
     --env-file|-e) LIVE_ENV="$2"; shift 2 ;;
     --new-env) NEW_ENV="$2"; shift 2 ;;
     --source-env) SOURCE_ENV="$2"; shift 2 ;;
+    --source-images) SOURCE_IMAGES="$2"; shift 2 ;;
     --boot-timeout) BOOT_TIMEOUT="$2"; shift 2 ;;
     --restore-from) RESTORE_FROM="$2"; shift 2 ;;
     --force|-f) FORCE=1; shift ;;
@@ -99,20 +107,70 @@ read_env() {
   printf -v "${prefix}_MOUNTPOINT" '%s' "${mountpoint%/}"
 }
 
+# Sets COMPOSE_FILES to the compose files docker compose loads from $REPO_DIR with an env file:
+# its COMPOSE_FILE (split on its COMPOSE_PATH_SEPARATOR, relative entries against $REPO_DIR), or
+# compose.yml and compose.override.yml when unset.  Files that do not exist go to
+# MISSING_COMPOSE_FILES instead.  The caller's own COMPOSE_FILE is ignored: the env file decides.
+resolve_compose_files() {
+  local env_file="$1" list separator file
+  local -a entries=()
+  COMPOSE_FILES=()
+  MISSING_COMPOSE_FILES=()
+  list=$(unset COMPOSE_FILE; env_value "$env_file" COMPOSE_FILE)
+  separator=$(unset COMPOSE_PATH_SEPARATOR; env_value "$env_file" COMPOSE_PATH_SEPARATOR)
+  if [ -n "$list" ]; then
+    IFS="${separator:-:}" read -r -a entries <<< "$list"
+  else
+    entries=(compose.yml)
+    [ ! -e "$REPO_DIR/compose.override.yml" ] || entries+=(compose.override.yml)
+  fi
+  for file in "${entries[@]}"; do
+    [ -n "$file" ] || continue
+    [[ "$file" = /* ]] || file="$REPO_DIR/$file"
+    if [ -e "$file" ]; then
+      COMPOSE_FILES+=("$file")
+    else
+      MISSING_COMPOSE_FILES+=("$file")
+    fi
+  done
+}
+
+require_compose_files() {
+  resolve_compose_files "$1"
+  [ "${#MISSING_COMPOSE_FILES[@]}" -eq 0 ] || die "$1: COMPOSE_FILE names missing file(s): ${MISSING_COMPOSE_FILES[*]}"
+}
+
 LIVE_ENV=$(realpath "$LIVE_ENV")
 read_env LIVE "$LIVE_ENV"
+require_compose_files "$LIVE_ENV"
 if [ "$COMMAND" != rollback ]; then
   [ -n "$NEW_ENV" ] || die "--new-env is required for $COMMAND"
   NEW_ENV=$(realpath "$NEW_ENV")
   read_env NEW "$NEW_ENV"
+  require_compose_files "$NEW_ENV"
 fi
 [ -z "$SOURCE_ENV" ] || SOURCE_ENV=$(realpath "$SOURCE_ENV")
+if [ -n "$SOURCE_IMAGES" ]; then
+  [ -f "$SOURCE_IMAGES" ] || die "$SOURCE_IMAGES does not exist"
+  SOURCE_IMAGES=$(realpath "$SOURCE_IMAGES")
+fi
 cd "$REPO_DIR"
 
-compose() {
-  local env_file="$1"
+# docker compose with the files COMPOSE_FILES holds and an env file.
+compose_resolved() {
+  local env_file="$1" file
+  local -a files=()
   shift
-  docker compose --project-directory "$REPO_DIR" -f "$REPO_DIR/compose.yml" --env-file "$env_file" "$@"
+  for file in "${COMPOSE_FILES[@]}"; do
+    files+=(-f "$file")
+  done
+  docker compose --project-directory "$REPO_DIR" "${files[@]}" --env-file "$env_file" "$@"
+}
+
+# docker compose as the env file configures it; further -f options in the arguments come last.
+compose() {
+  require_compose_files "$1"
+  compose_resolved "$@"
 }
 
 # Prints "<service> <what>" lines from the rendered compose configuration on stdin;
@@ -132,6 +190,13 @@ for name, svc in sorted(services.items()):
         for p in svc.get("ports", []):
             print(name, "%s:%s" % (p.get("host_ip", ""), p.get("published", "")))
 ' "$1"
+}
+
+# An image reference without its tag and digest.
+_image_repository() {
+  local image="${1%%@*}"
+  [[ "${image##*/}" != *:* ]] || image="${image%:*}"
+  printf '%s' "$image"
 }
 
 # Services whose images write the database: HAF and the app installers.
@@ -163,13 +228,15 @@ COPY_MOUNTED=0
 # check STRICT: STRICT=1 for steps that are about to use the copy (it must be mounted and complete).
 check() {
   local strict="$1" name canmount mounted property unmounted=0 latest binds source rel service image
-  local live_images new_images source_images source_image var live_value new_value
+  local live_images new_images source_images source_image var live_value new_value file same_repo
   local -a changed=()
   FAILURES=0
   MISSING_BINDS=()
 
   echo "Live configuration: $LIVE_ENV -> $LIVE_DATASET ($LIVE_MOUNTPOINT)"
   echo "New configuration:  $NEW_ENV -> $NEW_DATASET ($NEW_MOUNTPOINT)"
+  resolve_compose_files "$NEW_ENV"
+  echo "New compose files:  ${COMPOSE_FILES[*]#"$REPO_DIR/"}"
   echo ""
   echo "Copy:"
   if [ "$NEW_DATASET" = "$LIVE_DATASET" ]; then
@@ -241,8 +308,32 @@ check() {
   echo ""
   echo "Images:"
   new_images=$(compose "$NEW_ENV" config --format json | compose_query images)
-  if [ -n "$SOURCE_ENV" ]; then
-    source_images=$(compose "$SOURCE_ENV" config --format json | compose_query images)
+  if [ -n "$SOURCE_IMAGES" ]; then
+    echo "        source images from $SOURCE_IMAGES"
+    while read -r service image; do
+      _writes_database "$service" || continue
+      same_repo=()
+      while read -r source_image; do
+        [ -n "$source_image" ] || continue
+        [ "$(_image_repository "$source_image")" != "$(_image_repository "$image")" ] || same_repo+=("$source_image")
+      done < "$SOURCE_IMAGES"
+      if grep -qxF "$image" "$SOURCE_IMAGES"; then
+        ok "$service: $image (the source runs it)"
+      elif [ "${#same_repo[@]}" -eq 0 ]; then
+        warn "$service: the source runs no $(_image_repository "$image") image"
+      elif [ "$FORCE" -eq 1 ]; then
+        warn "$service: $image, but the source database was built by ${same_repo[*]}"
+      else
+        fail "$service: $image, but the source database was built by ${same_repo[*]}"
+      fi
+    done <<< "$new_images"
+  elif [ -n "$SOURCE_ENV" ]; then
+    resolve_compose_files "$SOURCE_ENV"
+    echo "        source compose files: ${COMPOSE_FILES[*]#"$REPO_DIR/"}"
+    for file in "${MISSING_COMPOSE_FILES[@]}"; do
+      warn "the source's COMPOSE_FILE names ${file#"$REPO_DIR/"}, which is not here: left out (pass --source-images for an exact comparison)"
+    done
+    source_images=$(compose_resolved "$SOURCE_ENV" config --format json | compose_query images)
     while read -r service image; do
       _writes_database "$service" || continue
       source_image=$(awk -v s="$service" '$1 == s { print $2 }' <<< "$source_images")
@@ -257,7 +348,7 @@ check() {
       fi
     done <<< "$new_images"
   else
-    warn "no --source-env: cannot verify that HAF and the installers match the versions that built the copy"
+    warn "no --source-env or --source-images: cannot verify that HAF and the installers match the versions that built the copy"
   fi
   live_images=$(compose "$LIVE_ENV" config --format json | compose_query images)
   changed=()
@@ -341,15 +432,19 @@ prepare() {
 ######### boot-check #########
 
 BOOT_PROJECT=""
+BOOT_OVERRIDE=""
+# The new configuration's own files, then the boot-check override: haf publishes only p2p, on
+# 127.0.0.1, whatever ports the configuration's files (e.g. exposed/) give it.
 boot_compose() {
   PROJECT_NAME="$BOOT_PROJECT" NETWORK_NAME="$BOOT_PROJECT" COMPOSE_PROFILES=core \
-    P2P_PORT_MAPPING="127.0.0.1::2001" compose "$NEW_ENV" -p "$BOOT_PROJECT" "$@"
+    compose "$NEW_ENV" -f "$BOOT_OVERRIDE" -p "$BOOT_PROJECT" "$@"
 }
 
 boot_cleanup() {
   set +e
   echo "Removing the boot-check project $BOOT_PROJECT"
   boot_compose down --timeout 120
+  rm -f "$BOOT_OVERRIDE"
 }
 
 boot_check() {
@@ -357,6 +452,14 @@ boot_check() {
   require_check
   BOOT_PROJECT="$(env_value "$LIVE_ENV" PROJECT_NAME)-boot-check"
   BOOT_PROJECT=${BOOT_PROJECT#-}
+  BOOT_OVERRIDE=$(mktemp --suffix=.boot-check.yml)
+  trap 'rm -f "$BOOT_OVERRIDE"' EXIT
+  cat > "$BOOT_OVERRIDE" <<'EOF'
+services:
+  haf:
+    ports: !override
+      - "127.0.0.1::2001"
+EOF
 
   # The boot check must not reach the live data or the live stack's published ports.
   while read -r _ source; do
@@ -402,6 +505,7 @@ boot_check() {
   boot_compose stop haf
   exit_code=$(docker inspect -f '{{.State.ExitCode}}' "$container")
   boot_compose down
+  rm -f "$BOOT_OVERRIDE"
   trap - EXIT
   [ "$exit_code" = 0 ] || die "HAF exited with code $exit_code on shutdown; check its logs before swapping"
   echo "Boot check passed.  The copy has advanced past the snapshot by whatever it synced; that is fine."
@@ -438,6 +542,7 @@ rollback() {
   fi
   dataset="$(env_value "$backup" ZPOOL)/$(env_value "$backup" TOP_LEVEL_DATASET)"
   zfs list "$dataset" >/dev/null 2>&1 || die "$backup uses $dataset, which no longer exists"
+  require_compose_files "$backup"
   echo "This stops the stack on $LIVE_DATASET and restarts it on $dataset using $backup."
   confirm "Roll back now?"
   compose "$LIVE_ENV" down

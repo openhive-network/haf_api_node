@@ -147,7 +147,7 @@ lint-shellcheck:
     # (see !241), so lint them. .shellcheckrc at the repo root follows the
     # sourced libs (source-path=SCRIPTDIR) so callers are checked in context.
     - shellcheck -f gcc healthchecks/checks/*.sh healthchecks/*.sh early-app-start/*.sh
-      transfer_zfs_datasets.sh switch_zfs_datasets.sh ci/scripts/test-zfs-transfer.sh
+      transfer_zfs_datasets.sh switch_zfs_datasets.sh ci/scripts/test-zfs-transfer.sh ci/scripts/test-switch-compose-files.sh
   tags:
     - public-runner-docker
 
