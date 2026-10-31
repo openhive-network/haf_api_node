@@ -346,7 +346,9 @@ if [ ! -z "${SWAP_LOGS_DATASET}" ]; then
 fi
 
 stdbuf -o0 echo -n "Taking snapshot..."
-if ! zfs snap -r "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"; then
+# transfer_zfs_datasets.sh refuses to send snapshots without this property: one taken
+# without the unmount/sync above can carry a stale shared_memory.bin
+if ! zfs snap -r -o haf_api_node:taken_by=snapshot_zfs_datasets.sh "${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"; then
   echo " FAILED"
   echo "ERROR: zfs snap -r failed for ${ZPOOL}/${TOP_LEVEL_DATASET}@${SNAPSHOT_NAME}"
   exit 1
