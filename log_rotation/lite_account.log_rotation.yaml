@@ -1,0 +1,7 @@
+services:
+  lite-account-install:
+    logging:
+      driver: local
+  lite-account-block-processing:
+    logging:
+      driver: local

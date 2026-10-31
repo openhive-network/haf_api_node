@@ -1,0 +1,7 @@
+services:
+  l2-framework-install:
+    logging:
+      driver: local
+  l2-framework-block-processing:
+    logging:
+      driver: local

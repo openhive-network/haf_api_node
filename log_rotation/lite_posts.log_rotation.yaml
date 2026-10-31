@@ -1,0 +1,7 @@
+services:
+  lite-posts-install:
+    logging:
+      driver: local
+  lite-posts-block-processing:
+    logging:
+      driver: local

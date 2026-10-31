@@ -1,0 +1,7 @@
+services:
+  lite-social-install:
+    logging:
+      driver: local
+  lite-social-block-processing:
+    logging:
+      driver: local

@@ -1,0 +1,10 @@
+services:
+  lite-gateway-install:
+    logging:
+      driver: local
+  lite-gateway-uninstall:
+    logging:
+      driver: local
+  lite-gateway:
+    logging:
+      driver: local
