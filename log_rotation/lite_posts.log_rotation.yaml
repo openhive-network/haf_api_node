@@ -5,3 +5,6 @@ services:
   lite-posts-block-processing:
     logging:
       driver: local
+  lite-openapi-spec:
+    logging:
+      driver: local

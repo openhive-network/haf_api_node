@@ -97,6 +97,12 @@ backend hived_openapi_spec {
     .port = "80";
 }
 
+# the lite.* spec runs only with the lite apps, so go through haproxy (see 30-proxies.cfg)
+backend lite_openapi_spec {
+    .host = "haproxy";
+    .port = "7020";
+}
+
 #backend hivesense_swagger {
 #     .host = "hivesense-swagger";
 #     .port = "81";
@@ -250,6 +256,9 @@ sub vcl_recv {
     } elseif (req.url == "/hived-api/") {
         set req.url = "/openapi.json";
         set req.backend_hint = hived_openapi_spec;
+    } elseif (req.url == "/lite-api/") {
+        set req.url = "/openapi.json";
+        set req.backend_hint = lite_openapi_spec;
     } elseif (req.url ~ "^/hafsql") {
         # redirect /hafsql and /hafsql/* to hafsql
         set req.backend_hint = hafsql;
