@@ -397,6 +397,126 @@ docker compose up -d
 
 Note: snapshot_zfs_datasets.sh unmounts the HAF datasets, takes a snapshot, and remounts them. Since it unmounts the datasets, the script will fail if you have anything accessing the datasets. In particular, be sure you don't have any terminals open with a current working directory set to those datasets. In theory, the script shouldn't have to unmount the datasets before taking the snapshot, but we have occassionally encountered issues where the snapshots didn't get all needed data.
 
+To copy a node's data to another host, see [Moving a node's datasets to another host](#moving-a-nodes-datasets-to-another-host).
+
+## Moving a node's datasets to another host
+
+Use this to replace a node's data with another node's copy (e.g. a freshly replayed or upgraded node
+becoming a public API node), or to seed a new node from an existing one.  Don't improvise it with
+`docker stop`, `zfs snapshot -r` and `zfs send -R`:
+
+- a snapshot taken without `snapshot_zfs_datasets.sh` can carry a `shared_memory.bin` older than the
+  RocksDB comment store, and hived then refuses to start (`Inconsistency in last irreversible block`);
+- `zfs send -R` fails when `blockchain` is a clone of a dataset outside the tree (which
+  `clone_zfs_datasets.sh` leaves behind);
+- a hand-rolled `nc -l` accepts one connection, so a probe or an early sender breaks the transfer;
+- the target's profiles may bind-mount directories the source never had (e.g. `hivesense/llama-cpu`),
+  and `docker compose up` then fails halfway.
+
+Two scripts cover the procedure.  `transfer_zfs_datasets.sh` sends one compressed stream per dataset,
+parents first, so clones need no origin on the target; datasets are received unmounted, re-running it
+skips datasets that already arrived, and an incremental mode refreshes a long first copy in minutes.
+`switch_zfs_datasets.sh` checks, prepares and boot-tests the copy on the target while the target's
+live stack keeps serving, then swaps to it, with a one-command rollback.  The live stack is only
+stopped in step 7.
+
+Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receives it as
+`haf-pool/haf-datadir-20261030` on `dst-host`.  Run everything from the haf_api_node directory.
+
+1. **Snapshot the source.**  The source stack must be stopped for the snapshot, and only for it;
+   `transfer_zfs_datasets.sh` refuses snapshots that `snapshot_zfs_datasets.sh` did not take (it tags them):
+   ```bash
+   docker compose down
+   sudo ./snapshot_zfs_datasets.sh 20261030-move
+   docker compose up -d        # the transfer reads from the snapshot
+   ```
+2. **Plan, without sending anything** (streams, sizes, mount state, what the target already has, and a
+   space verdict):
+   ```bash
+   sudo ./transfer_zfs_datasets.sh send --check 20261030-move dst-host:haf-pool/haf-datadir-20261030
+   ```
+   `SPACE: OK` means the copy fits alongside the target's live data.  `WARNING` means it fits but leaves
+   the pool fuller than `--max-capacity` (default 80%; ZFS slows down past 80-90%), so `send` needs
+   `--force`.  `FAIL` means it does not fit: free space first.  Destroying the target's old dataset makes
+   room but removes the rollback path, so prefer another pool.
+3. **Transfer.**  Over ssh (key-based; remote `zfs` runs through `sudo -n` unless you log in as root;
+   under `sudo` the script uses `$SUDO_USER`'s keys):
+   ```bash
+   sudo ./transfer_zfs_datasets.sh send 20261030-move dst-host:haf-pool/haf-datadir-20261030
+   ```
+   Without ssh keys between the hosts, start a listener on the target and point the sender at it:
+   ```bash
+   dst-host$ sudo ./transfer_zfs_datasets.sh receive --port=7700 haf-pool/haf-datadir-20261030   # prints a token
+   src-host$ sudo ./transfer_zfs_datasets.sh send --token=<token> 20261030-move tcp://dst-host:7700
+   ```
+   Each connection carries one request with the token in its header; a connection that closes without
+   a request, or presents the wrong token, is dropped before `zfs recv` runs, and the sender retries until the listener
+   accepts it, so probes and start-up order don't matter.  The sender waits for the receiver to
+   confirm each dataset.  This transport is not encrypted; use it on trusted networks only.
+   Streams are buffered with `mbuffer` (or `pv`) when installed (`--buffer=`).  If the transfer
+   breaks, run the same command again: datasets that already hold the snapshot are skipped.
+4. **Catch up just before the swap.**  Repeat step 1 with a new name, then send only the changes;
+   the target rolls each dataset back to `@20261030-move` (`zfs recv -F`) before applying them:
+   ```bash
+   sudo ./transfer_zfs_datasets.sh send --incremental-from=20261030-move 20261031-move dst-host:haf-pool/haf-datadir-20261030
+   ```
+   The receiving side refuses to roll back a dataset that has open files, so the live node is safe
+   from a mistyped destination.  The rollback also removes what `prepare` and the boot check (steps 5
+   and 6) added to the copy, so if you catch up after them, run `prepare` again; `swap` refuses a copy
+   that lacks a bind-mounted directory.  Don't catch up while the boot check runs.
+5. **Write the new configuration** on the target: copy the target's `.env` to e.g. `.env.new` and
+   change only
+   - `TOP_LEVEL_DATASET` (and `TOP_LEVEL_DATASET_MOUNTPOINT`, if it is set explicitly) to the copy;
+   - the image pins of HAF and of every app that installs into the database (`HIVE_API_NODE_VERSION`,
+     `HAF_VERSION`, `HIVEMIND_VERSION`, ...) to the source's values: the database was built by those
+     versions.  If the source runs apps through compose additions of its own, bring those over too
+     (including their `pg_hba` rows in `PG_ACCESS`).
+
+   Hostnames, TLS/proxy settings, `COMPOSE_PROFILES` and other site settings stay the target's own.
+   Then check it (copy the source's env file over as e.g. `source.env` so the image check can run):
+   ```bash
+   sudo ./switch_zfs_datasets.sh --new-env=.env.new --source-env=source.env check
+   sudo ./switch_zfs_datasets.sh --new-env=.env.new --source-env=source.env prepare
+   ```
+   `check` shows the copy's datasets and whether they are mounted, every directory the new
+   configuration bind-mounts that the copy lacks (target-only directories), image mismatches, and the
+   names of the settings that differ from the live `.env`.  `prepare` mounts the copy, copies the
+   target-only directories from the live datadir (creating them empty when the live datadir lacks them
+   too) and checks again.  Both fail if any service of the new configuration would still mount the
+   live datadir.
+6. **Boot the copy before any downtime:**
+   ```bash
+   sudo ./switch_zfs_datasets.sh --new-env=.env.new --source-env=source.env boot-check
+   ```
+   This starts HAF alone on the copy as a separate compose project (`<PROJECT_NAME>-boot-check`, with
+   its own network and the p2p port published on 127.0.0.1 only), waits up to `--boot-timeout`
+   (default 1 hour) for it to become healthy, failing at once on hived's shared-memory/RocksDB
+   inconsistency error, then stops it cleanly and removes the project.  HAF may sync a few blocks
+   meanwhile; that is fine.
+7. **Swap:**
+   ```bash
+   sudo ./switch_zfs_datasets.sh --new-env=.env.new --source-env=source.env swap
+   ```
+   It re-runs the check, stops the live stack, saves `.env` as `.env.before-switch.<time>`, installs
+   `.env.new` as `.env` and starts the stack on the copy.  The old datasets are left untouched.
+8. **Roll back if needed:**
+   ```bash
+   sudo ./switch_zfs_datasets.sh rollback     # or --restore-from=.env.before-switch.<time>
+   ```
+   stops the stack, restores the newest `.env.before-switch.*` and starts the stack on the old datasets.
+9. **Delete the old datasets** only once the node runs well on the copy, as a separate, explicit step;
+   nothing above deletes them, and afterwards there is nothing to roll back to:
+   ```bash
+   zfs list -r -t all haf-pool/haf-datadir     # review what will be deleted
+   sudo zfs destroy -r haf-pool/haf-datadir
+   ```
+   If a dataset elsewhere is a clone of one of these snapshots, `zfs destroy` refuses; `zfs promote`
+   that clone first.
+
+`ci/scripts/test-zfs-transfer.sh` exercises the transfer end to end on two throwaway file-backed
+pools (run it as root on a host with ZFS; it skips, naming the reason, elsewhere).  CI does not run
+it: its runners have no ZFS.
+
 ## Deleting Hivemind data from your database (or a similar app's data)
 
 You may want to remove the Hivemind app's data from your database -- either because you no longer
@@ -546,6 +666,8 @@ Example:
 ```markdown
 sudo ./clone_zfs_datasets.sh haf-pool/haf-datadir haf-pool/haf-datadir-test-upgrade
 ```
+To copy datasets to another host instead, see
+[Moving a node's datasets to another host](#moving-a-nodes-datasets-to-another-host).
 
 ## snapshot_zfs_datasets.sh
 This script creates a ZFS snapshot of the HAF datasets. It unmounts the datasets, takes a snapshot, and then remounts them. It also provides options for handling log files during the snapshot process.
@@ -564,6 +686,14 @@ Example:
 ```
 sudo ./snapshot_zfs_datasets.sh 20231023T1831Z-haf-only
 ```
+
+Snapshots carry the property `haf_api_node:taken_by=snapshot_zfs_datasets.sh`, which
+`transfer_zfs_datasets.sh` requires before it sends one to another host.
+
+## transfer_zfs_datasets.sh and switch_zfs_datasets.sh
+Copy a node's datasets to another host and switch that host over to them.  See
+[Moving a node's datasets to another host](#moving-a-nodes-datasets-to-another-host) for the
+procedure, and `--help` of each script for all options.
 
 ## rollback_zfs_datasets.sh
 This script rolls back ZFS datasets to a specified snapshot. It unmounts the datasets, rolls them back to the named snapshot, and then remounts them. This process will result in the loss of all data on those datasets since the snapshot.
