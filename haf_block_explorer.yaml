@@ -19,6 +19,8 @@ services:
         condition: service_healthy
       hafah-install:
         condition: service_completed_successfully
+      l2-framework-install:
+        condition: service_completed_successfully
       reputation-tracker-install:
         condition: service_completed_successfully
   # to uninstall HAF Block Explorer, shut down the stack and run a command like:
