@@ -2,13 +2,14 @@
 # subscriptions, profiles, lite-granular community moderation) — consumer of l2_framework,
 # lite_account, lite_posts AND hivemind (its community moderation ops are validated against
 # hivemind's roles at index time, so its loop is gated on hivemind in HAF's application
-# registry). One of the lite HAF apps (profiles `apps` and `lite`): l2_framework ->
-# lite_account -> lite_posts -> lite_social. See .env.example ("Lite accounts").
+# registry). One of the lite HAF apps (l2_framework -> lite_account -> lite_posts ->
+# lite_social), but unlike the others it needs hivemind, so it is in `apps` and not in `lite`:
+# a lite-only stack (no hivemind) does not run it. To add it to a `lite` stack, enable
+# `hivemind` and `lite-social` too. See .env.example ("Lite accounts").
 services:
   lite-social-install:
     image: ${LITE_SOCIAL_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_social/lite-social}:${LITE_SOCIAL_VERSION:-latest}
     profiles:
-      - lite
       - apps
       - lite-social
     environment:
@@ -37,7 +38,6 @@ services:
   lite-social-block-processing:
     image: ${LITE_SOCIAL_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_social/lite-social}:${LITE_SOCIAL_VERSION:-latest}
     profiles:
-      - lite
       - apps
       - lite-social
     environment:
