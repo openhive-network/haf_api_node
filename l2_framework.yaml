@@ -1,6 +1,8 @@
 # L2 framework: temporal L1 authority tracking + the L2 transaction driver (always syncs from genesis)
 # One of the lite HAF apps (profiles `apps` and `lite`): l2_framework -> lite_account ->
 # lite_posts; the `lite` profile adds the gateway. See .env.example ("Lite accounts").
+# haf_block_explorer also depends on l2_framework (it reads account authorities from the
+# l2.authority_* tables), so both services also carry the `hafbe` profile.
 services:
   l2-framework-install:
     image: ${L2_FRAMEWORK_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/l2_framework/l2-framework}:${L2_FRAMEWORK_VERSION:-latest}
@@ -8,6 +10,7 @@ services:
       - lite
       - apps
       - l2-framework
+      - hafbe
     environment:
       POSTGRES_HOST: haf
     networks:
@@ -24,6 +27,7 @@ services:
       - lite
       - apps
       - l2-framework
+      - hafbe
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: l2_framework_owner
