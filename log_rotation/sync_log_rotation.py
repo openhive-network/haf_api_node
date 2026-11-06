@@ -115,7 +115,7 @@ def get_services_from_file(file_path):
     return list(data.get('services', {}).keys())
 
 
-def is_valid_log_rotation_entry(service_config):
+def is_valid_log_rotation_entry(service_config) -> bool:
     """Check if a service config in a log rotation file is a valid logging override.
 
     A valid entry has a 'logging' key. Entries that define their own image/command/etc
@@ -152,7 +152,7 @@ def check_log_rotation_file(log_rotation_path, expected_services):
     return problems
 
 
-def fix_log_rotation_file(log_rotation_path, expected_services):
+def fix_log_rotation_file(log_rotation_path, expected_services) -> None:
     """Create or update a log rotation file to match expected services."""
     data = load_yaml(log_rotation_path)
 
@@ -183,7 +183,7 @@ def fix_log_rotation_file(log_rotation_path, expected_services):
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
 
-def fix_manifest(expected_includes):
+def fix_manifest(expected_includes) -> None:
     """Update compose.log_rotation.yml to include all expected files."""
     includes = sorted(expected_includes)
     with open(LOG_ROTATION_MANIFEST, 'w') as f:
@@ -192,7 +192,7 @@ def fix_manifest(expected_includes):
             f.write(f"  - {path}\n")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description='Verify or fix log rotation configuration drift')
     group = parser.add_mutually_exclusive_group()
