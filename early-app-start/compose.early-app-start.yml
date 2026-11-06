@@ -77,6 +77,14 @@ services:
   nft-tracker-block-processing:
     depends_on: *early-depends-on
 
+  # The lite apps (lite-account, lite-posts, lite-social) stay out: their block
+  # processing reads custom_json operations through l2.process_block_range,
+  # which needs indexes keep-monotonic defers.
+  l2-framework-install:
+    depends_on: *early-depends-on
+  l2-framework-block-processing:
+    depends_on: *early-depends-on
+
   hivesense-install-schema:
     depends_on: *early-depends-on
   # Defined only by hivesense-local.yaml (HIVESENSE_CONFIGURATION=local).  The
