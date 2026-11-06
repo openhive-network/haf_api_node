@@ -630,6 +630,8 @@ WHERE l.locktype = 'advisory';
 | hivesense (block-processing, SQL) | `hivemind`, `hivesense` | `hivesense` (via `install_app.sh`) |
 | hivesense-sync (Python) | `hivemind`, `hivesense` | (same installer as above) |
 | proxy-whitelist | `hivemind`, `proxy-whitelist` | `proxy-whitelist` (via `install_app.sh`) |
+| haf_fyp (block-processing, SQL) | `haf_fyp`, `hivemind` | `haf_fyp` (via `install_app.sh`) |
+| haf_fyp-ranker (Python) | `haf_fyp` | (same installer as above) |
 
 Apps not in this table (balance_tracker, reputation_tracker, nft_tracker, hafah, haf_block_explorer) have idempotent installers and don't need lock coordination today.
 
