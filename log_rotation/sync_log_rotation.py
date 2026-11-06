@@ -87,7 +87,6 @@ def get_log_rotation_filename(compose_filename):
     """Derive the log rotation filename from a compose filename.
 
     e.g. 'haf_base.yaml' -> 'log_rotation/haf_base.log_rotation.yaml'
-         '${JSONRPC_API_SERVER_NAME:-drone}.yaml' -> 'log_rotation/${JSONRPC_API_SERVER_NAME:-drone}.log_rotation.yaml'
     """
     base, ext = os.path.splitext(compose_filename)
     return os.path.join(LOG_ROTATION_DIR, f"{base}.log_rotation.yaml")

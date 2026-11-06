@@ -313,7 +313,7 @@ Currently available profiles are:
 - `core`: the minimal HAF system of a database and hived
 - `admin`: useful tools for administrating HAF: pgadmin, pghero
 - `apps`: core HAF apps: hivemind, HAfAH, haf-block-explorer
-- `servers`: services for routing/caching API calls: haproxy, jussi,varnish
+- `servers`: services for routing/caching API calls: haproxy, drone, varnish
 
 The front-end services (caddy, haproxy, haproxy-healthchecks, varnish, drone,
 pgbouncer) use `restart: unless-stopped`: if one of them exits — for example

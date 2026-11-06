@@ -79,7 +79,7 @@ caddy_validate() {
     for variant in "${CADDY_VARIANTS[@]}"; do
         read -r name vars <<< "$variant"
         dir="$out/caddy-validate/$name"; log="$out/caddy-validate-$name.log"; t0=$SECONDS; rc=0
-        local -a envs=(JSONRPC_API_SERVER_NAME=drone ADMIN_ENDPOINT_PROTOCOL=https
+        local -a envs=(ADMIN_ENDPOINT_PROTOCOL=https
             "XDG_DATA_HOME=$PWD/$out/caddy-xdg" "XDG_CONFIG_HOME=$PWD/$out/caddy-xdg")
         # comma-separated CADDY_SITES stand for "a, b" (one word per variant field)
         local v; for v in $vars; do envs+=("${v//,/, }"); done

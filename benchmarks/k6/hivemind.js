@@ -1,5 +1,5 @@
 // Hivemind (Social Graph API) benchmark
-// JSON-RPC at root / via drone/jussi
+// JSON-RPC at root / via drone
 
 import http from "k6/http";
 import { check, group, sleep } from "k6";

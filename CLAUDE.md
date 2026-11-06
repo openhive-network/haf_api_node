@@ -5,7 +5,7 @@
 **haf_api_node** is a docker-compose based deployment stack for running a complete HAF (Hive Application Framework) API node. It orchestrates:
 - HAF PostgreSQL database with hived consensus node
 - Multiple HAF applications (Hivemind, HAfAH, Balance/Reputation/NFT Trackers, Block Explorer)
-- API routing, caching, and load balancing (HAProxy, Caddy, Varnish, Jussi)
+- API routing, caching, and load balancing (HAProxy, Caddy, Varnish, Drone)
 - Connection pooling (PgBouncer) and monitoring (Prometheus/Grafana/Loki)
 
 ## Tech Stack
@@ -45,7 +45,6 @@ haf_api_node/
 ├── haproxy/                 # Load balancer config (*.cfg files)
 ├── pgbouncer/               # Connection pooler config
 ├── varnish/                 # HTTP cache config
-├── jussi/                   # JSON-RPC cache config
 ├── monitoring/              # Prometheus/Grafana/Loki configs
 ├── healthchecks/            # HAProxy health check scripts
 ├── ci/                      # CI scripts and configs
@@ -109,7 +108,6 @@ sudo ./reduce_writebacks.sh      # Reduce disk writebacks
 - **`haproxy/*.cfg`** - Load balancer rules (00-global, 10-defaults, 30-proxies)
 - **`caddy/Caddyfile`** - Web server routing with `/admin/*` paths
 - **`varnish/default.vcl`** - HTTP cache rules
-- **`jussi/config.json`** - JSON-RPC cache configuration
 
 ## Coding Conventions
 
