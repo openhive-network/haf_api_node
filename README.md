@@ -174,17 +174,21 @@ COMPOSE_FILE=compose.yml:early-app-start/compose.early-app-start.yml
   connections, the HAF extension is installed, the events queue has been written and hived is
   connected), or until hived's API answers, whichever comes first.
 - the install and block-processing services of hafah, hivemind, reputation tracker, balance
-  tracker, HAF block explorer, NFT tracker and hivesense start once `haf-db-ready` has finished,
+  tracker, HAF block explorer, NFT tracker, l2_framework and hivesense start once `haf-db-ready` has finished,
   instead of waiting for hived's API.  Each app then waits inside its own container until HAF
   reports that it is ready for block processing.
 - nothing else changes: the API servers (PostgREST, rewriters), haproxy, drone, uninstall services,
   hivesense-sync and the apps that don't support early block processing yet (haf_stats, haf_fyp,
-  proxy_whitelist, HafSQL) still wait for HAF to be fully up.
+  proxy_whitelist, HafSQL, and the lite apps lite_account, lite_posts and lite_social) still wait
+  for HAF to be fully up.
 
 It needs a HAF version that has the `psql-massive-index-policy` option (older hived refuses to
 start with `unrecognised option`) and app versions that wait for HAF's block-processing readiness
 rather than full readiness to gain anything: an app that predates that waits inside its
-block-processing container until HAF is fully up, as it does without early start.  The block-processing healthchecks' start periods (48h, 72h for
+block-processing container until HAF is fully up, as it does without early start.  For l2_framework
+that means an `l2-framework` image that opts the `l2` context into early block processing
+(l2_framework#12): an older image installs fine but its block processing waits for HAF to be fully
+up inside `hive.app_next_iteration`.  The block-processing healthchecks' start periods (48h, 72h for
 hivemind) count from the container's start, which is now the start of the replay.
 
 ###### Reducing Writebacks
