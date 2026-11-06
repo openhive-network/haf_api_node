@@ -135,6 +135,9 @@ services:
         condition: service_healthy
       haf-fyp-install:
         condition: service_completed_successfully
+        # This service holds the shared haf_fyp lock, so a recreated install would skip
+        # while it runs; restart: true has Compose stop it around the install.
+        restart: true
   # The ranker scores candidates and writes the feed cache on a schedule, plus on demand
   # when the API publishes a refresh on Redis. It connects directly to haf, not through
   # pgbouncer, because it holds long transactions with autocommit off across cycles. It
@@ -185,6 +188,8 @@ services:
         condition: service_healthy
       haf-fyp-install:
         condition: service_completed_successfully
+        # Holds the shared haf_fyp lock too; see haf-fyp-block-processing.
+        restart: true
       haf-fyp-redis:
         condition: service_healthy
   # The write API, served at /haf-fyp-admin/ (HAProxy 7018). Despite the prefix only
