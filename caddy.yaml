@@ -18,7 +18,6 @@ services:
     environment:
       PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME}
       CADDY_SITES: ${CADDY_SITES:-${PUBLIC_HOSTNAME}}
-      JSONRPC_API_SERVER_NAME: ${JSONRPC_API_SERVER_NAME:-drone}
       ADMIN_ENDPOINT_PROTOCOL: ${ADMIN_ENDPOINT_PROTOCOL:-https}
       # TLS configuration (new vars with backwards compatibility for old vars)
       CADDY_TLS_SELF_SIGNED: ${CADDY_TLS_SELF_SIGNED:-}

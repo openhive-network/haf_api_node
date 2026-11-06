@@ -1,7 +1,7 @@
 // Performance tests for JSON-RPC API endpoints
 //
 // Covers hived and HAfAH JSON-RPC calls routed through
-// the main POST / endpoint via Jussi/Drone.
+// the main POST / endpoint via Drone.
 //
 // Uses real blockchain data:
 // - Block numbers in the 1M-80M range (where transactions exist)

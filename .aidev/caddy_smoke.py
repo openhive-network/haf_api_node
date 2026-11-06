@@ -52,7 +52,7 @@ import zstandard
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CADDY_PORT = 18080
 CADDY_ADMIN = "127.0.0.1:18019"
-# The template proxies POST / to http://{$JSONRPC_API_SERVER_NAME}:9000.
+# The template proxies POST / to http://drone:9000; the stub listens on the same port.
 JSONRPC_PORT = 9000
 ACCEPT_ENCODING = "zstd, br, gzip, deflate"
 READY_TIMEOUT_S = 30
@@ -146,7 +146,8 @@ def point_upstreams_at_stubs(caddyfile: str) -> None:
     """Rewrite `http://<upstream>` in the rendered Caddyfile to the stub's loopback port."""
     with open(caddyfile, encoding="utf-8") as handle:
         text = handle.read()
-    for name, port in UPSTREAMS.items():
+    targets = [*UPSTREAMS.items(), (f"drone:{JSONRPC_PORT}", JSONRPC_PORT)]
+    for name, port in targets:
         text, count = re.subn(
             rf"http://{re.escape(name)}(?=[\s{{])", f"http://127.0.0.1:{port}", text
         )
@@ -162,7 +163,6 @@ def caddy_env(xdg: str) -> dict[str, str]:
         {
             "CADDY_SITES": f"http://localhost:{CADDY_PORT}",
             "CADDY_TLS_SELF_SIGNED": "false",
-            "JSONRPC_API_SERVER_NAME": "127.0.0.1",
             "ADMIN_ENDPOINT_PROTOCOL": "https",
             "CADDY_ADMIN": CADDY_ADMIN,
             "XDG_DATA_HOME": os.path.join(xdg, "data"),

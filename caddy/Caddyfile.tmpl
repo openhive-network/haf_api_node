@@ -247,7 +247,7 @@ Disallow: /wallet/
       reverse_proxy http://denser-wallet
   }
 
-  # Route all POST calls to the root URL to jussi/drone (assume they're old-style JSON-RPC calls)
+  # Route all POST calls to the root URL to drone (assume they're old-style JSON-RPC calls)
   @post_to_root {
     method POST
     path /
@@ -260,14 +260,14 @@ Disallow: /wallet/
       Access-Control-Allow-Headers "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range"
       Access-Control-Max-Age "3600"
     }
-    reverse_proxy http://{$JSONRPC_API_SERVER_NAME}:9000 {
+    reverse_proxy http://drone:9000 {
       # Retry once on transient errors. Drone reaps idle keepalive connections
       # before Caddy's pool notices, so a low-traffic standby occasionally hits
       # "use of closed network connection" on the first attempt; the retry
       # opens a fresh connection and succeeds.
       lb_try_duration 2s
       lb_retries 1
-      # remove any CORS headers sent by jussi/drone so we don't have duplicates
+      # remove any CORS headers sent by drone so we don't have duplicates
       header_down -Access-Control-Allow-Origin
       header_down -Access-Control-Allow-Methods
       header_down -Access-Control-Allow-Headers

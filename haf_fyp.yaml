@@ -312,9 +312,7 @@ services:
     restart: on-failure
     networks:
       - haf-network
-  # Named haf-fyp-redis because jussi.yaml already defines a service called `redis`, and
-  # a duplicate service name across included files merges or errors depending on the
-  # Compose version. Holds only rate-limit counters and the ranker's pub/sub channel, so
+  # Holds only rate-limit counters and the ranker's pub/sub channel, so
   # no volume. Unauthenticated, like everything else on the app network.
   haf-fyp-redis:
     image: redis:7-alpine

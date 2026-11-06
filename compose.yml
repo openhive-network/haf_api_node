@@ -12,7 +12,7 @@ include:
   - haf_fyp.yaml
   - haf_block_explorer.yaml
   - varnish.yaml
-  - ${JSONRPC_API_SERVER_NAME:-drone}.yaml
+  - drone.yaml
   - pgbouncer.yaml
   - haproxy.yaml
   - caddy.yaml

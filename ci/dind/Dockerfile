@@ -8,7 +8,6 @@ RUN <<-EOF
 
     mkdir -p /haf-api-node/caddy/snippets
     mkdir -p /haf-api-node/caddy/admin_html
-    mkdir -p /haf-api-node/jussi
     mkdir -p /haf-api-node/pgadmin
     mkdir -p /haf-api-node/varnish
 EOF

@@ -1,5 +1,5 @@
 include:
-  - log_rotation/${JSONRPC_API_SERVER_NAME:-drone}.log_rotation.yaml
+  - log_rotation/drone.log_rotation.yaml
   - log_rotation/backend.log_rotation.yaml
   - log_rotation/balance_tracker.log_rotation.yaml
   - log_rotation/caddy.log_rotation.yaml
