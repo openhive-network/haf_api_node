@@ -43,9 +43,11 @@ send options:
   --force, -f                send even if the space check warns
 
 receive (on the target host) listens for 'send ... tcp://' and receives into pool/dataset.  Each
-connection is one request; one that closes without a request, or presents the wrong token, is
-dropped without touching the pool, so probes or an early sender only cost the sender a retry (a
-connection that stays open silently holds the listener until it closes).  It exits after the
+connection is one request; one that closes without a request is dropped and one that presents
+the wrong token is refused, both without touching the pool.  The sender retries a connection that
+is refused or closes before the receiver replies, so probes, an early sender or the listener
+re-arming between datasets only cost it a retry (a connection that stays open silently holds the
+listener until it closes).  It exits after the
 sender reports that every dataset arrived.  The stream is not encrypted: use trusted networks only.
   --port=N                   listen port (default 7700)
   --listen-address=addr      listen on this address only
@@ -145,8 +147,12 @@ receive_main() {
     line=""
     IFS= read -r line <&"$nc_in" || true
     read -r magic peer_token cmd rel kind <<< "$line" || true
-    if [ "$magic" != HAFZFS1 ] || [ "$peer_token" != "$token" ]; then
+    if [ "$magic" != HAFZFS1 ]; then
       [ -z "$line" ] || echo "$(date -u +%FT%TZ) ignored a connection without a valid header"
+    elif [ "$peer_token" != "$token" ]; then
+      # a sender retries a connection closed without a reply, so tell it why it was refused
+      echo "$(date -u +%FT%TZ) refused a sender with the wrong token"
+      echo "ERR wrong token" >&"$nc_out" || true
     else
       case $cmd in
         STATE)
@@ -188,15 +194,24 @@ receive_main() {
 
 ######### send #########
 
-# One request over tcp:// on fd 3.  Retries the connection, so a receiver that is not
-# listening yet (or is busy dropping a probe) only delays us.
-_tcp_open() {
+# One request over tcp:// on fd 3; sets TCP_REPLY to the receiver's first reply line.  Retries,
+# within --connect-timeout, a refused connect and a connection that closes or resets before that
+# reply (a receiver not listening yet, dropping a probe, or re-arming its listener after a
+# dataset): nothing past the header has been sent then, so the request is safe to repeat.
+_tcp_request() {
   local deadline=$((SECONDS + CONNECT_TIMEOUT))
-  until { exec 3<>"/dev/tcp/$TCP_HOST/$TCP_PORT"; } 2>/dev/null; do
-    [ "$SECONDS" -lt "$deadline" ] || die "could not connect to $TCP_HOST:$TCP_PORT within ${CONNECT_TIMEOUT}s"
+  while true; do
+    if { exec 3<>"/dev/tcp/$TCP_HOST/$TCP_PORT"; } 2>/dev/null; then
+      # the subshell takes the SIGPIPE of a connection already reset
+      if ( printf 'HAFZFS1 %s %s\n' "$TOKEN" "$*" >&3 ) 2>/dev/null && IFS= read -r TCP_REPLY <&3 2>/dev/null; then
+        return 0
+      fi
+      _tcp_close
+      echo "$(date -u +%FT%TZ) the receiver closed the $1 connection before replying; retrying" >&2
+    fi
+    [ "$SECONDS" -lt "$deadline" ] || die "no reply to '$*' from $TCP_HOST:$TCP_PORT within ${CONNECT_TIMEOUT}s"
     sleep 5
   done
-  printf 'HAFZFS1 %s %s\n' "$TOKEN" "$*" >&3
 }
 
 _tcp_close() {
@@ -224,10 +239,14 @@ fetch_target_state() {
   if [ -n "$SSH_HOST" ]; then
     _ssh "$SSH_HOST" "$(_remote _target_state "$TARGET")"
   else
-    _tcp_open STATE
-    while IFS= read -r line <&3; do
-      [ "$line" = END ] && break
+    _tcp_request STATE
+    case $TCP_REPLY in
+      ERR*) _tcp_close; die "receiver refused the state request: $TCP_REPLY" ;;
+    esac
+    line=$TCP_REPLY
+    while [ "$line" != END ]; do
       echo "$line"
+      IFS= read -r line <&3 || break
     done
     _tcp_close
   fi
@@ -251,9 +270,8 @@ send_one() {
   if [ -n "$SSH_HOST" ]; then
     "${send_cmd[@]}" | _buffer "$size" | _ssh "$SSH_HOST" "$(_remote _recv_into "$TARGET" "$rel" "$kind")"
   else
-    _tcp_open STREAM "$rel" "$kind"
-    IFS= read -r reply <&3 || reply="ERR connection closed"
-    [ "$reply" = GO ] || { _tcp_close; die "receiver refused $rel: $reply"; }
+    _tcp_request STREAM "$rel" "$kind"
+    [ "$TCP_REPLY" = GO ] || { _tcp_close; die "receiver refused $rel: $TCP_REPLY"; }
     "${send_cmd[@]}" | _buffer "$size" >&3
     IFS= read -r reply <&3 || reply="ERR connection closed before the receiver confirmed"
     _tcp_close
@@ -435,8 +453,7 @@ send_main() {
   done
 
   if [ -n "$TCP_HOST" ]; then
-    _tcp_open END
-    IFS= read -r _ <&3 || true
+    _tcp_request END
     _tcp_close
   fi
   echo ""
@@ -467,6 +484,7 @@ LISTEN_ADDRESS=""
 SSH_HOST=""
 TCP_HOST=""
 TCP_PORT=""
+TCP_REPLY=""
 TARGET=""
 
 eval set -- "$OPTIONS"

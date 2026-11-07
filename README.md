@@ -454,9 +454,12 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    src-host$ sudo ./transfer_zfs_datasets.sh send --token=<token> 20261030-move tcp://dst-host:7700
    ```
    Each connection carries one request with the token in its header; a connection that closes without
-   a request, or presents the wrong token, is dropped before `zfs recv` runs, and the sender retries until the listener
-   accepts it, so probes and start-up order don't matter.  The sender waits for the receiver to
-   confirm each dataset.  This transport is not encrypted; use it on trusted networks only.
+   a request is dropped, and one with the wrong token is refused (`ERR wrong token`, the sender stops),
+   both before `zfs recv` runs.  The sender retries, for up to `--connect-timeout` (default an hour), a
+   connection that is refused or that closes or resets before the receiver's first reply (nothing has
+   been streamed then), so probes, start-up order and the listener re-arming between datasets don't
+   matter.  An explicit refusal (`ERR ...`) and a failure after the receiver said `GO` are not retried.
+   The sender waits for the receiver to confirm each dataset.  This transport is not encrypted; use it on trusted networks only.
    Streams are buffered with `mbuffer` (or `pv`) when installed (`--buffer=`).  If the transfer
    breaks, run the same command again: datasets that already hold the snapshot are skipped.
 4. **Catch up just before the swap.**  Repeat step 1 with a new name, then send only the changes;
