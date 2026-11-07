@@ -218,6 +218,28 @@ _tcp_close() {
   exec 3>&-
 }
 
+# Reports to the receiver that every dataset arrived.  The receiver exits on END, so once END is
+# sent nothing is retried: a lost BYE would only be retried against a listener that is gone.  Only
+# a refused connect (the listener re-arming after the last dataset) is retried, for a short bound.
+# Every dataset is already on the target, so a failure here is a warning, never an error.
+_tcp_end() {
+  local deadline=$((SECONDS + 30)) reply=""
+  until { exec 3<>"/dev/tcp/$TCP_HOST/$TCP_PORT"; } 2>/dev/null; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "WARNING: could not reach the receiver at $TCP_HOST:$TCP_PORT to report the end; stop it by hand" >&2
+      return 0
+    fi
+    sleep 1
+  done
+  if ( printf 'HAFZFS1 %s END\n' "$TOKEN" >&3 ) 2>/dev/null && IFS= read -r -t 30 reply <&3 2>/dev/null \
+    && [ "$reply" = BYE ]; then
+    _tcp_close
+    return 0
+  fi
+  _tcp_close
+  echo "WARNING: the receiver did not confirm the end${reply:+ (it replied: $reply)}; check that it exited" >&2
+}
+
 # Command string that runs one of the receiving-side helpers on the ssh destination.
 _remote() {
   local fn="$1" script
@@ -453,8 +475,7 @@ send_main() {
   done
 
   if [ -n "$TCP_HOST" ]; then
-    _tcp_request END
-    _tcp_close
+    _tcp_end
   fi
   echo ""
   echo "$(date -u +%FT%TZ) all datasets of @$snapshot_name are on the target (received unmounted)."

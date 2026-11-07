@@ -5,7 +5,8 @@
 # dataset outside the tree, snapshots taken by snapshot_zfs_datasets.sh, then --check, a full
 # transfer behind a probe connection, a re-run that skips everything and an incremental catch-up
 # whose first dataset connection is closed before the receiver replies (retried), after checking that a
-# wrong token stops the sender at once and a listener that goes away makes it give up.
+# wrong token stops the sender at once and a listener that goes away makes it give up, and a re-run
+# whose END connection is closed without a reply (a warning, not a failure).
 # Needs root, ZFS and nc; skips (exit 0) with the reason when the host lacks them.
 # With XFER_SSH_HOST set to an ssh destination that reaches this same host (e.g. localhost,
 # logged in with $SUDO_USER's keys), the full transfer and the catch-up are repeated over ssh.
@@ -70,7 +71,7 @@ end_receiver() {
 }
 
 # Stands in for the receiver on $PORT: answers one STATE request through the real receiver on
-# $HELPER_PORT, then closes the next $1 STREAM connections without a reply and stops listening.
+# $HELPER_PORT, then closes the next $1 STREAM or END connections without a reply and stops listening.
 flaky_receiver() {
   local drops="$1" answered=0 line nc_in nc_out nc_pid up
   while [ "$answered" -eq 0 ] || [ "$drops" -gt 0 ]; do
@@ -91,7 +92,7 @@ flaky_receiver() {
         exec {up}>&-
         answered=1
         ;;
-      *" STREAM "*)
+      *" STREAM "*|*" END")
         echo "closed without a reply: $line"
         drops=$((drops - 1))
         ;;
@@ -150,6 +151,7 @@ grep -q "SPACE: WARNING" "$WORK/full.log" || fail "no space warning: $(cat "$WOR
 
 send --buffer=none s1 "tcp://127.0.0.1:$PORT"
 wait_receiver
+grep -q "Sender reports all datasets received." "$WORK/receiver.log" || fail "the receiver did not see the end: $(cat "$WORK/receiver.log")"
 if [ -n "${XFER_SSH_HOST:-}" ]; then
   send s1 "$XFER_SSH_HOST:$DST/copy-ssh"
   zfs list "$DST/copy-ssh/haf_db_store/pgdata/pg_wal@s1" >/dev/null || fail "the ssh transfer is incomplete"
@@ -212,6 +214,21 @@ if [ -n "${XFER_SSH_HOST:-}" ]; then
   zfs list "$DST/copy-ssh/shared_memory@s2" >/dev/null || fail "the ssh catch-up did not arrive"
 fi
 zfs list "$DST/copy/shared_memory@s2" >/dev/null || fail "the incremental snapshot was not received"
+
+start_receiver "$HELPER_PORT"
+until nc -z 127.0.0.1 "$HELPER_PORT"; do sleep 1; done
+flaky_receiver 1 > "$WORK/flaky.log" &
+FLAKY_PID=$!
+started=$SECONDS
+send --incremental-from=s1 s2 "tcp://127.0.0.1:$PORT" > "$WORK/lost-bye.log" 2>&1 \
+  || fail "send failed when the reply to END was lost: $(cat "$WORK/lost-bye.log")"
+[ $((SECONDS - started)) -lt 30 ] || fail "send waited on the lost reply to END"
+grep -q "WARNING: the receiver did not confirm the end" "$WORK/lost-bye.log" \
+  || fail "the lost reply to END was not reported: $(cat "$WORK/lost-bye.log")"
+grep -q "closed without a reply: .* END" "$WORK/flaky.log" || fail "the stand-in did not get END: $(cat "$WORK/flaky.log")"
+wait "$FLAKY_PID" || fail "the stand-in receiver failed: $(cat "$WORK/flaky.log")"
+FLAKY_PID=""
+end_receiver "$HELPER_PORT"
 zfs mount "$DST/copy/shared_memory" 2>/dev/null || true
 cmp "$DATADIR/shared_memory/shared_memory.bin" "$WORK/mnt/$DST/copy/shared_memory/shared_memory.bin" \
   || fail "shared_memory.bin differs after the incremental receive"
