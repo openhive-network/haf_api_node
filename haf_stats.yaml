@@ -62,6 +62,10 @@ services:
       # app is in sync. Raise it if a massive-sync batch runs longer than this. Nothing
       # routes on it; chain staleness is measured by the agent-check on 7016.
       HAF_STATS_HEALTHCHECK_MAX_AGE_SECONDS: ${HAF_STATS_HEALTHCHECK_MAX_AGE_SECONDS:-300}
+      # Connections massive sync splits independent processor groups across; live sync
+      # always uses one. 1 keeps the single-session sync. Images without haf_stats #140
+      # ignore it.
+      HAF_STATS_SYNC_PARALLELISM: ${HAF_STATS_SYNC_PARALLELISM:-1}
     networks:
       haf-network:
     restart: on-failure
