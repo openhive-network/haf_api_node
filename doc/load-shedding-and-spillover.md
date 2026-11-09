@@ -49,6 +49,60 @@ logged, but the published level stays 0 so nothing is actually shed. Arm it
 spike. All thresholds and the per-app `<APP>_SHED_MAXCONNS="normal reduced
 floor"` triples are environment variables (see `.env.example`).
 
+## Pool-metric caps (log-only by default)
+
+Each postgrest-backed agent check also reads its app postgrest's admin
+`/metrics` (port 3001, no pool connection) and sizes that backend's cap from
+the live pool: `ceil(pgrst_db_pool_max × POOL_CAP_FACTOR)` (factor 1.5, never
+below `pool_max + 1`). When `pgrst_db_pool_waiting > 0` or
+`pgrst_db_pool_timeouts_total` rose since the last poll, for
+`POOL_CAP_CONFIRMATIONS` consecutive polls, the cap steps down to `pool_max`;
+it returns after `POOL_CAP_COOLDOWN` quiet polls. The hysteresis state lives
+in `/run/poolcap/<app>` in the healthchecks container. If `/metrics` can't be
+read, the agent uses the static `*_SERVER_MAXCONN` (fail-open). A pool resize
+takes effect at the next poll after postgrest restarts, without an HAProxy
+reload.
+
+`POOL_CAP_MODE=log` (default) computes and logs the cap every poll but
+advertises exactly what Layer 2 would. `on` advertises `maxconn:<cap>`, or
+the lower of the cap and the shed-level value when `SHED_ARMED=true`. `off`
+skips `/metrics`. HAProxy keeps the last agent-set maxconn, so after going
+from `on` back to `log`/`off`, restart haproxy to restore the static caps.
+
+`*_PGRST_DB_POOL_ACQUISITION_TIMEOUT` defaults to 4s, below
+`API_QUEUE_TIMEOUT` (5s), so requests beyond the pool fail in HAProxy's queue
+with a fast 503 rather than as a later postgrest 504.
+
+Checking it on a running stack (hivesense as the example):
+
+```bash
+# the pool metrics and the cap the agent computed from them
+docker compose exec haproxy-healthchecks wget -qO- http://hivesense-postgrest:3001/metrics | grep pgrst_db_pool
+docker compose logs --since 1m haproxy-healthchecks | grep 'pool_cap: hivesense'
+# the cap HAProxy applies (slim column); with POOL_CAP_MODE=on it follows the pool
+docker compose exec haproxy sh -c 'echo "show stat" | socat stdio /run/haproxy/admin.sock' | grep '^hivesense,' | cut -d, -f1,2,7
+# resize: HIVESENSE_PGRST_DB_POOL=8, `docker compose up -d hivesense-postgrest`; slim -> 12 within two agent intervals
+# saturate: hold every pool slot (e.g. that many concurrent requests to an endpoint running pg_sleep);
+#   after POOL_CAP_CONFIRMATIONS polls the log shows TIGHTEN and slim drops to pool_max, LOOSEN after the load stops
+# fail-open: point HIVESENSE_METRICS_URL at a closed port (stopping postgrest would fail /live too) and
+#   recreate haproxy-healthchecks; the log shows "metrics unreadable", slim is HIVESENSE_SERVER_MAXCONN, the server stays UP
+```
+
+## Crawler budget on hivesense
+
+`frontend hivesense-in-7011` gives every request whose User-Agent matches
+`HIVESENSE_CRAWLER_UA_REGEX` one shared request-rate counter; above
+`HIVESENSE_CRAWLER_REQS_PER_10S` (default 30) they get `429` with
+`Retry-After: 30`. `0` disables it. Crawler traffic to similar-posts asks for
+unique posts no cache can absorb, so without this it can occupy the whole
+hivesense pool. Check it with two bursts to an uncached endpoint:
+
+```bash
+for ua in AhrefsBot 'Mozilla/5.0 Firefox/120.0'; do
+  for i in $(seq 40); do curl -s -o /dev/null -w '%{http_code}\n' -A "$ua" "https://<your node>/hivesense-api/<uncached path>"; done | sort | uniq -c
+done   # the crawler burst gets 429s (with Retry-After: 30), the browser burst none
+```
+
 ## Layer 3 — spillover to secondary backends (optional, multi-stack only)
 
 If you run more than one API stack, you can send the *excess* to secondaries

@@ -19,5 +19,7 @@ check_haf_lib
 check_sync_status "hivesense" 60 "${HIVESENSE_LIVE_URL:-http://hivesense-postgrest:3001/live}" \
   "$POSTGRES_URL_HIVESENSE" hivesense_endpoints.get_hivesense_sync_status "hivesense_endpoints, hivesense_app"
 
-shed_up "${HIVESENSE_SHED_MAXCONNS:-32 8 4}"
+# Cap from the live postgrest pool (see pool_cap_up in shed_functions.sh).
+pool_cap_up "hivesense" "${HIVESENSE_METRICS_URL:-http://hivesense-postgrest:3001/metrics}" \
+  "${HIVESENSE_SERVER_MAXCONN:-32}" "${HIVESENSE_SHED_MAXCONNS:-32 8 4}"
 exit 0

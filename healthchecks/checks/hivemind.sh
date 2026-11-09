@@ -21,5 +21,7 @@ check_sync_status "reptracker" 60 "${REPTRACKER_LIVE_URL:-http://reputation-trac
 check_sync_status "hivemind" 60 "${HIVEMIND_LIVE_URL:-http://hivemind-postgrest-server:3001/live}" \
   "$POSTGRES_URL_HIVEMIND" hivemind_endpoints.get_sync_status "hivemind_endpoints, public"
 
-shed_up "${HIVEMIND_SHED_MAXCONNS:-64 12 6}"
+# Cap from the live postgrest pool (see pool_cap_up in shed_functions.sh).
+pool_cap_up "hivemind" "${HIVEMIND_METRICS_URL:-http://hivemind-postgrest-server:3001/metrics}" \
+  "${HIVEMIND_SERVER_MAXCONN:-64}" "${HIVEMIND_SHED_MAXCONNS:-64 12 6}"
 exit 0

@@ -17,5 +17,7 @@ check_haf_lib
 check_sync_status "hafbe" 60 "${HAFBE_LIVE_URL:-http://block-explorer-postgrest:3001/live}" \
   "$POSTGRES_URL_HAFBE" hafbe_endpoints.get_hafbe_sync_status "hafbe_endpoints, hafbe_bal, reptracker_app"
 
-shed_up "${HAFBE_SHED_MAXCONNS:-32 8 4}"
+# Cap from the live postgrest pool (see pool_cap_up in shed_functions.sh).
+pool_cap_up "hafbe" "${HAFBE_METRICS_URL:-http://block-explorer-postgrest:3001/metrics}" \
+  "${BLOCK_EXPLORER_SERVER_MAXCONN:-32}" "${HAFBE_SHED_MAXCONNS:-32 8 4}"
 exit 0
