@@ -237,6 +237,8 @@ To do this, first create a ramdisk:
 sudo mkdir /mnt/haf_shared_mem
 
 # then
+sudo mount -t tmpfs -o size=8g,huge=within_size tmpfs /mnt/haf_shared_mem
+# - or, if your kernel rejects huge= (no tmpfs transparent huge page support) -
 sudo mount -t tmpfs -o size=8g tmpfs /mnt/haf_shared_mem
 # - or -
 sudo mount -t ramfs ramfs /mnt/haf_shared_mem
@@ -244,6 +246,16 @@ sudo mount -t ramfs ramfs /mnt/haf_shared_mem
 # then
 sudo chown 1000:100 /mnt/haf_shared_mem
 ```
+
+`huge=within_size` backs the shared memory file with 2 MB transparent huge pages instead of
+4 KB pages.  hived accesses its state file randomly, so the larger pages greatly reduce TLB misses:
+a hived-only replay of mainnet blocks 1-18M took 2757s instead of 3375s (about 18% less), with
+the gain growing as the state grows.  `within_size` only allocates huge pages inside the file's
+size, so the ramdisk needs no extra room.  The mount option is ignored if
+`/sys/kernel/mm/transparent_hugepage/shmem_enabled` is `deny`; you can confirm huge pages are in
+use by watching `ShmemHugePages` grow in `/proc/meminfo` during the replay.  `assisted_startup.sh`
+mounts its ramdisk this way, and falls back to a plain tmpfs (with a warning) if the kernel
+rejects `huge=`.
 
 Then, edit your `.env` file to tell it where to put the shared memory file:
 
