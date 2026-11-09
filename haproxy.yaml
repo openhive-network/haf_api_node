@@ -134,12 +134,14 @@ services:
       PROXY_WHITELIST_SHED_MAXCONNS: "${PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
       # Pool-metric caps (see pool_cap_up in checks/shed_functions.sh): each
       # agent sizes its backend's maxconn from the app postgrest's /metrics.
-      # POOL_CAP_MODE=log (the default) computes and logs the cap every poll but
-      # advertises what the agent did before; "on" advertises it.
+      # POOL_CAP_MODE=log (the default) computes and logs the cap (on change,
+      # pressure, or every POOL_CAP_LOG_EVERY s) but advertises what the agent
+      # did before; "on" advertises it.
       POOL_CAP_MODE: "${POOL_CAP_MODE:-log}"
       POOL_CAP_FACTOR: "${POOL_CAP_FACTOR:-1.5}"
       POOL_CAP_CONFIRMATIONS: "${POOL_CAP_CONFIRMATIONS:-2}"
       POOL_CAP_COOLDOWN: "${POOL_CAP_COOLDOWN:-3}"
+      POOL_CAP_LOG_EVERY: "${POOL_CAP_LOG_EVERY:-300}"
       HIVEMIND_METRICS_URL: "${HIVEMIND_METRICS_URL:-http://hivemind-postgrest-server:3001/metrics}"
       HAFAH_METRICS_URL: "${HAFAH_METRICS_URL:-http://hafah-postgrest:3001/metrics}"
       REPTRACKER_METRICS_URL: "${REPTRACKER_METRICS_URL:-http://reputation-tracker-postgrest:3001/metrics}"
