@@ -80,9 +80,14 @@ shed_up() {
 # *_SERVER_MAXCONN) is used, so a broken probe never sheds.
 #
 # POOL_CAP_MODE: off = don't read /metrics; log (default) = compute and log
-# the cap every poll but advertise exactly what shed_up would; on = advertise
+# the cap but advertise exactly what shed_up would; on = advertise
 # "maxconn:<cap>" (the lower of the pool cap and the shed-level value when
 # SHED_ARMED=true).
+#
+# The per-poll "cap=..." line is logged only when the cap, tight or the mode
+# differs from the last logged line, when waiting > 0, when timeouts_total
+# rose, or as a heartbeat once every POOL_CAP_LOG_EVERY seconds. TIGHTEN,
+# LOOSEN, fail-open and state-write failures are logged on every occurrence.
 #
 # The agent scripts are forked per poll (nc -e), so the hysteresis state lives
 # in one small file per app under POOL_CAP_STATE_DIR. HAProxy runs one agent
@@ -93,6 +98,7 @@ POOL_CAP_FACTOR="${POOL_CAP_FACTOR:-1.5}"
 POOL_CAP_CONFIRMATIONS="${POOL_CAP_CONFIRMATIONS:-2}"
 POOL_CAP_COOLDOWN="${POOL_CAP_COOLDOWN:-3}"
 POOL_CAP_STATE_DIR="${POOL_CAP_STATE_DIR:-/run/poolcap}"
+POOL_CAP_LOG_EVERY="${POOL_CAP_LOG_EVERY:-300}"
 # The agent's stdout is the HAProxy socket (and nc may hand it stderr too),
 # so log lines go to the entrypoint's stderr, i.e. the container log.
 POOL_CAP_LOG="${POOL_CAP_LOG:-/proc/1/fd/2}"
@@ -141,11 +147,19 @@ pool_cap() {
 
   _pc_state="$POOL_CAP_STATE_DIR/$_pc_name"
   _pc_tight=0 _pc_over=0 _pc_under=0 _pc_prev_timeouts=""
+  # Last logged cap line: cap, tight, epoch seconds, mode (last, so it takes
+  # the rest of the line). Empty (e.g. a state file from before these
+  # fields existed) means the next line is logged.
+  _pc_lcap="" _pc_ltight="" _pc_ltime="" _pc_lmode=""
   if [ -r "$_pc_state" ]; then
-    read -r _pc_tight _pc_over _pc_under _pc_prev_timeouts < "$_pc_state" || true
+    read -r _pc_tight _pc_over _pc_under _pc_prev_timeouts \
+      _pc_lcap _pc_ltight _pc_ltime _pc_lmode < "$_pc_state" || true
   fi
   case "$_pc_tight$_pc_over$_pc_under$_pc_prev_timeouts" in
     *[!0-9]*) _pc_tight=0 _pc_over=0 _pc_under=0 _pc_prev_timeouts="" ;;
+  esac
+  case "$_pc_lcap$_pc_ltight$_pc_ltime" in
+    *[!0-9]*) _pc_lcap="" _pc_ltight="" _pc_ltime="" ;;
   esac
 
   _pc_reason=""
@@ -171,17 +185,33 @@ pool_cap() {
     fi
   fi
 
-  mkdir -p "$POOL_CAP_STATE_DIR" 2>/dev/null || true
-  { echo "$_pc_tight $_pc_over $_pc_under $_pc_timeouts" > "$_pc_state.$$" \
-      && mv "$_pc_state.$$" "$_pc_state"; } 2>/dev/null \
-    || _pool_cap_log "$_pc_name cannot write state $_pc_state; hysteresis restarts every poll"
-
   if [ "$_pc_tight" -eq 1 ]; then
     _pc_cap=$_pc_max
   else
     _pc_cap=$(_pool_normal_cap "$_pc_max")
   fi
-  _pool_cap_log "$_pc_name cap=$_pc_cap pool_max=$_pc_max waiting=$_pc_waiting timeouts_total=$_pc_timeouts tight=$_pc_tight mode=$POOL_CAP_MODE"
+
+  _pc_now=$(date +%s)
+  _pc_every=$POOL_CAP_LOG_EVERY
+  case "$_pc_every" in ''|*[!0-9]*) _pc_every=300 ;; esac
+  # A clock that went backwards (ltime > now) also forces a line.
+  if [ -n "$_pc_reason" ] || [ "$_pc_cap" != "$_pc_lcap" ] \
+      || [ "$_pc_tight" != "$_pc_ltight" ] || [ "$POOL_CAP_MODE" != "$_pc_lmode" ] \
+      || [ -z "$_pc_ltime" ] || [ "$_pc_ltime" -gt "$_pc_now" ] \
+      || [ $((_pc_now - _pc_ltime)) -ge "$_pc_every" ]; then
+    _pc_log=1 _pc_lcap=$_pc_cap _pc_ltight=$_pc_tight _pc_ltime=$_pc_now _pc_lmode=$POOL_CAP_MODE
+  else
+    _pc_log=0
+  fi
+
+  mkdir -p "$POOL_CAP_STATE_DIR" 2>/dev/null || true
+  { echo "$_pc_tight $_pc_over $_pc_under $_pc_timeouts $_pc_lcap $_pc_ltight $_pc_ltime $_pc_lmode" > "$_pc_state.$$" \
+      && mv "$_pc_state.$$" "$_pc_state"; } 2>/dev/null \
+    || _pool_cap_log "$_pc_name cannot write state $_pc_state; hysteresis restarts every poll"
+
+  if [ "$_pc_log" -eq 1 ]; then
+    _pool_cap_log "$_pc_name cap=$_pc_cap pool_max=$_pc_max waiting=$_pc_waiting timeouts_total=$_pc_timeouts tight=$_pc_tight mode=$POOL_CAP_MODE"
+  fi
   echo "$_pc_cap"
 }
 
