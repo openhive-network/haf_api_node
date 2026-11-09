@@ -8,12 +8,13 @@ set -e
 # Setup a trap to kill potentially pending healthcheck SQL query at script exit
 trap "trap - 2 15 && kill -- -\$$" 2 15
 
-# HAF gate first (psql) — see hivemind.sh for why this precedes HTTP probes.
+# HAF gate first (psql) — see hivemind.sh for why this precedes the app probes.
 check_haf_lib
 
-# Full-path sync check via the uniform /sync-status API (rewriter ->
-# postgrest -> DB round-trip + app last-block age in one call).
-check_sync_status "nfttracker" 60 "${NFTTRACKER_HEALTH_URL:-http://nft-tracker-postgrest-rewriter:80/sync-status}"
+# postgrest liveness plus the app's last-block age from the SQL function
+# behind /sync-status (see check_http_sync_age.sh).
+check_sync_status "nfttracker" 60 "${NFTTRACKER_LIVE_URL:-http://nft-tracker-postgrest:3001/live}" \
+  "$POSTGRES_URL_NFTTRACKER" nfttracker_endpoints.get_sync_status "nfttracker_endpoints, nfttracker_app"
 
 shed_up "${NFTTRACKER_SHED_MAXCONNS:-32 8 4}"
 exit 0
