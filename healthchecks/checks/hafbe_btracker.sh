@@ -16,5 +16,7 @@ check_haf_lib
 check_sync_status "btracker" 60 "${BTRACKER_LIVE_URL:-http://balance-tracker-postgrest:3001/live}" \
   "$POSTGRES_URL_BTRACKER" btracker_endpoints.get_btracker_sync_status "btracker_endpoints, ${BTRACKER_SCHEMA:-hafbe_bal}"
 
-shed_up "${BTRACKER_SHED_MAXCONNS:-32 8 4}"
+# Cap from the live postgrest pool (see pool_cap_up in shed_functions.sh).
+pool_cap_up "btracker" "${BTRACKER_METRICS_URL:-http://balance-tracker-postgrest:3001/metrics}" \
+  "${BALANCE_TRACKER_SERVER_MAXCONN:-32}" "${BTRACKER_SHED_MAXCONNS:-32 8 4}"
 exit 0

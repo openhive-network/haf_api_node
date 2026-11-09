@@ -25,6 +25,10 @@ services:
       PROXY_WHITELIST_SERVER_MAXCONN: "${PROXY_WHITELIST_SERVER_MAXCONN:-32}"
       API_QUEUE_TIMEOUT: "${API_QUEUE_TIMEOUT:-5s}"
       HIVEMIND_AGENT_INTER: "${HIVEMIND_AGENT_INTER:-5s}"
+      # Crawler budget on the hivesense frontend (haproxy/30-proxies.cfg):
+      # crawler User-Agents share one request-rate counter, 429 above it; 0 disables.
+      HIVESENSE_CRAWLER_REQS_PER_10S: "${HIVESENSE_CRAWLER_REQS_PER_10S:-30}"
+      HIVESENSE_CRAWLER_UA_REGEX: "${HIVESENSE_CRAWLER_UA_REGEX:-(bot|crawler|spider|slurp|bingpreview|ahrefs|yandex|baidu|semrush|petal|bytespider|gptbot|claudebot|ccbot|facebookexternalhit)}"
       # Email alert configuration (optional)
       HAPROXY_EMAIL_TO: "${HAPROXY_EMAIL_TO:-}"
       HAPROXY_EMAIL_FROM: "${HAPROXY_EMAIL_FROM:-}"
@@ -128,6 +132,36 @@ services:
       HAF_STATS_SHED_MAXCONNS: "${HAF_STATS_SHED_MAXCONNS:-32 8 4}"
       HAF_FYP_SHED_MAXCONNS: "${HAF_FYP_SHED_MAXCONNS:-32 8 4}"
       PROXY_WHITELIST_SHED_MAXCONNS: "${PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
+      # Pool-metric caps (see pool_cap_up in checks/shed_functions.sh): each
+      # agent sizes its backend's maxconn from the app postgrest's /metrics.
+      # POOL_CAP_MODE=log (the default) computes and logs the cap every poll but
+      # advertises what the agent did before; "on" advertises it.
+      POOL_CAP_MODE: "${POOL_CAP_MODE:-log}"
+      POOL_CAP_FACTOR: "${POOL_CAP_FACTOR:-1.5}"
+      POOL_CAP_CONFIRMATIONS: "${POOL_CAP_CONFIRMATIONS:-2}"
+      POOL_CAP_COOLDOWN: "${POOL_CAP_COOLDOWN:-3}"
+      HIVEMIND_METRICS_URL: "${HIVEMIND_METRICS_URL:-http://hivemind-postgrest-server:3001/metrics}"
+      HAFAH_METRICS_URL: "${HAFAH_METRICS_URL:-http://hafah-postgrest:3001/metrics}"
+      REPTRACKER_METRICS_URL: "${REPTRACKER_METRICS_URL:-http://reputation-tracker-postgrest:3001/metrics}"
+      HAFBE_METRICS_URL: "${HAFBE_METRICS_URL:-http://block-explorer-postgrest:3001/metrics}"
+      HIVESENSE_METRICS_URL: "${HIVESENSE_METRICS_URL:-http://hivesense-postgrest:3001/metrics}"
+      BTRACKER_METRICS_URL: "${BTRACKER_METRICS_URL:-http://balance-tracker-postgrest:3001/metrics}"
+      NFTTRACKER_METRICS_URL: "${NFTTRACKER_METRICS_URL:-http://nft-tracker-postgrest:3001/metrics}"
+      HAF_STATS_METRICS_URL: "${HAF_STATS_METRICS_URL:-http://haf-stats-postgrest:3001/metrics}"
+      HAF_FYP_METRICS_URL: "${HAF_FYP_METRICS_URL:-http://haf-fyp-postgrest:3001/metrics}"
+      PROXY_WHITELIST_METRICS_URL: "${PROXY_WHITELIST_METRICS_URL:-http://proxy-whitelist-postgrest:3001/metrics}"
+      # The fail-open cap when /metrics can't be read: the same static caps as
+      # the haproxy service above.
+      HIVEMIND_SERVER_MAXCONN: "${HIVEMIND_SERVER_MAXCONN:-64}"
+      HAFAH_SERVER_MAXCONN: "${HAFAH_SERVER_MAXCONN:-48}"
+      BALANCE_TRACKER_SERVER_MAXCONN: "${BALANCE_TRACKER_SERVER_MAXCONN:-32}"
+      BLOCK_EXPLORER_SERVER_MAXCONN: "${BLOCK_EXPLORER_SERVER_MAXCONN:-32}"
+      REPUTATION_TRACKER_SERVER_MAXCONN: "${REPUTATION_TRACKER_SERVER_MAXCONN:-32}"
+      HIVESENSE_SERVER_MAXCONN: "${HIVESENSE_SERVER_MAXCONN:-32}"
+      NFT_TRACKER_SERVER_MAXCONN: "${NFT_TRACKER_SERVER_MAXCONN:-32}"
+      HAF_STATS_SERVER_MAXCONN: "${HAF_STATS_SERVER_MAXCONN:-32}"
+      HAF_FYP_SERVER_MAXCONN: "${HAF_FYP_SERVER_MAXCONN:-32}"
+      PROXY_WHITELIST_SERVER_MAXCONN: "${PROXY_WHITELIST_SERVER_MAXCONN:-32}"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "/healthcheck_healthcheck.sh || exit 1"]

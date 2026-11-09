@@ -16,5 +16,7 @@ check_haf_lib
 check_sync_status "nfttracker" 60 "${NFTTRACKER_LIVE_URL:-http://nft-tracker-postgrest:3001/live}" \
   "$POSTGRES_URL_NFTTRACKER" nfttracker_endpoints.get_sync_status "nfttracker_endpoints, nfttracker_app"
 
-shed_up "${NFTTRACKER_SHED_MAXCONNS:-32 8 4}"
+# Cap from the live postgrest pool (see pool_cap_up in shed_functions.sh).
+pool_cap_up "nfttracker" "${NFTTRACKER_METRICS_URL:-http://nft-tracker-postgrest:3001/metrics}" \
+  "${NFT_TRACKER_SERVER_MAXCONN:-32}" "${NFTTRACKER_SHED_MAXCONNS:-32 8 4}"
 exit 0

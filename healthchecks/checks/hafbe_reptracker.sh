@@ -16,5 +16,7 @@ check_haf_lib
 check_sync_status "reptracker" 60 "${REPTRACKER_LIVE_URL:-http://reputation-tracker-postgrest:3001/live}" \
   "$POSTGRES_URL_REPTRACKER" reptracker_endpoints.get_rep_sync_status "reptracker_endpoints, reptracker_app"
 
-shed_up "${REPTRACKER_SHED_MAXCONNS:-32 8 4}"
+# Cap from the live postgrest pool (see pool_cap_up in shed_functions.sh).
+pool_cap_up "reptracker" "${REPTRACKER_METRICS_URL:-http://reputation-tracker-postgrest:3001/metrics}" \
+  "${REPUTATION_TRACKER_SERVER_MAXCONN:-32}" "${REPTRACKER_SHED_MAXCONNS:-32 8 4}"
 exit 0

@@ -266,7 +266,7 @@ services:
       # 8 rather than haf_fyp's own 20: pgbouncer multiplexes behind this.
       PGRST_DB_POOL: ${HAF_FYP_PGRST_DB_POOL:-8}
       PGRST_DB_ROOT_SPEC: root
-      PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: ${HAF_FYP_PGRST_DB_POOL_ACQUISITION_TIMEOUT:-4}
       PGRST_LOG_LEVEL: ${HAF_FYP_SERVER_LOG_LEVEL:-error}
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:3001/ready || exit 1"]

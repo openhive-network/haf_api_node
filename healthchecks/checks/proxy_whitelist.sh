@@ -16,5 +16,7 @@ check_haf_lib
 check_sync_status "proxy_whitelist" 60 "${PROXY_WHITELIST_LIVE_URL:-http://proxy-whitelist-postgrest:3001/live}" \
   "$POSTGRES_URL_PROXY_WHITELIST" proxy_whitelist_endpoints.sync_status "proxy_whitelist_endpoints, proxy_whitelist_app"
 
-shed_up "${PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
+# Cap from the live postgrest pool (see pool_cap_up in shed_functions.sh).
+pool_cap_up "proxy_whitelist" "${PROXY_WHITELIST_METRICS_URL:-http://proxy-whitelist-postgrest:3001/metrics}" \
+  "${PROXY_WHITELIST_SERVER_MAXCONN:-32}" "${PROXY_WHITELIST_SHED_MAXCONNS:-32 8 4}"
 exit 0

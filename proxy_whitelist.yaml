@@ -61,7 +61,7 @@ services:
       PGRST_DB_SCHEMA: proxy_whitelist_endpoints
       PGRST_DB_ANON_ROLE: proxy_whitelist_user
       PGRST_DB_POOL: ${PROXY_WHITELIST_PGRST_DB_POOL:-6}
-      PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: ${PROXY_WHITELIST_PGRST_DB_POOL_ACQUISITION_TIMEOUT:-4}
       PGRST_DB_ROOT_SPEC: root
       PGRST_DB_EXTRA_SEARCH_PATH: proxy_whitelist_app
     restart: on-failure

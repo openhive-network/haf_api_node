@@ -20,5 +20,7 @@ check_haf_lib
 check_sync_status "haf_stats" 60 "${HAF_STATS_LIVE_URL:-http://haf-stats-postgrest:3001/live}" \
   "$POSTGRES_URL_HAF_STATS" haf_stats_endpoints.get_sync_status "haf_stats_endpoints, haf_stats_app"
 
-shed_up "${HAF_STATS_SHED_MAXCONNS:-32 8 4}"
+# Cap from the live postgrest pool (see pool_cap_up in shed_functions.sh).
+pool_cap_up "haf_stats" "${HAF_STATS_METRICS_URL:-http://haf-stats-postgrest:3001/metrics}" \
+  "${HAF_STATS_SERVER_MAXCONN:-32}" "${HAF_STATS_SHED_MAXCONNS:-32 8 4}"
 exit 0
