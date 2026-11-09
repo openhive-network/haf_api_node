@@ -75,23 +75,28 @@ services:
       POSTGRES_URL_REPTRACKER: postgresql://reptracker_user@pgbouncer:6432/haf_block_log
       POSTGRES_URL_HIVESENSE: postgresql://hivesense_user@pgbouncer:6432/haf_block_log
       POSTGRES_URL_NFTTRACKER: postgresql://nfttracker_user@pgbouncer:6432/haf_block_log
+      POSTGRES_URL_HIVEMIND: postgresql://hivemind_user@pgbouncer:6432/haf_block_log
+      POSTGRES_URL_HAFAH: postgresql://hafah_user@pgbouncer:6432/haf_block_log
+      POSTGRES_URL_HAF_STATS: postgresql://haf_stats_user@pgbouncer:6432/haf_block_log
+      POSTGRES_URL_HAF_FYP: postgresql://haf_fyp_user@pgbouncer:6432/haf_block_log
+      POSTGRES_URL_PROXY_WHITELIST: postgresql://proxy_whitelist_user@pgbouncer:6432/haf_block_log
       EXPECTED_BLOCK_TIME: "${EXPECTED_BLOCK_TIME:-}"
-      # HTTP probes through each app's postgrest rewriter, so the checks
-      # exercise the real request path and catch a wedged postgrest that
-      # direct SQL checks can't see (see checks/check_http_sync_age.sh)
-      # Uniform /sync-status probes ({last_block_num, last_block_time}):
-      # one call proves the postgrest path AND yields the sync age.
-      # Requires app images that ship /sync-status (2026-08 develop+).
-      HIVEMIND_HEALTH_URL: "${HIVEMIND_HEALTH_URL:-http://hivemind-postgrest-rewriter:80/sync-status}"
-      HAFAH_HEALTH_URL: "${HAFAH_HEALTH_URL:-http://hafah-postgrest-rewriter:80/sync-status}"
-      REPTRACKER_HEALTH_URL: "${REPTRACKER_HEALTH_URL:-http://reputation-tracker-postgrest-rewriter:80/sync-status}"
-      HAFBE_HEALTH_URL: "${HAFBE_HEALTH_URL:-http://block-explorer-postgrest-rewriter:80/sync-status}"
-      HIVESENSE_HEALTH_URL: "${HIVESENSE_HEALTH_URL:-http://hivesense-postgrest-rewriter:80/sync-status}"
-      BTRACKER_HEALTH_URL: "${BTRACKER_HEALTH_URL:-http://balance-tracker-postgrest-rewriter:80/sync-status}"
-      NFTTRACKER_HEALTH_URL: "${NFTTRACKER_HEALTH_URL:-http://nft-tracker-postgrest-rewriter:80/sync-status}"
-      HAF_STATS_HEALTH_URL: "${HAF_STATS_HEALTH_URL:-http://haf-stats-postgrest-rewriter:80/sync-status}"
-      HAF_FYP_HEALTH_URL: "${HAF_FYP_HEALTH_URL:-http://haf-fyp-postgrest-rewriter:80/sync-status}"
-      PROXY_WHITELIST_HEALTH_URL: "${PROXY_WHITELIST_HEALTH_URL:-http://proxy-whitelist-postgrest-rewriter:80/sync-status}"
+      # Agent-check liveness probes: each app's postgrest admin server (/live
+      # needs no pool connection). Sync age is read over SQL as the app's role,
+      # via the POSTGRES_URL_* above (see checks/check_http_sync_age.sh).
+      HIVEMIND_LIVE_URL: "${HIVEMIND_LIVE_URL:-http://hivemind-postgrest-server:3001/live}"
+      HAFAH_LIVE_URL: "${HAFAH_LIVE_URL:-http://hafah-postgrest:3001/live}"
+      REPTRACKER_LIVE_URL: "${REPTRACKER_LIVE_URL:-http://reputation-tracker-postgrest:3001/live}"
+      HAFBE_LIVE_URL: "${HAFBE_LIVE_URL:-http://block-explorer-postgrest:3001/live}"
+      HIVESENSE_LIVE_URL: "${HIVESENSE_LIVE_URL:-http://hivesense-postgrest:3001/live}"
+      BTRACKER_LIVE_URL: "${BTRACKER_LIVE_URL:-http://balance-tracker-postgrest:3001/live}"
+      NFTTRACKER_LIVE_URL: "${NFTTRACKER_LIVE_URL:-http://nft-tracker-postgrest:3001/live}"
+      HAF_STATS_LIVE_URL: "${HAF_STATS_LIVE_URL:-http://haf-stats-postgrest:3001/live}"
+      HAF_FYP_LIVE_URL: "${HAF_FYP_LIVE_URL:-http://haf-fyp-postgrest:3001/live}"
+      PROXY_WHITELIST_LIVE_URL: "${PROXY_WHITELIST_LIVE_URL:-http://proxy-whitelist-postgrest:3001/live}"
+      # balance_tracker's app schema, part of the search_path its sync-status
+      # function runs under (same default as balance_tracker.yaml)
+      BTRACKER_SCHEMA: "${BTRACKER_SCHEMA:-hafbe_bal}"
       HTTP_CHECK_TIMEOUT: "${HTTP_CHECK_TIMEOUT:-5}"
       PSQL_CHECK_TIMEOUT: "${PSQL_CHECK_TIMEOUT:-5}"
       # Load-shed configuration (see healthchecks/checks/shed_poller.sh).

@@ -13,7 +13,11 @@ short `timeout queue` (`API_QUEUE_TIMEOUT=5s`). Requests beyond the cap wait
 briefly in HAProxy's queue and then get a fast 503, instead of piling into
 the postgrest pool and collapsing the database. The caps are deliberately
 generous (several times each app's `PGRST_DB_POOL`), so normal traffic is
-unaffected.
+unaffected. For an app under sustained load, lower its cap to about 1-2x its
+pool (`*_PGRST_DB_POOL`) so the excess queues in HAProxy rather than inside
+postgrest; `.env.example` explains the sizing, including pgbouncer's shared
+`max_db_connections`. Neither the agent checks nor HAProxy's own server check
+take a postgrest pool connection, so a saturated app stays UP.
 
 **Opt out entirely:** set a backend's `*_SERVER_MAXCONN=0` (HAProxy = no
 limit) to restore the old unbounded behavior where the stack simply gets

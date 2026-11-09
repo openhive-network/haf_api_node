@@ -264,7 +264,7 @@ services:
       PGRST_DB_SCHEMA: haf_fyp_endpoints
       PGRST_DB_ANON_ROLE: haf_fyp_user
       # 8 rather than haf_fyp's own 20: pgbouncer multiplexes behind this.
-      PGRST_DB_POOL: 8
+      PGRST_DB_POOL: ${HAF_FYP_PGRST_DB_POOL:-8}
       PGRST_DB_ROOT_SPEC: root
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
       PGRST_LOG_LEVEL: ${HAF_FYP_SERVER_LOG_LEVEL:-error}
