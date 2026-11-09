@@ -35,7 +35,9 @@
 # `30-proxies.cfg` target in a compose.override.yml — the same way the hbt4
 # deployment already does with its 30-proxies-override.cfg. HAProxy loads the
 # whole /usr/local/etc/haproxy directory, so only your version of each backend
-# must exist.
+# must exist. Keep the `listen haproxy-healthchecks-agents` relay from
+# 30-proxies.cfg in your file: the local servers' `agent-addr 127.0.0.1
+# agent-port 270NN` reach the local agent through it.
 #
 # ---------------------------------------------------------------------------
 # Two secondary patterns
@@ -77,7 +79,7 @@ backend hivemind
   http-check expect status 200
   # 1) local primary — the shed poller tightens this server's maxconn under
   #    DB overload, which is what starts the overflow to the servers below
-  server-template hivemind 1 hivemind-postgrest-rewriter:80 maxconn "$HIVEMIND_SERVER_MAXCONN" check agent-check agent-addr haproxy-healthchecks agent-port 7002 agent-inter "$HIVEMIND_AGENT_INTER"
+  server-template hivemind 1 hivemind-postgrest-rewriter:80 maxconn "$HIVEMIND_SERVER_MAXCONN" check agent-check agent-addr 127.0.0.1 agent-port 27002 agent-inter "$HIVEMIND_AGENT_INTER"
   # 2) preferred spillover: external public node (HTTPS + SNI, conservative cap)
   server spill-openhive api.openhive.network:443 maxconn 100 check ssl verify required ca-file ca-certificates.crt sni str(api.openhive.network)
   # 3) peer stacks via the exposed scheme (170NN API, 270NN that peer's agent)
@@ -94,7 +96,7 @@ backend hafah
   http-check send meth GET uri /version
   http-check expect status 200
   # 1) local primary
-  server-template hafah-postgrest 1 hafah-postgrest-rewriter:80 maxconn "$HAFAH_SERVER_MAXCONN" check agent-check agent-addr haproxy-healthchecks agent-port 7003 agent-inter 10s
+  server-template hafah-postgrest 1 hafah-postgrest-rewriter:80 maxconn "$HAFAH_SERVER_MAXCONN" check agent-check agent-addr 127.0.0.1 agent-port 27003 agent-inter 10s
   # 2) external public node
   server spill-openhive api.openhive.network:443 maxconn 100 check ssl verify required ca-file ca-certificates.crt sni str(api.openhive.network)
   # 3) peer stacks (hafah frontend 7003 -> exposed API 17003, agent 27003)
