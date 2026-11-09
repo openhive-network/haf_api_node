@@ -6,7 +6,8 @@
 # haproxy-healthchecks, answering every agent port.  The agent first says "down"; it is then
 # recreated on a new IP saying "up", and every agent-checked server must come back UP with
 # agent_status L7OK (polled with "show stat" on the admin socket) without restarting haproxy.
-# Finally haproxy itself is recreated and must see the agent again.
+# While it answers, the agent relay must log nothing. Then haproxy itself is recreated and must see
+# the agent again, and once the agent is removed every agent_status must show the failure.
 # Needs a docker daemon; skips (exit 0) with the reason when there is none.
 
 set -euo pipefail
@@ -15,6 +16,8 @@ REPO_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 HAPROXY_IMAGE=${HAPROXY_IMAGE:-$(sed -n 's/^FROM //p' "$REPO_DIR/haproxy/Dockerfile")}
 # Two 10s agent intervals plus DNS re-resolution and check scheduling slack.
 AGENT_TIMEOUT=${AGENT_TIMEOUT:-30}
+# Steady-state window in which the agent relay must log nothing: two 10s agent intervals.
+STEADY_SECONDS=${STEADY_SECONDS:-20}
 
 skip() {
   echo "SKIP haproxy-agent-recreate: $*"
@@ -53,6 +56,13 @@ AGENT_PORTS=$(awk '{print $3 - 20000}' "$WORK/servers" | sort -u | tr '\n' ' ')
 
 mkdir "$WORK/cfg"
 cp "$REPO_DIR"/haproxy/[0-9]*.cfg "$WORK/cfg/"
+# The info-level log goes to /dev/log, which the container lacks; send it to stdout instead so
+# docker logs carries every per-connection line the stack would write to logs/haproxy.
+sed -i 's|^\( *log \)/dev/log |\1stdout |' "$WORK/cfg/00-global.cfg"
+grep -q '^ *log stdout .* info$' "$WORK/cfg/00-global.cfg" || fail "00-global.cfg has no info-level log to redirect"
+# Agent checks send nothing, so dontlognull alone hides their sessions; drop it so the relay's own
+# logging setting is what keeps them out of the log.
+sed -i '/^ *option *dontlognull$/d' "$WORK/cfg/10-defaults.cfg"
 
 ######### Stub containers #########
 
@@ -165,10 +175,40 @@ NEW_IP=$(agent_ip)
 wait_for UP L7OK "agent recreated ($OLD_IP -> $NEW_IP), every server back UP"
 [ "$(haproxy_started_at)" = "$STARTED_AT" ] || fail "haproxy restarted"
 
+######### Agent relay logging #########
+
+relay_log_lines() {
+  docker logs "$NAME-haproxy" 2>&1 | grep -c 'haproxy-healthchecks-agents' || true
+}
+
+BEFORE=$(relay_log_lines)
+sleep "$STEADY_SECONDS"
+LOGGED=$(($(relay_log_lines) - BEFORE))
+[ "$LOGGED" -eq 0 ] || fail "the agent relay logged $LOGGED lines in ${STEADY_SECONDS}s of steady state:
+$(docker logs "$NAME-haproxy" 2>&1 | grep 'haproxy-healthchecks-agents' | tail -5)"
+echo "ok    agent relay logged nothing in ${STEADY_SECONDS}s of steady state"
+
 ######### Recreate haproxy #########
 
 docker rm -f "$NAME-haproxy" >/dev/null
 start_haproxy
 wait_for UP L7OK "haproxy recreated, every server UP"
+
+######### Agent gone #########
+
+# With the relay unable to reach the agent, every agent-checked server must report a failed
+# agent_status (the server stays UP: an unreachable agent does not change its state).
+docker rm -f "$NAME-agent" >/dev/null
+deadline=$((SECONDS + AGENT_TIMEOUT))
+while :; do
+  stats=$(agent_stats || true)
+  if [ "$(echo "$stats" | grep -c .)" -eq "$EXPECTED" ] && ! echo "$stats" | awk '{print $(NF - 1)}' | grep -q 'L7OK'; then
+    echo "ok    agent removed, every agent_status failed ($(echo "$stats" | awk '{print $(NF - 1)}' | sort -u | tr '\n' ' '))"
+    break
+  fi
+  [ "$SECONDS" -lt "$deadline" ] || fail "agent removed: an agent_status still reads L7OK after ${AGENT_TIMEOUT}s:
+$stats"
+  sleep 1
+done
 
 echo "PASS haproxy-agent-recreate"
