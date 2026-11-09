@@ -382,6 +382,11 @@ require_check() {
   [ "$FAILURES" -eq 0 ] || die "fix the problems above before $COMMAND"
 }
 
+# Without a terminal, read gets an empty answer: refuse up front instead of aborting at the prompt.
+require_prompt_or_force() {
+  [ "$FORCE" -eq 1 ] || [ -t 0 ] || die "stdin is not a terminal, so $COMMAND cannot ask for confirmation; pass --force to run it non-interactively"
+}
+
 confirm() {
   local choice
   [ "$FORCE" -eq 0 ] || return 0
@@ -390,6 +395,19 @@ confirm() {
     y|Y) ;;
     *) die "aborted" ;;
   esac
+}
+
+# Runs "<compose command> down".  A down that fails after removing every container (the daemon can
+# keep a stale endpoint on the network until it restarts) only warns: the next up reuses or
+# recreates the network.
+STALE_NETWORK=0
+down_tolerating_network() {
+  local left
+  "$@" down && return 0
+  left=$("$@" ps -a -q) || die "docker compose down failed and the stack's containers could not be listed"
+  [ -z "$left" ] || die "docker compose down failed and left containers: ${left//$'\n'/ }"
+  warn "docker compose down removed every container but failed (typically on a network with a stale endpoint); continuing"
+  STALE_NETWORK=1
 }
 
 ######### prepare #########
@@ -504,7 +522,7 @@ EOF
   echo "$(date -u +%FT%TZ) HAF is healthy on the copy; stopping it cleanly"
   boot_compose stop haf
   exit_code=$(docker inspect -f '{{.State.ExitCode}}' "$container")
-  boot_compose down
+  down_tolerating_network boot_compose
   rm -f "$BOOT_OVERRIDE"
   trap - EXIT
   [ "$exit_code" = 0 ] || die "HAF exited with code $exit_code on shutdown; check its logs before swapping"
@@ -513,21 +531,57 @@ EOF
 
 ######### swap and rollback #########
 
+# Once swap or rollback stops the stack: the configuration $LIVE_ENV holds, and other ways back.
+INSTALLED=""
+ALTERNATIVE=""
+
+# The docker compose command line that starts the stack as $LIVE_ENV configures it now.
+_live_up_command() {
+  local file
+  local -a files=()
+  require_compose_files "$LIVE_ENV"
+  for file in "${COMPOSE_FILES[@]}"; do
+    files+=(-f "$file")
+  done
+  printf 'sudo'
+  printf ' %q' docker compose --project-directory "$REPO_DIR" "${files[@]}" --env-file "$LIVE_ENV" up -d
+}
+
+# EXIT trap: after a failure with the stack stopped, say what is installed and how to start it.
+report_stopped_state() {
+  local status=$?
+  [ "$status" -ne 0 ] && [ -n "$INSTALLED" ] || return 0
+  {
+    echo ""
+    echo "The stack is stopped (or partly stopped).  $LIVE_ENV holds $INSTALLED."
+    echo "To bring the node back up on it: $(_live_up_command)"
+    [ -z "$ALTERNATIVE" ] || echo "$ALTERNATIVE"
+    if [ "$STALE_NETWORK" -eq 1 ]; then
+      echo "docker compose down could not remove the stack's network.  If up failed on it and docker ps"
+      echo "lists no containers, restart the Docker daemon (systemctl restart docker), then run the command above."
+    fi
+  } >&2
+}
+
 swap() {
   local backup
+  require_prompt_or_force
   require_check
   backup="$LIVE_ENV.before-switch.$(date -u +%Y%m%dT%H%M%SZ)"
   echo ""
   echo "This stops the live stack on $LIVE_DATASET and starts it on $NEW_DATASET."
   confirm "Swap now?"
-  compose "$LIVE_ENV" down
+  INSTALLED="the live configuration ($LIVE_DATASET), not switched"
+  ALTERNATIVE="To retry the switch instead, re-run this swap."
+  trap report_stopped_state EXIT
+  down_tolerating_network compose "$LIVE_ENV"
   cp -p "$LIVE_ENV" "$backup"
   cp "$NEW_ENV" "$LIVE_ENV"
+  INSTALLED="the new configuration ($NEW_DATASET); the previous one is saved as $backup"
+  ALTERNATIVE="To go back to $LIVE_DATASET instead: sudo $0 --env-file=$LIVE_ENV rollback"
   echo "Saved the previous configuration as $backup"
-  if ! compose "$LIVE_ENV" up -d; then
-    echo "docker compose up failed.  To go back: sudo $0 --env-file=$LIVE_ENV rollback" >&2
-    exit 1
-  fi
+  compose "$LIVE_ENV" up -d || die "docker compose up failed"
+  trap - EXIT
   echo ""
   echo "Stack started on $NEW_DATASET.  Watch it with: docker compose logs -f haf"
   echo "To go back to $LIVE_DATASET: sudo $0 --env-file=$LIVE_ENV rollback"
@@ -536,6 +590,7 @@ swap() {
 
 rollback() {
   local backup="$RESTORE_FROM" dataset
+  require_prompt_or_force
   if [ -z "$backup" ]; then
     backup=$(find "$(dirname "$LIVE_ENV")" -maxdepth 1 -name "$(basename "$LIVE_ENV").before-switch.*" | sort | tail -1)
     [ -n "$backup" ] || die "no $LIVE_ENV.before-switch.* backup found; pass --restore-from"
@@ -545,9 +600,14 @@ rollback() {
   require_compose_files "$backup"
   echo "This stops the stack on $LIVE_DATASET and restarts it on $dataset using $backup."
   confirm "Roll back now?"
-  compose "$LIVE_ENV" down
+  INSTALLED="the configuration on $LIVE_DATASET, not rolled back"
+  ALTERNATIVE="To retry the rollback instead, re-run it."
+  trap report_stopped_state EXIT
+  down_tolerating_network compose "$LIVE_ENV"
   cp -p "$backup" "$LIVE_ENV"
-  compose "$LIVE_ENV" up -d
+  INSTALLED="the restored configuration from $backup ($dataset)"
+  compose "$LIVE_ENV" up -d || die "docker compose up failed"
+  trap - EXIT
   echo "Rolled back to $dataset.  $LIVE_DATASET is kept; destroy it yourself when no longer needed."
 }
 

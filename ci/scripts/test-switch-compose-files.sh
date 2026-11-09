@@ -5,6 +5,8 @@
 # pinning haf to a tag of its own, plus exposed/ (which publishes haf ports the boot check must drop).
 # No ZFS or docker daemon needed: zfs and id are stubbed, and a docker wrapper logs every compose
 # command, passes "config" to the real docker compose and renders the stack in place of "up".
+# Marker files in the work directory make the wrapper's "down" fail as on a network with a stale
+# endpoint (down-fails), "ps" list a container (containers-left) and "up" fail (up-fails).
 # Skips (exit 0) with the reason when docker compose is missing.
 
 set -euo pipefail
@@ -51,7 +53,13 @@ for i in "\${!args[@]}"; do
     config) exec "$REAL_DOCKER" "\$@" ;;
     up)
       "$REAL_DOCKER" "\${args[@]:0:i}" config --format json > "$WORK/up.\$(wc -l < "$WORK/docker.log").json"
-      [[ "\$*" != *-boot-check* ]]
+      [[ "\$*" != *-boot-check* ]] && [ ! -e "$WORK/up-fails" ]
+      exit ;;
+    down)
+      [ ! -e "$WORK/down-fails" ] || { echo "failed to remove network haf: network haf has active endpoints" >&2; exit 1; }
+      exit ;;
+    ps)
+      [ ! -e "$WORK/containers-left" ] || echo 0123456789ab
       exit ;;
   esac
 done
@@ -142,5 +150,36 @@ grep -qF -- "-f $WORK/pins.yml --env-file $WORK/live.env down" "$WORK/docker.log
 up=$(grep -n -- ' up ' "$WORK/docker.log" | cut -d: -f1 || true)
 [ "$(haf_of "$WORK/up.$up.json")" = "$DEFAULT_HAF :2001" ] || fail "rollback started haf as $(haf_of "$WORK/up.$up.json")"
 cmp -s "$WORK/live.env" "$WORK/live.env.orig" || fail "rollback did not restore the live env file"
+
+######### non-interactive use and a failed down #########
+
+: > "$WORK/docker.log"
+switch --new-env="$WORK/new.env" --source-env="$WORK/source.env" swap < /dev/null > "$WORK/notty.log" 2>&1 && fail "swap ran without a terminal or --force"
+grep -qF -- "--force" "$WORK/notty.log" || fail "swap without a terminal did not name --force: $(cat "$WORK/notty.log")"
+switch rollback < /dev/null > "$WORK/notty.log" 2>&1 && fail "rollback ran without a terminal or --force"
+grep -qF -- "--force" "$WORK/notty.log" || fail "rollback without a terminal did not name --force: $(cat "$WORK/notty.log")"
+[ ! -s "$WORK/docker.log" ] || fail "a refused swap or rollback ran docker: $(cat "$WORK/docker.log")"
+
+touch "$WORK/down-fails" "$WORK/containers-left"
+: > "$WORK/docker.log"
+switch --new-env="$WORK/new.env" --source-env="$WORK/source.env" --force swap > "$WORK/swap.log" 2>&1 && fail "swap went on after a down that left containers"
+cmp -s "$WORK/live.env" "$WORK/live.env.orig" || fail "swap switched the env file after a down that left containers"
+! grep -q -- ' up ' "$WORK/docker.log" || fail "swap started the stack after a down that left containers"
+grep -qF "$WORK/live.env holds the live configuration (pool/live), not switched" "$WORK/swap.log" || fail "swap did not report the installed configuration: $(cat "$WORK/swap.log")"
+grep -qF -- "--env-file $WORK/live.env up -d" "$WORK/swap.log" || fail "swap did not print the command that starts the stack: $(cat "$WORK/swap.log")"
+
+rm "$WORK/containers-left"
+: > "$WORK/docker.log"
+switch --new-env="$WORK/new.env" --source-env="$WORK/source.env" --force swap > "$WORK/swap.log" 2>&1 || fail "swap stopped on a down that removed every container: $(cat "$WORK/swap.log")"
+grep -qF "WARN  docker compose down removed every container but failed" "$WORK/swap.log" || fail "swap did not warn about the failed down: $(cat "$WORK/swap.log")"
+grep -q -- ' up ' "$WORK/docker.log" || fail "swap did not start the stack after a network-only down failure"
+cmp -s "$WORK/live.env" "$WORK/new.env" || fail "swap did not install the new configuration"
+
+touch "$WORK/up-fails"
+switch --force rollback > "$WORK/rollback.log" 2>&1 && fail "rollback succeeded with a failing up"
+cmp -s "$WORK/live.env" "$WORK/live.env.orig" || fail "rollback did not restore the env file before up"
+grep -qF "$WORK/live.env holds the restored configuration from $WORK/live.env.before-switch." "$WORK/rollback.log" || fail "rollback did not report the installed configuration: $(cat "$WORK/rollback.log")"
+grep -qF -- "-f $REPO_DIR/compose.yml --env-file $WORK/live.env up -d" "$WORK/rollback.log" || fail "rollback did not print the command that starts the stack: $(cat "$WORK/rollback.log")"
+grep -qF "systemctl restart docker" "$WORK/rollback.log" || fail "rollback did not mention the stale network: $(cat "$WORK/rollback.log")"
 
 echo "PASS switch-compose-files"

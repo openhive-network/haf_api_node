@@ -521,6 +521,14 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    ```
    It re-runs the check, stops the live stack, saves `.env` as `.env.before-switch.<time>`, installs
    `.env.new` as `.env` and starts the stack on the copy.  The old datasets are left untouched.
+   `swap` and `rollback` ask for confirmation; without a terminal (e.g. `ssh host sudo ...`) they
+   refuse before stopping anything unless given `--force`.
+   If `docker compose down` removes every container but fails to remove a network ("has active
+   endpoints": the daemon kept a stale endpoint), the switch warns and goes on, since `up` reuses or
+   recreates the network.  Any failure once the stack is stopped prints which configuration `.env`
+   holds and the command that starts the node on it.  If `up` itself fails on the stale network and
+   `docker ps` lists no containers, restart the Docker daemon (`systemctl restart docker`) and run
+   that command, or `rollback`.
 8. **Roll back if needed:**
    ```bash
    sudo ./switch_zfs_datasets.sh rollback     # or --restore-from=.env.before-switch.<time>
