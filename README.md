@@ -325,6 +325,14 @@ haproxy after its worker process crashes — Docker starts it again, and it also
 comes back when the Docker daemon or host restarts. A service you stop yourself
 with `docker compose stop` stays stopped.
 
+haproxy reaches the haproxy-healthchecks agents through a loopback relay
+(`listen haproxy-healthchecks-agents` in `haproxy/30-proxies.cfg`) that re-resolves
+the container's address, so `docker compose up -d haproxy-healthchecks` can recreate
+it without restarting haproxy. If you replace `30-proxies.cfg` with your own copy,
+keep that section and the `agent-addr 127.0.0.1 agent-port 270NN` form.
+`ci/scripts/test-haproxy-agent-recreate.sh` checks this against a throwaway docker
+network (it needs a docker daemon; CI does not run it).
+
 ## Networking: IPv6 and the p2p port
 
 By default, the stack runs hived dual-stack and exposes its p2p port:
