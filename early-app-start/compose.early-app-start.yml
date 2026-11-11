@@ -85,6 +85,14 @@ services:
   l2-framework-block-processing:
     depends_on: *early-depends-on
 
+  haf-stats-install:
+    depends_on: *early-depends-on
+  haf-stats-block-processing:
+    depends_on:
+      <<: *early-depends-on
+      haf-stats-install:
+        condition: service_completed_successfully
+
   hivesense-install-schema:
     depends_on: *early-depends-on
   # Defined only by hivesense-local.yaml (HIVESENSE_CONFIGURATION=local).  The
