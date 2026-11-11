@@ -60,7 +60,7 @@ compose_lint() {
 run_shellcheck() {
     shellcheck --version | head -2
     shellcheck -f gcc healthchecks/checks/*.sh healthchecks/*.sh early-app-start/*.sh .aidev/*.sh .aidev/runtime/*.sh \
-        transfer_zfs_datasets.sh switch_zfs_datasets.sh ci/scripts/test-zfs-transfer.sh ci/scripts/test-switch-compose-files.sh ci/scripts/test-haproxy-agent-recreate.sh
+        transfer_zfs_datasets.sh switch_zfs_datasets.sh repair_permissions.sh zfs_dataset_layout.sh ci/scripts/test-repair-permissions.sh ci/scripts/test-zfs-transfer.sh ci/scripts/test-switch-compose-files.sh ci/scripts/test-haproxy-agent-recreate.sh
 }
 
 # Environments the template is rendered under: name, then VAR=value words (no spaces

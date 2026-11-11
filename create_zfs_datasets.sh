@@ -82,45 +82,20 @@ echo "  mounted on:      $ZPOOL_MOUNT_POINT"
 echo "top-level dataset: $TOP_LEVEL_DATASET"
 echo "  mounted on:      $TOP_LEVEL_DATASET_MOUNTPOINT"
 
-zfs_common_options="-o atime=off"
-zfs_compressed_options="-o compression=lz4"
-zfs_uncompressed_options="-o compression=off"
-# several sites recommend 8k blocks for optimizing postgres on zfs, but we have found that it
-# kills compression ratios for haf_block_log, so we've decided to leave it at the default 128k
-zfs_postgres_options="" # or "-o recordsize=8k -o recordsize=16k", consider also "-o logbias=throughput"
-zfs create $zfs_common_options $zfs_compressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}"
+# shellcheck source=zfs_dataset_layout.sh
+. "$(dirname "$0")/zfs_dataset_layout.sh"
 
-# create an uncompressed dataset for the blockchain.  Blocks in it are already compressed, so won't compress further.
-zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/blockchain"
-
-# create an uncompressed dataset for the shared_memory.bin file and WAL.
-# AFAIK we haven't done studies on whether compression helps shared_memory.bin.
-zfs create $zfs_common_options $zfs_uncompressed_options "${ZPOOL}/${TOP_LEVEL_DATASET}/shared_memory"
-
-# create an unmountable dataset to serve as the parent for pgdata & tablespaces
-zfs create $zfs_common_options $zfs_compressed_options -o canmount=off "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store"
-
-# create a dataset for everything in PostgreSQL except for HAF (system tables and the like).  Having this directory
-# uncompressed improved performance in tests, and it's not very big
-zfs create $zfs_common_options $zfs_uncompressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata"
-
-# create a dataset for the write-ahead logs, simply to reduce the size of snapshots of other datasets
-# note: this is disabled, I'm not sure we really care about the size of the snapshots of other datasets, we
-# only care about the total size, and I'm not sure this gives us any benefit
-zfs create $zfs_common_options $zfs_uncompressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/pgdata/pg_wal"
-
-# create a dataset for the main HAF database itself
-zfs create $zfs_common_options $zfs_compressed_options $zfs_postgres_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/haf_db_store/tablespace"
-
-# create a dataset for logs (hived and postgresql, for now)
-zfs create $zfs_common_options $zfs_compressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/logs"
-
-# create a parent dataset for hivesense components (compressed for config files)
-# This is optional - only created if hivesense is being used
-zfs create $zfs_common_options $zfs_compressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense"
-
-# create a child dataset for ollama models (already compressed, so no ZFS compression)
-zfs create $zfs_common_options $zfs_uncompressed_options -o canmount=on "${ZPOOL}/${TOP_LEVEL_DATASET}/hivesense/ollama"
+# create the datasets with the properties zfs_dataset_layout lists, parents first
+zfs_dataset_layout | while read -r relative_dataset _presence properties; do
+  dataset="${ZPOOL}/${TOP_LEVEL_DATASET}"
+  [ "$relative_dataset" = . ] || dataset="${dataset}/${relative_dataset}"
+  create_options=""
+  for property in $properties; do
+    create_options="$create_options -o $property"
+  done
+  # shellcheck disable=SC2086 # one word per option
+  zfs create $create_options "$dataset"
+done
 
 # needs to exist to be bind-mounted, no real reason to make it a dataset of its own though
 mkdir -p "$TOP_LEVEL_DATASET_MOUNTPOINT/shared_memory/haf_wal"
