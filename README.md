@@ -114,6 +114,36 @@ is not compressed because hived directly manages compression of the block_log fi
 If you have a LOT of nvme storage (e.g. 6TB+), you can get better API performance at the cost of disk
 storage by disabling ZFS compression on the database dataset, but for most nodes this isn't recommended.
 
+The datasets and their properties (`compression`, `atime`, `canmount`) are listed in
+`zfs_dataset_layout.sh`, which `create_zfs_datasets.sh` creates them from. To change the layout,
+edit that file.
+
+##### Checking dataset properties
+
+Datasets moved with a plain `zfs send | zfs recv` (without `-p`) lose those properties and inherit
+the pool defaults instead. For example, `shared_memory` and `pgdata` end up compressed, or
+`haf_db_store` ends up mountable and mounted. When the data directory is a ZFS dataset,
+`repair_permissions.sh` (below) compares each dataset with `zfs_dataset_layout.sh` after repairing
+ownership. For each difference it prints the dataset, the actual and expected value, and the
+`zfs set` that fixes it. It also reports a missing dataset, and a dataset whose mount state
+contradicts its `canmount`, which is what an interrupted receive leaves behind. The optional
+`hivesense` datasets are not reported when they are absent. `compression=on` counts as `lz4`.
+A compliant datadir gets a one-line confirmation. Data directories that are not on ZFS are not
+checked, and no `zfs` command runs for them.
+
+By default the check only warns and changes nothing. That's because the script runs from
+`create_directories.sh` and `assisted_startup.sh` and on live stacks. Warnings do not change the
+exit status. To apply the fixes that are safe on a live datadir, run:
+```
+sudo ./repair_permissions.sh --fix-zfs
+```
+This sets `compression` and `atime`. It also sets `canmount=off` on a dataset that is not mounted.
+It does not change `canmount` on a mounted dataset, because that needs the dataset unmounted.
+Instead it prints the steps to do by hand with the stack stopped: unmount its children leaf-first,
+unmount the dataset, `zfs set canmount=off`, then remount the children parent-first. A
+`compression` change only affects data written after the change. A `zfs set` that fails makes the
+script exit non-zero.
+
 ##### Non-ZFS users
 
 If you're not using ZFS, you can run:
