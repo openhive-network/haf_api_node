@@ -171,14 +171,15 @@ COMPOSE_FILE=compose.yml:early-app-start/compose.early-app-start.yml
   the initial sync from the p2p network) HAF keeps the indexes the apps' block processing reads and
   defers only the others, so apps can process blocks while hived is still replaying.
 - a one-shot `haf-db-ready` service waits until the HAF database is ready (PostgreSQL accepts
-  connections, the HAF extension is installed, the events queue has been written and hived is
-  connected), or until hived's API answers, whichever comes first.
+  connections, the HAF extension is installed, the events queue has been written, hived is
+  connected and has written the operation types), or until hived's API answers, whichever comes
+  first.
 - the install and block-processing services of hafah, hivemind, reputation tracker, balance
-  tracker, HAF block explorer, NFT tracker, l2_framework and hivesense start once `haf-db-ready` has finished,
+  tracker, HAF block explorer, NFT tracker, l2_framework, haf_stats and hivesense start once `haf-db-ready` has finished,
   instead of waiting for hived's API.  Each app then waits inside its own container until HAF
   reports that it is ready for block processing.
 - nothing else changes: the API servers (PostgREST, rewriters), haproxy, drone, uninstall services,
-  hivesense-sync and the apps that don't support early block processing yet (haf_stats, haf_fyp,
+  hivesense-sync and the apps that don't support early block processing yet (haf_fyp,
   proxy_whitelist, HafSQL, and the lite apps lite_account, lite_posts and lite_social) still wait
   for HAF to be fully up.
 
@@ -188,7 +189,10 @@ rather than full readiness to gain anything: an app that predates that waits ins
 block-processing container until HAF is fully up, as it does without early start.  For l2_framework
 that means an `l2-framework` image that opts the `l2` context into early block processing
 (l2_framework#12): an older image installs fine but its block processing waits for HAF to be fully
-up inside `hive.app_next_iteration`.  The block-processing healthchecks' start periods (48h, 72h for
+up inside `hive.app_next_iteration`.  For haf_stats it means a `haf_stats` image that opts the
+`haf_stats` context into early block processing (haf_stats#152); an older image installs fine but
+waits for HAF to be fully up inside its block-processing container.  On the hivemind content source
+haf_stats still gets only as far as hivemind has synced.  The block-processing healthchecks' start periods (48h, 72h for
 hivemind) count from the container's start, which is now the start of the replay.
 
 ###### Reducing Writebacks

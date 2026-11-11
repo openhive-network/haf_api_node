@@ -1,8 +1,12 @@
 #!/bin/bash
 # Exits once the HAF database can take app installs and block processing while
 # hived may still be replaying: PostgreSQL accepts connections, the
-# hive_fork_manager extension is installed, hafd.events_queue has a row and
-# hived holds a session to the database.
+# hive_fork_manager extension is installed, hafd.events_queue has a row,
+# hived holds a session to the database and has written hafd.operation_types.
+#
+# hived writes the op-type catalog just before it applies its first block, a
+# little after it connects; an install that checks the catalog (haf_stats')
+# fails if it runs in between.
 #
 # hived's session is checked because on a restart of an existing database the
 # queue already has rows, yet the HAF entrypoint restarts PostgreSQL (to load
@@ -32,7 +36,8 @@ database_ready() {
                                      AND backend_type = 'client backend'
                                      AND client_addr IS NULL
                                      AND application_name = ''
-                                     AND pid <> pg_backend_pid())")" = t ]
+                                     AND pid <> pg_backend_pid())")" = t ] &&
+        [ "$(query "SELECT EXISTS (SELECT 1 FROM hafd.operation_types)")" = t ]
 }
 
 hived_api_answers() {
@@ -44,7 +49,7 @@ until database_ready; do
         echo "hived's API answers; not waiting for the database checks any longer"
         exit 0
     fi
-    echo "Waiting for the HAF database (extension installed, events queue written, hived connected)..."
+    echo "Waiting for the HAF database (extension installed, events queue written, hived connected, op types written)..."
     sleep "${INTERVAL}"
 done
 echo "HAF database is ready for app installs and block processing"
