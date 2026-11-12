@@ -182,6 +182,12 @@ services:
       - type: bind
         source: ${HAF_ROCKSDB_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/comments-rocksdb-storage
         target: /home/hived/shm_dir/comments-rocksdb-storage
+      # max_connections sized for the full app set; see the budget in connections.conf.
+      # Mounted rather than copied in by create_directories.sh so existing datadirs get it.
+      - type: bind
+        source: ./connections.conf
+        target: /home/hived/datadir/haf_postgresql_conf.d/connections.conf
+        read_only: true
     shm_size: ${HAF_SHM_SIZE:-8gb}
     depends_on:
       hived-pme:
