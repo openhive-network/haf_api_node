@@ -6,6 +6,9 @@ services:
       - hafbe
       - hivemind
       - reputation-tracker
+      # lite_posts' install requires reptracker_app (see lite_posts.yaml)
+      - lite
+      - lite-posts
     environment:
       POSTGRES_HOST: haf
     networks:
@@ -37,6 +40,9 @@ services:
       - hafbe
       - hivemind
       - reputation-tracker
+      # lite_posts' install requires reptracker_app (see lite_posts.yaml)
+      - lite
+      - lite-posts
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: reptracker_owner
