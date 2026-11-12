@@ -1,6 +1,8 @@
 # Lite posts: disavowed gate comments index + lite attestations (consumer of l2_framework + lite_account)
 # One of the lite HAF apps (profiles `apps` and `lite`): l2_framework -> lite_account ->
-# lite_posts; the `lite` profile adds the gateway. See .env.example ("Lite accounts").
+# lite_posts, and lite_posts also needs reputation_tracker (its install refuses without the
+# reptracker_app context), so `lite` and `lite-posts` start the reputation tracker too; the
+# `lite` profile adds the gateway. See .env.example ("Lite accounts").
 services:
   lite-posts-install:
     image: ${LITE_POSTS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/lite_posts/lite-posts}:${LITE_POSTS_VERSION:-latest}
@@ -25,6 +27,8 @@ services:
       haf:
         condition: service_healthy
       lite-account-install:
+        condition: service_completed_successfully
+      reputation-tracker-install:
         condition: service_completed_successfully
       # the role above exists once hivemind is installed; optional so a lite-only stack
       # (no hivemind) still starts
