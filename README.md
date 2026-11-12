@@ -778,6 +778,16 @@ sudo ./snapshot_zfs_datasets.sh 20231023T1831Z-haf-only
 Snapshots carry the property `haf_api_node:taken_by=snapshot_zfs_datasets.sh`, which
 `transfer_zfs_datasets.sh` requires before it sends one to another host.
 
+Before unmounting, the script checks that `shared_memory.bin` is the state hived flushed at its last
+clean shutdown (`shared_memory_freshness.sh`), and asks before going on (`--force` goes on) when it
+is not. hived writes the file through a shared mapping, which doesn't reliably update its mtime (on
+a tmpfs ramdisk it can stay hours behind), so the evidence is hived's log in `logs/hived/default`:
+the last run that opened the database must have logged `Database flushed at last irreversible
+block: N`, `blockchain/` must not have been written more than 5 minutes after that, and
+`shared_memory.bin` must have been modified since that run opened the database. Without that log it
+falls back to requiring `shared_memory.bin`'s mtime within 5 minutes of the newest write in
+`blockchain/`. It prints which source it used and the times it compared.
+
 ## transfer_zfs_datasets.sh and switch_zfs_datasets.sh
 Copy a node's datasets to another host and switch that host over to them.  See
 [Moving a node's datasets to another host](#moving-a-nodes-datasets-to-another-host) for the
