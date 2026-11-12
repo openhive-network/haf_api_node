@@ -207,19 +207,16 @@ if [ "$SNAPSHOT_NAME" != "empty" ]; then
       esac
     fi
   else
-    # Only do timestamp validation if shared_memory.bin exists
-    last_shared_memory_write=$(stat -c %Y "${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory/shared_memory.bin")
-    last_blockchain_write=$(find "${TOP_LEVEL_DATASET_MOUNTPOINT}/blockchain" -type f -printf '%T@\n' | sort -n | tail -1 | cut -d. -f1)
+    # shellcheck source=shared_memory_freshness.sh
+    . "$(dirname "$0")/shared_memory_freshness.sh"
+    freshness=0
+    check_shared_memory_freshness "${TOP_LEVEL_DATASET_MOUNTPOINT}" || freshness=$?
 
-    if [ -z "$last_blockchain_write" ]; then
-      echo "Warning: No files found in the blockchain directory"
+    if [ $freshness -eq 2 ]; then
       exit 1
     fi
 
-    time_diff=$((last_blockchain_write - last_shared_memory_write))
-
-    if [ $time_diff -gt 300 ] || [ $time_diff -lt -300 ]; then
-      echo "Warning: The shared_memory.bin file was not written to within 5 minutes of the last write to a file in the blockchain directory."
+    if [ $freshness -ne 0 ]; then
       if [ "$FORCE" -eq 1 ]; then
         echo "Continuing due to --force option."
       else
