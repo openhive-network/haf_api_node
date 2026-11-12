@@ -379,6 +379,22 @@ keep that section and the `agent-addr 127.0.0.1 agent-port 270NN` form.
 `ci/scripts/test-haproxy-agent-recreate.sh` checks this against a throwaway docker
 network (it needs a docker daemon; CI does not run it).
 
+### PostgreSQL connection limit
+
+`connections.conf` sets PostgreSQL's `max_connections` to 200 and documents the
+budget behind it: the connections each service of the full profile set holds at
+steady state and at peaks (installs, hivemind's post-sync index builds and
+vacuums, hived's replay writers), plus 50% headroom. The stock HAF image allows
+100, which a full stack exhausts during hivemind's finalization. haf_base.yaml
+bind-mounts the file into the datadir's `haf_postgresql_conf.d`, so existing
+nodes pick it up too. `max_connections` changes only when PostgreSQL restarts:
+the first `docker compose up -d` after upgrading recreates the haf container
+(restarting hived) for the new mount. To use a different value, set
+`max_connections` in a `haf_postgresql_conf.d` file that sorts after
+`connections.conf`, such as `pgtune.conf`. If you raise pgbouncer's
+`PGBOUNCER_MAX_DB_CONNECTIONS` or an app's connection counts past what that
+budget allows, raise `max_connections` with them.
+
 ## Networking: IPv6 and the p2p port
 
 By default, the stack runs hived dual-stack and exposes its p2p port:
