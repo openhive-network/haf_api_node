@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 #
 # Test that switch_zfs_datasets.sh renders the stack each env file's COMPOSE_FILE selects, in check,
-# prepare, boot-check, swap and rollback.  The new configuration and the source layer an override
-# pinning haf to a tag of its own, plus exposed/ (which publishes haf ports the boot check must drop).
-# No ZFS or docker daemon needed: zfs and id are stubbed, and a docker wrapper logs every compose
-# command, passes "config" to the real docker compose and renders the stack in place of "up".
-# Marker files in the work directory make the wrapper's "down" fail as on a network with a stale
-# endpoint (down-fails), "ps" list a container (containers-left) and "up" fail (up-fails).
+# prepare, boot-check, swap and rollback, and that boot-check leaves the copy rolled back to the
+# snapshot it takes first.  The new configuration and the source layer an override pinning haf to a
+# tag of its own, plus exposed/ (which publishes haf ports the boot check must drop).
+# No ZFS or docker daemon needed: the script runs from a copy of the repository whose
+# rollback_zfs_datasets.sh only logs its arguments, zfs and id are stubbed, and a docker wrapper logs
+# every compose command, passes "config" to the real docker compose and renders the stack in place of
+# "up".  Marker files in the work directory make the wrapper's "down" fail as on a network with a
+# stale endpoint (down-fails), "ps" list a container (containers-left), "up" fail (up-fails) and
+# the boot-check HAF come up healthy (boot-healthy).
 # Skips (exit 0) with the reason when docker compose is missing.
 
 set -euo pipefail
 
-REPO_DIR=$(cd "$(dirname "$0")/../.." && pwd)
+SOURCE_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 PIN=example.test/hive/haf:switch-test
 
 skip() {
@@ -29,7 +32,14 @@ REAL_DOCKER=$(command -v docker) || skip "docker is not installed"
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-mkdir -p "$WORK/bin" "$WORK/mnt/live" "$WORK/mnt/copy"
+mkdir -p "$WORK/bin" "$WORK/mnt/live" "$WORK/mnt/copy" "$WORK/repo"
+tar -C "$SOURCE_DIR" --exclude=./.git --exclude=./test-results -cf - . | tar -C "$WORK/repo" -xf -
+REPO_DIR="$WORK/repo"
+cat > "$REPO_DIR/rollback_zfs_datasets.sh" <<EOF
+#!/bin/sh
+echo "\$*" >> "$WORK/rollback-zfs.log"
+EOF
+chmod +x "$REPO_DIR/rollback_zfs_datasets.sh"
 
 cat > "$WORK/bin/id" <<'EOF'
 #!/bin/sh
@@ -38,7 +48,11 @@ EOF
 cat > "$WORK/bin/zfs" <<EOF
 #!/usr/bin/env bash
 dataset=\${!#}
+echo "\$*" >> "$WORK/zfs.log"
 case "\$*" in
+  "snapshot -r "*) touch "$WORK/boot-snapshot" ;;
+  "destroy -r "*) rm "$WORK/boot-snapshot" ;;
+  "list "*@switch-boot-check) [ -e "$WORK/boot-snapshot" ] ;;
   "get -H -o value mountpoint "*) echo "$WORK/mnt/\${dataset#pool/}" ;;
   *"-t snapshot"*) echo "\$dataset@move" ;;
   *"-t filesystem"*) printf '%s\ton\tyes\n' "\$dataset" ;;
@@ -53,16 +67,24 @@ for i in "\${!args[@]}"; do
     config) exec "$REAL_DOCKER" "\$@" ;;
     up)
       "$REAL_DOCKER" "\${args[@]:0:i}" config --format json > "$WORK/up.\$(wc -l < "$WORK/docker.log").json"
-      [[ "\$*" != *-boot-check* ]] && [ ! -e "$WORK/up-fails" ]
+      { [[ "\$*" != *-boot-check* ]] || [ -e "$WORK/boot-healthy" ]; } && [ ! -e "$WORK/up-fails" ]
       exit ;;
     down)
       [ ! -e "$WORK/down-fails" ] || { echo "failed to remove network haf: network haf has active endpoints" >&2; exit 1; }
       exit ;;
     ps)
-      [ ! -e "$WORK/containers-left" ] || echo 0123456789ab
+      [[ "\$*" != *" -q haf" ]] && [ ! -e "$WORK/containers-left" ] || echo 0123456789ab
       exit ;;
   esac
 done
+case \$1 in
+  inspect)
+    case \$3 in
+      *Health*) echo healthy ;;
+      *Status*) echo running ;;
+      *ExitCode*) echo 0 ;;
+    esac ;;
+esac
 EOF
 chmod +x "$WORK/bin/"*
 export PATH="$WORK/bin:$PATH"
@@ -133,6 +155,26 @@ grep -E -- "-f $REPO_DIR/exposed/compose.exposed.yml -f $WORK/pins.yml --env-fil
   || fail "boot-check did not layer its override after the new configuration's files: $(cat "$WORK/docker.log")"
 [ "$(haf_of "$WORK/up.$up.json")" = "$PIN 127.0.0.1:" ] || fail "boot-check haf: $(haf_of "$WORK/up.$up.json")"
 grep -q -- '-p haf-boot-check down' "$WORK/docker.log" || fail "boot-check did not remove its project"
+grep -qxF "snapshot -r pool/copy@switch-boot-check" "$WORK/zfs.log" || fail "boot-check did not snapshot the copy: $(cat "$WORK/zfs.log")"
+grep -qxF -- "--env-file=$WORK/new.env switch-boot-check" "$WORK/rollback-zfs.log" || fail "a failed boot-check did not roll the copy back"
+[ ! -e "$WORK/boot-snapshot" ] || fail "a failed boot-check left its snapshot"
+
+touch "$WORK/boot-healthy"
+: > "$WORK/docker.log"
+: > "$WORK/zfs.log"
+: > "$WORK/rollback-zfs.log"
+switch --new-env="$WORK/new.env" --source-env="$WORK/source.env" boot-check > "$WORK/boot.log" 2>&1 || fail "boot-check failed: $(cat "$WORK/boot.log")"
+[ "$(grep -o -e '^snapshot -r pool/copy@switch-boot-check$' -e '^destroy -r pool/copy@switch-boot-check$' "$WORK/zfs.log" | cut -d' ' -f1 | tr '\n' ' ')" = "snapshot destroy " ] \
+  || fail "boot-check did not snapshot the copy, then destroy the snapshot: $(cat "$WORK/zfs.log")"
+grep -qxF -- "--env-file=$WORK/new.env switch-boot-check" "$WORK/rollback-zfs.log" || fail "boot-check did not roll the copy back: $(cat "$WORK/boot.log")"
+grep -q -- '-p haf-boot-check stop haf' "$WORK/docker.log" || fail "boot-check did not stop HAF before the rollback"
+grep -qF "Boot check passed.  The copy is back at its received state" "$WORK/boot.log" || fail "boot-check did not report the rollback: $(cat "$WORK/boot.log")"
+
+touch "$WORK/boot-snapshot"
+switch --new-env="$WORK/new.env" --source-env="$WORK/source.env" boot-check > "$WORK/boot.log" 2>&1 && fail "boot-check ran over a leftover snapshot"
+grep -qF "an earlier boot check left pool/copy@switch-boot-check behind" "$WORK/boot.log" || fail "leftover snapshot not reported: $(cat "$WORK/boot.log")"
+grep -qF "rollback_zfs_datasets.sh --env-file=$WORK/new.env switch-boot-check" "$WORK/boot.log" || fail "leftover snapshot without instructions: $(cat "$WORK/boot.log")"
+rm "$WORK/boot-snapshot" "$WORK/boot-healthy"
 
 ######### swap and rollback #########
 
@@ -155,7 +197,7 @@ cmp -s "$WORK/live.env" "$WORK/live.env.orig" || fail "rollback did not restore 
 
 : > "$WORK/docker.log"
 switch --new-env="$WORK/new.env" --source-env="$WORK/source.env" swap < /dev/null > "$WORK/notty.log" 2>&1 && fail "swap ran without a terminal or --force"
-grep -qF -- "--force" "$WORK/notty.log" || fail "swap without a terminal did not name --force: $(cat "$WORK/notty.log")"
+grep -qF "refusing: no terminal to confirm; pass --force" "$WORK/notty.log" || fail "swap without a terminal did not refuse naming --force: $(cat "$WORK/notty.log")"
 switch rollback < /dev/null > "$WORK/notty.log" 2>&1 && fail "rollback ran without a terminal or --force"
 grep -qF -- "--force" "$WORK/notty.log" || fail "rollback without a terminal did not name --force: $(cat "$WORK/notty.log")"
 [ ! -s "$WORK/docker.log" ] || fail "a refused swap or rollback ran docker: $(cat "$WORK/docker.log")"
