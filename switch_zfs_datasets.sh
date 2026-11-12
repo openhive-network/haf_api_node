@@ -22,8 +22,10 @@ from this directory: its COMPOSE_FILE, or compose.yml (and compose.override.yml)
               (target-only directories), image differences, and the settings that change
   prepare     mount the copy, then copy target-only directories from the live datadir (create
               them empty when the live datadir lacks them too)
-  boot-check  start HAF alone on the copy under a separate compose project, network and p2p
-              port, wait until it is healthy, then stop it cleanly.  The live stack keeps running.
+  boot-check  snapshot the copy as @switch-boot-check, start HAF alone on it under a separate
+              compose project, network and p2p port, wait until it is healthy, stop it cleanly,
+              then roll the copy back to that snapshot (undoing whatever HAF synced, keeping what
+              prepare added) and destroy the snapshot.  The live stack keeps running.
   swap        stop the live stack, save the live env file as <env-file>.before-switch.<time>,
               install the new configuration and start the stack on the copy
   rollback    stop the stack, restore the newest <env-file>.before-switch.* (or --restore-from)
@@ -384,7 +386,7 @@ require_check() {
 
 # Without a terminal, read gets an empty answer: refuse up front instead of aborting at the prompt.
 require_prompt_or_force() {
-  [ "$FORCE" -eq 1 ] || [ -t 0 ] || die "stdin is not a terminal, so $COMMAND cannot ask for confirmation; pass --force to run it non-interactively"
+  [ "$FORCE" -eq 1 ] || [ -t 0 ] || die "refusing: no terminal to confirm; pass --force ($COMMAND asks for confirmation and stdin is not a terminal)"
 }
 
 confirm() {
@@ -451,6 +453,11 @@ prepare() {
 
 BOOT_PROJECT=""
 BOOT_OVERRIDE=""
+# HAF syncs while the boot check runs, and hived reopens with less than the database then holds.
+# The copy is snapshotted before HAF starts (after prepare, so its additions survive) and rolled
+# back to the snapshot afterwards.
+BOOT_SNAPSHOT=switch-boot-check
+BOOT_SNAPSHOT_TAKEN=0
 # The new configuration's own files, then the boot-check override: haf publishes only p2p, on
 # 127.0.0.1, whatever ports the configuration's files (e.g. exposed/) give it.
 boot_compose() {
@@ -458,11 +465,31 @@ boot_compose() {
     compose "$NEW_ENV" -f "$BOOT_OVERRIDE" -p "$BOOT_PROJECT" "$@"
 }
 
+_boot_snapshot_instructions() {
+  {
+    echo "The copy may have advanced past @$BOOT_SNAPSHOT and must not be started as it is."
+    echo "Once nothing uses it, roll it back and remove the snapshot:"
+    echo "  sudo $REPO_DIR/rollback_zfs_datasets.sh --env-file=$NEW_ENV $BOOT_SNAPSHOT"
+    echo "  sudo zfs destroy -r $NEW_DATASET@$BOOT_SNAPSHOT"
+  } >&2
+}
+
+# Rolls the copy back to @$BOOT_SNAPSHOT (syncing and dropping caches first) and destroys it.
+restore_boot_snapshot() {
+  echo ""
+  echo "Rolling the copy back to @$BOOT_SNAPSHOT, its state before the boot check"
+  "$REPO_DIR/rollback_zfs_datasets.sh" --env-file="$NEW_ENV" "$BOOT_SNAPSHOT" || return 1
+  zfs destroy -r "$NEW_DATASET@$BOOT_SNAPSHOT" || return 1
+  BOOT_SNAPSHOT_TAKEN=0
+}
+
 boot_cleanup() {
   set +e
   echo "Removing the boot-check project $BOOT_PROJECT"
   boot_compose down --timeout 120
   rm -f "$BOOT_OVERRIDE"
+  [ "$BOOT_SNAPSHOT_TAKEN" -eq 1 ] || return
+  restore_boot_snapshot || _boot_snapshot_instructions
 }
 
 boot_check() {
@@ -493,9 +520,17 @@ EOF
     esac
   done < <(boot_compose config --format json haf | compose_query ports | awk '$1 == "haf"')
 
+  if zfs list -H -o name "$NEW_DATASET@$BOOT_SNAPSHOT" >/dev/null 2>&1; then
+    _boot_snapshot_instructions
+    die "an earlier boot check left $NEW_DATASET@$BOOT_SNAPSHOT behind"
+  fi
+
   echo ""
-  echo "Starting HAF on the copy as compose project $BOOT_PROJECT (live stack untouched)"
+  echo "Snapshotting the copy as @$BOOT_SNAPSHOT"
   trap boot_cleanup EXIT
+  zfs snapshot -r "$NEW_DATASET@$BOOT_SNAPSHOT"
+  BOOT_SNAPSHOT_TAKEN=1
+  echo "Starting HAF on the copy as compose project $BOOT_PROJECT (live stack untouched)"
   boot_compose up -d --no-deps haf
   container=$(boot_compose ps -q haf)
   deadline=$((SECONDS + BOOT_TIMEOUT))
@@ -525,8 +560,12 @@ EOF
   down_tolerating_network boot_compose
   rm -f "$BOOT_OVERRIDE"
   trap - EXIT
+  if ! restore_boot_snapshot; then
+    _boot_snapshot_instructions
+    die "could not roll the copy back after the boot check"
+  fi
   [ "$exit_code" = 0 ] || die "HAF exited with code $exit_code on shutdown; check its logs before swapping"
-  echo "Boot check passed.  The copy has advanced past the snapshot by whatever it synced; that is fine."
+  echo "Boot check passed.  The copy is back at its received state plus what prepare added."
 }
 
 ######### swap and rollback #########

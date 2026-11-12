@@ -522,9 +522,9 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    sudo ./transfer_zfs_datasets.sh send --incremental-from=20261030-move 20261031-move dst-host:haf-pool/haf-datadir-20261030
    ```
    The receiving side refuses to roll back a dataset that has open files, so the live node is safe
-   from a mistyped destination.  The rollback also removes what `prepare` and the boot check (steps 5
-   and 6) added to the copy, so if you catch up after them, run `prepare` again; `swap` refuses a copy
-   that lacks a bind-mounted directory.  Don't catch up while the boot check runs.
+   from a mistyped destination.  The rollback also removes what `prepare` (step 5) added to the copy,
+   so if you catch up after it, run `prepare` again; `swap` refuses a copy that lacks a bind-mounted
+   directory.  Don't catch up while the boot check runs.
 5. **Write the new configuration** on the target: copy the target's `.env` to e.g. `.env.new` and
    change only
    - `TOP_LEVEL_DATASET` (and `TOP_LEVEL_DATASET_MOUNTPOINT`, if it is set explicitly) to the copy;
@@ -555,12 +555,19 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    ```bash
    sudo ./switch_zfs_datasets.sh --new-env=.env.new --source-env=source.env boot-check
    ```
-   This starts HAF alone on the copy as a separate compose project (`<PROJECT_NAME>-boot-check`, with
-   its own network and the p2p port published on 127.0.0.1 only, whatever other ports the
-   configuration's compose files give HAF), waits up to `--boot-timeout`
-   (default 1 hour) for it to become healthy, failing at once on hived's shared-memory/RocksDB
-   inconsistency error, then stops it cleanly and removes the project.  HAF may sync a few blocks
-   meanwhile; that is fine.
+   This snapshots the copy recursively as `@switch-boot-check`, starts HAF alone on it as a separate
+   compose project (`<PROJECT_NAME>-boot-check`, with its own network and the p2p port published on
+   127.0.0.1 only, whatever other ports the configuration's compose files give HAF), waits up to
+   `--boot-timeout` (default 1 hour) for it to become healthy, failing at once on hived's
+   shared-memory/RocksDB inconsistency error, then stops it cleanly and removes the project.
+   HAF syncs while it runs, and the state hived reopens with can then lag the HAF database ("HAF
+   database irreversible top block ... is above hived head block"), so the boot check finally rolls
+   the copy back to `@switch-boot-check` with `rollback_zfs_datasets.sh` (which syncs and drops caches
+   first) and destroys that snapshot.  The copy is left as received plus what `prepare` added; it
+   does this after a failed boot check too.  If the rollback cannot run (e.g. a container still holds
+   the copy), the boot check prints the two commands that finish it, and refuses to run again while
+   `@switch-boot-check` exists.  A copy that was started any other way must likewise be rolled back
+   to its received snapshot (and `prepare` re-run) before `swap` starts it for real.
 7. **Swap:**
    ```bash
    sudo ./switch_zfs_datasets.sh --new-env=.env.new --source-env=source.env swap
@@ -568,7 +575,8 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    It re-runs the check, stops the live stack, saves `.env` as `.env.before-switch.<time>`, installs
    `.env.new` as `.env` and starts the stack on the copy.  The old datasets are left untouched.
    `swap` and `rollback` ask for confirmation; without a terminal (e.g. `ssh host sudo ...`) they
-   refuse before stopping anything unless given `--force`.
+   exit non-zero before stopping anything ("refusing: no terminal to confirm; pass --force") unless
+   given `--force`.
    If `docker compose down` removes every container but fails to remove a network ("has active
    endpoints": the daemon kept a stale endpoint), the switch warns and goes on, since `up` reuses or
    recreates the network.  Any failure once the stack is stopped prints which configuration `.env`
