@@ -72,6 +72,10 @@ services:
       PGRST_SERVER_HOST: "::"
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_DB_URI: postgresql://nfttracker_user@pgbouncer:6432/haf_block_log?application_name=nft_tracker_postgrest
+      # Off behind transaction-mode pgbouncer: a failed prepared query leaves its
+      # name on the pooled backend, so the error turns into 503 08P01 and a dropped
+      # connection. See PGRST_DB_PREPARED_STATEMENTS in .env.example.
+      PGRST_DB_PREPARED_STATEMENTS: ${PGRST_DB_PREPARED_STATEMENTS:-false}
       PGRST_DB_SCHEMA: nfttracker_endpoints
       PGRST_DB_ANON_ROLE: nfttracker_user
       PGRST_DB_POOL: ${NFT_TRACKER_PGRST_DB_POOL:-8}
