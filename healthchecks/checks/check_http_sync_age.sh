@@ -41,10 +41,20 @@ check_postgrest_live() {
 
 # check_sync_status <name> <threshold_seconds> <live_url> <postgres_url> <function> <search_path>
 #
+# read_sync_status, then go down if the app's last processed block is older
+# than the threshold.
+check_sync_status() {
+  read_sync_status "$1" "$3" "$4" "$5" "$6"
+  check_http_block_time "$1" "$2" "$_block_time"
+}
+
+# read_sync_status <name> <live_url> <postgres_url> <function> <search_path>
+#
 # Check the app's postgrest liveness, then call its sync-status SQL function
 # (schema-qualified, no arguments; returns {"last_block_num": N,
-# "last_block_time": "YYYY-MM-DDTHH:MM:SS"} as json or as a row) and go down
-# if the app's last processed block is older than the threshold.
+# "last_block_time": "YYYY-MM-DDTHH:MM:SS"} as json or as a row) and set
+# _block_num and _block_time from it. Goes down if postgrest is not live, the
+# query fails, or the app has no block time to judge.
 # <search_path> is what postgrest sets for the app (PGRST_DB_SCHEMA, then
 # PGRST_DB_EXTRA_SEARCH_PATH), since the function may rely on it. The
 # function fails fast during HAF massive sync, which correctly reads as
@@ -60,15 +70,14 @@ check_postgrest_live() {
 # for a few hundred ms before OBI makes it irreversible, so ~1 in 80 probes
 # came back without a time and the backend flapped (fixed app-side in
 # reputation_tracker!228, balance_tracker!396, haf_block_explorer!512).
-check_sync_status() {
+read_sync_status() {
   _name="$1"
-  _threshold="$2"
-  check_postgrest_live "$_name" "$3"
+  check_postgrest_live "$_name" "$2"
   # One query string is one transaction, so SET LOCAL and the call share a
   # server connection under pgbouncer's transaction pooling. to_json of the
   # FROM alias yields the object whether the function returns json or a row.
-  _sync_status=$(timeout "$PSQL_CHECK_TIMEOUT" psql "$4" --quiet --no-align --tuples-only \
-      --command="BEGIN; SET LOCAL search_path TO $6; SELECT to_json(s) FROM $5() s LIMIT 1; COMMIT") || {
+  _sync_status=$(timeout "$PSQL_CHECK_TIMEOUT" psql "$3" --quiet --no-align --tuples-only \
+      --command="BEGIN; SET LOCAL search_path TO $5; SELECT to_json(s) FROM $4() s LIMIT 1; COMMIT") || {
     case "$?" in
       124|143) echo "down #$_name sync-status query timed out after ${PSQL_CHECK_TIMEOUT}s" ;;
       *)       echo "down #$_name sync-status query failed" ;;
@@ -87,7 +96,6 @@ check_sync_status() {
     echo "down #$_name block $_block_num has no timestamp in sync-status"
     exit 15
   fi
-  check_http_block_time "$_name" "$_threshold" "$_block_time"
 }
 
 # check_http_block_time <name> <threshold_seconds> <block_time_string>
