@@ -6,8 +6,12 @@ services:
       - hivemind
     networks:
       haf-network:
+    # --upgrade-schema runs `hive upgrade_schema`: it creates the schema on a fresh
+    # database and applies table migrations on an existing one. Plain `setup` runs
+    # `build_schema`, which on an existing database only reloads functions.
     command:
       - "setup"
+      - "--upgrade-schema"
       - "--database-admin-url=postgresql://haf_admin@haf/haf_block_log"
       - "--statement-timeout=${HIVEMIND_STATEMENT_TIMEOUT:-5000}"
       - "--swagger-url=${PUBLIC_HOSTNAME}"

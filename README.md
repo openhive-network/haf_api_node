@@ -673,8 +673,34 @@ If you're uninstalling Hivemind permanently, then remember to remove the `hivemi
 If you're upgrading to a new version of hivemind:
 - if you're upgrading to a pre-release version, you'll need to set `HIVEMIND_VERSION` in your `.env` file to the correct tag for the version you want to run.  If you're just upgrading to a new release version (the ones tagged `haf_api_node`), you can leave this alone.
 - run `docker compose pull` to grab the new version
+- stop the block processing of the apps that depend on hivemind, if you run them: `docker compose stop haf-fyp-block-processing hivesense-sync` (see below for why)
 - run `docker compose up -d` to bring up all services.  This should run hivemind's install, then launch the block processing container.
 - you can monitor Hivemind's sync process by watching the logs from `docker compose logs -f hivemind-block-processing`.  In a few short days, your Hivemind app should be fully synced and ready to handle API requests.
+
+What hivemind's install step does on an upgrade:
+
+- `hivemind-install` runs `setup --upgrade-schema` (`hive upgrade_schema`).  On an existing
+  database this applies the new version's table changes (new tables, altered columns) as well
+  as reloading its functions and views; on a fresh database it creates the schema, exactly as a
+  plain install does.  Without the table upgrade, a new version whose code expects a new table
+  crash-loops in `hivemind-block-processing` (e.g. `UndefinedTable` from `app_restore_indexes`).
+- The install needs the exclusive `hivemind` lock (see
+  [Advisory-lock coordination](#advisory-lock-coordination-between-installers-and-block-processors)).
+  While any dependent app's block processing holds its shared lock on `hivemind` --
+  `haf-fyp-block-processing` and `hivesense-sync` -- the install does nothing and exits 0.  You
+  can tell it skipped from its log:
+  `docker compose logs hivemind-install | grep 'Skipping install: lock on hivemind held by'`
+  (followed by `Skipping hivemind schema install`).  If you see it, stop the services it names,
+  rerun `docker compose --profile core --profile hivemind up hivemind-install`, then start them
+  again.  If a hivemind version makes a skipped, still-pending upgrade exit non-zero instead,
+  the `service_completed_successfully` dependency keeps `hivemind-block-processing`,
+  `hivemind-server` and the other hivemind-dependent services from starting until the upgrade
+  has run; that is intended.
+- If one of the version's migrations requested it, the upgrade ends with a `VACUUM FULL` of the
+  database (log line `Attempting to run VACUUM FULL on upgraded database`; otherwise
+  `Skipping VACUUM FULL on upgraded database (no vacuum request)`).  That can take a long time on
+  a mainnet database, and every service that waits for `hivemind-install` to complete waits for
+  it too.
 
 ## HafSQL
 
@@ -734,7 +760,7 @@ Block-processors connect directly to postgres (not via pgbouncer), which is what
 
 - Hivesense-sync (Python) re-acquires its locks inside `ensure_connection_alive` after any reconnect, since psycopg drops the session on idle-close.
 - Shell-based installers (hivesense, proxy-whitelist, and any future apps that adopt the pattern) self-re-exec through `install_with_app_lock.py` at the top of `install_app.sh`. The wrapper opens a psycopg2 connection, takes the exclusive lock, then runs the install script as a subprocess; the lock is held continuously across every internal `psql` invocation and released when the wrapper exits (cleanly, on signal, or on crash). The wrapper lives in the `common-ci-configuration/psql` base image, which is now the common base for all HAF app installers including hivesense and proxy-whitelist.
-- Hivemind's installer holds the lock continuously across its destructive Python phase via `hive build_schema`, which is the only destructive step. Its preceding shell-level install (`install_app.sh`) is non-destructive (function checks, `ALTER DATABASE`, `GRANT`), so it doesn't need wrapper protection.
+- Hivemind's installer holds the lock continuously across its destructive Python phase via `hive upgrade_schema` (`hive build_schema` without `--upgrade-schema`), which is the only destructive step. Its preceding shell-level install (`install_app.sh`) is non-destructive (function checks, `ALTER DATABASE`, `GRANT`), so it doesn't need wrapper protection.
 - The dependency list for each BP is hardcoded in its main-loop source. The starting set reflects compose `depends_on` plus known cross-app schema reads (hivesense and proxy-whitelist both query `hivemind_app.*`); expand the lists if a new race is discovered.
 
 # Scripts in the haf_api_node Directory
