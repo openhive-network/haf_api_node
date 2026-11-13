@@ -99,6 +99,10 @@ services:
       # pgbouncer rejects that startup parameter and postgrest would never connect. A
       # statement timeout for this app has to be set at the role level by its installer.
       PGRST_DB_URI: postgresql://haf_stats_user@pgbouncer:6432/haf_block_log?application_name=haf_stats_postgrest
+      # Off behind transaction-mode pgbouncer: a failed prepared query leaves its
+      # name on the pooled backend, so the error turns into 503 08P01 and a dropped
+      # connection. See PGRST_DB_PREPARED_STATEMENTS in .env.example.
+      PGRST_DB_PREPARED_STATEMENTS: ${PGRST_DB_PREPARED_STATEMENTS:-false}
       PGRST_DB_SCHEMA: haf_stats_endpoints
       PGRST_DB_ANON_ROLE: haf_stats_user
       PGRST_DB_POOL: ${HAF_STATS_PGRST_DB_POOL:-8}
