@@ -1,29 +1,36 @@
 # Hivesense during a sync-chain rebase
 
 hivesense's `docs/sync_chain_rebase.md` freezes the embedding generator with
-`HIVESENSE_SYNC_ARGS=--stop-at-block=B` for hours, while downstream syncers drain
-to the frozen block and idle and search keeps serving the frozen embeddings.
+`HIVESENSE_SYNC_ARGS=--stop-at-block=B`, and every node following the sync chain
+drains to block B and stops there.
 
-**The hivesense agent check (`healthchecks/checks/hivesense.sh`, port 7011)
-tolerates the freeze**: it keeps a frozen hivesense in HAProxy's rotation, while
-a hivesense that is stuck still goes down once its last block is more than 60 s
-old. Postgrest liveness and the HAF gate apply as always.
+The hivesense agent check (`healthchecks/checks/hivesense.sh`, port 7011) treats
+a frozen hivesense like any other stale one: once its last block is more than
+60 s old it answers `down #hivesense block too old`, and HAProxy takes the
+server out of rotation. This is by design: a hivesense that is behind the head
+block serves stale search results.
 
-| Stack (`HIVESENSE_CONFIGURATION`) | Kept up when its last block is old, if | Agent answer |
-|---|---|---|
-| `sync` (hivesense-sync) | its `last_block_num` is at most 20 blocks (60 s) behind the `last_block_num` of `${HIVESENSE_SYNC_API}/sync-status` | `up #hivesense frozen at upstream block N` |
-| `local` (block processor) | `HIVESENSE_SYNC_ARGS` has `--stop-at-block=B` and its `last_block_num` is `B` | `up #hivesense frozen at stop block B` |
+An operator who decides that a node should keep serving the frozen embeddings
+anyway disables the agent check for that node's hivesense server, inside its
+haproxy container. Find the server name (`hivesense1` with the stock
+`server-template`) with:
 
-With `POOL_CAP_MODE=on` the answer is `up maxconn:N #hivesense frozen ...`. The
-note shows in HAProxy's stats ("last agent check") and logs, so a stale node
-that is serving says why.
+```bash
+docker compose exec haproxy sh -c 'echo "show servers state hivesense" | socat stdio /run/haproxy/admin.sock'
+```
 
-The upstream's `/sync-status` is fetched only when the local block is older than
-60 s, bounded by `HTTP_CHECK_TIMEOUT`. If it can't be fetched, the 60 s rule
-applies, so a downstream node goes down during a freeze if its upstream is
-unreachable.
+then disable the agent check:
 
-`haproxy-healthchecks` reads `HIVESENSE_CONFIGURATION`, `HIVESENSE_SYNC_API` and
-`HIVESENSE_SYNC_ARGS` from `.env` (`haproxy.yaml`). After changing
-`HIVESENSE_SYNC_ARGS` for the freeze or the cutover, recreate it along with the
-block processor: `docker compose up -d` does both.
+```bash
+docker compose exec haproxy sh -c 'echo "disable agent hivesense/hivesense1" | socat stdio /run/haproxy/admin.sock'
+```
+
+and re-enable it once the node has caught up and is fresh again:
+
+```bash
+docker compose exec haproxy sh -c 'echo "enable agent hivesense/hivesense1" | socat stdio /run/haproxy/admin.sock'
+```
+
+This is a runtime-only, per-node decision: it is not stored in the repository or
+`.env`, applies only to the node where it is run, and is lost when haproxy
+restarts or is recreated, after which the 60 s rule applies again.

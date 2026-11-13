@@ -98,12 +98,6 @@ services:
       HAF_STATS_LIVE_URL: "${HAF_STATS_LIVE_URL:-http://haf-stats-postgrest:3001/live}"
       HAF_FYP_LIVE_URL: "${HAF_FYP_LIVE_URL:-http://haf-fyp-postgrest:3001/live}"
       PROXY_WHITELIST_LIVE_URL: "${PROXY_WHITELIST_LIVE_URL:-http://proxy-whitelist-postgrest:3001/live}"
-      # How hivesense gets its embeddings, so its agent check can tell a
-      # deliberate freeze (sync-chain rebase) from a stuck app: same defaults
-      # as compose.yml, hivesense-sync.yaml and hivesense-local.yaml.
-      HIVESENSE_CONFIGURATION: "${HIVESENSE_CONFIGURATION:-sync}"
-      HIVESENSE_SYNC_API: "${HIVESENSE_SYNC_API:-https://api.hive.blog/hivesense-api}"
-      HIVESENSE_SYNC_ARGS: "${HIVESENSE_SYNC_ARGS:-}"
       # balance_tracker's app schema, part of the search_path its sync-status
       # function runs under (same default as balance_tracker.yaml)
       BTRACKER_SCHEMA: "${BTRACKER_SCHEMA:-hafbe_bal}"
