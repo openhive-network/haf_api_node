@@ -60,20 +60,6 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
-# The POSTGRESQL_SHARED_BUFFERS_GB override the haf container gets: from the environment, else
-# from the .env next to this script (sudo does not pass the caller's environment through)
-shared_buffers_override() {
-    if [[ -n "${POSTGRESQL_SHARED_BUFFERS_GB:-}" ]]; then
-        echo "$POSTGRESQL_SHARED_BUFFERS_GB"
-    elif [[ -f "$SCRIPT_DIR/.env" ]]; then
-        local value
-        value=$(grep -E '^[[:space:]]*POSTGRESQL_SHARED_BUFFERS_GB=' "$SCRIPT_DIR/.env" | tail -n 1 || true)
-        value=${value#*=}
-        value=${value%%#*}
-        echo "${value//[\"\'[:space:]]/}"
-    fi
-}
-
 # Calculate ZFS ARC max based on system memory
 # Returns the value in bytes
 calculate_arc_max() {
@@ -83,7 +69,7 @@ calculate_arc_max() {
 
     # pg_shared_buffers_gb reports on stderr how it chose the value
     local shared_buffers_gb
-    shared_buffers_gb=$(pg_shared_buffers_gb "$total_ram_kb" "$(shared_buffers_override)") || return 1
+    shared_buffers_gb=$(pg_shared_buffers_gb "$total_ram_kb" "$(pg_shared_buffers_override "$SCRIPT_DIR/.env")") || return 1
     local shared_segment_gb
     shared_segment_gb=$(pg_shared_segment_gb "$shared_buffers_gb")
 
@@ -102,8 +88,26 @@ calculate_arc_max() {
     print_info "System RAM: ${total_ram_gb}GB" >&2
     print_info "Reserved: PostgreSQL=${shared_segment_gb}GB (shared_buffers ${shared_buffers_gb}GB + segment overhead), Kernel=${PG_KERNEL_OVERHEAD_GB}GB, Dirty=${PG_MAX_DIRTY_GB}GB, Safety=${PG_SAFETY_MARGIN_GB}GB" >&2
     print_info "Calculated ZFS ARC max: ${arc_max_gb}GB" >&2
+    report_huge_pages "$shared_segment_gb"
 
     echo "$arc_max_bytes"
+}
+
+# report_huge_pages SHARED_SEGMENT_GB: the huge pages reserve_huge_pages.sh reserves hold
+# PostgreSQL's shared segment, so the PostgreSQL reservation above already counts them; warn when
+# the host reserves more than that, which the ARC formula does not account for
+report_huge_pages() {
+    local huge_page_kb huge_pages reserved_gb
+    huge_page_kb=$(pg_huge_page_size_kb /)
+    huge_pages=$(get_sysctl_value vm.nr_hugepages)
+    reserved_gb=$((huge_pages * huge_page_kb / 1024 / 1024))
+    if [[ $huge_pages -eq 0 ]]; then
+        print_info "Huge pages: none reserved; PostgreSQL uses 4kB pages (see reserve_huge_pages.sh)" >&2
+    elif [[ $reserved_gb -le $1 ]]; then
+        print_info "Huge pages: ${huge_pages} x ${huge_page_kb}kB (${reserved_gb}GB) reserved, within the PostgreSQL reservation" >&2
+    else
+        print_warning "Huge pages: ${huge_pages} x ${huge_page_kb}kB (${reserved_gb}GB) reserved, more than the ${1}GB PostgreSQL reservation; the ARC formula does not count the excess" >&2
+    fi
 }
 
 # Check if ZFS module is loaded
@@ -151,7 +155,7 @@ set_zfs_param() {
 # Show help message
 show_help() {
     local shared_buffers_gb
-    shared_buffers_gb=$(pg_shared_buffers_gb "$(pg_memory_total_kb /)" "$(shared_buffers_override)" 2>&1 >/dev/null || true)
+    shared_buffers_gb=$(pg_shared_buffers_gb "$(pg_memory_total_kb /)" "$(pg_shared_buffers_override "$SCRIPT_DIR/.env")" 2>&1 >/dev/null || true)
     cat << EOF
 Usage: sudo $0 [OPTIONS]
 
@@ -181,7 +185,8 @@ MEMORY ALLOCATION:
   PostgreSQL's shared_buffers is sized the way the haf container sizes it (postgresql_memory.sh):
   POSTGRESQL_SHARED_BUFFERS_GB from the environment or $SCRIPT_DIR/.env when set, otherwise
   ${PG_SHARED_BUFFERS_PERCENT}% of RAM capped at ${PG_SHARED_BUFFERS_MAX_GB}GB (at least ${PG_SHARED_BUFFERS_MIN_GB}GB). Its shared segment adds
-  ${PG_SHARED_SEGMENT_OVERHEAD_PERCENT}% overhead.
+  ${PG_SHARED_SEGMENT_OVERHEAD_PERCENT}% overhead.  The huge pages reserve_huge_pages.sh reserves hold that segment, so
+  they are part of this reservation, not on top of it.
 
   Current configuration:
     PostgreSQL ${shared_buffers_gb}

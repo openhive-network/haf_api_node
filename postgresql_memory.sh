@@ -1,7 +1,8 @@
 # shellcheck shell=sh
 # PostgreSQL memory sizing for a HAF node, sourced by haf/entrypoint.sh (which writes the result to
-# haf_postgresql_conf.d/zz-memory.conf each time the haf container starts) and reduce_writebacks.sh
-# (which limits the ZFS ARC around it), so both work from the same shared_buffers.
+# haf_postgresql_conf.d/zz-memory.conf each time the haf container starts), reduce_writebacks.sh
+# (which limits the ZFS ARC around it) and reserve_huge_pages.sh (which reserves huge pages for
+# PostgreSQL's shared segment), so all three work from the same shared_buffers.
 #
 # Sizes are whole GiB, which PostgreSQL calls GB:
 #   shared_buffers       POSTGRESQL_SHARED_BUFFERS_GB when set; otherwise 40% of RAM rounded down,
@@ -9,10 +10,12 @@
 #   zfs_arc_max          RAM - (shared_buffers + PostgreSQL's shared segment overhead
 #                        + kernel overhead + max dirty pages + safety margin), at least 20GB
 #   effective_cache_size shared_buffers + zfs_arc_max, at most RAM
+#   vm.nr_hugepages      the shared segment below, in huge pages
 #
 # PostgreSQL's shared segment is larger than shared_buffers (buffer descriptors, lock tables,
 # wal_buffers): 48GB of buffers made a 50425MB segment, so 5% of shared_buffers, rounded up, is
-# reserved for it.
+# reserved for it.  The huge pages are that same reservation, so the ARC formula counts them once.
+# PostgreSQL uses huge pages only when its whole segment fits in them, hence the margin.
 
 PG_SHARED_BUFFERS_PERCENT=40
 PG_SHARED_BUFFERS_MAX_GB=64
@@ -46,6 +49,20 @@ pg_memory_total_kb() {
       ;;
   esac
   echo "$_pgm_total_kb"
+}
+
+# pg_shared_buffers_override ENV_FILE prints the POSTGRESQL_SHARED_BUFFERS_GB the haf container
+# gets: from the environment, else from ENV_FILE (the .env next to the host scripts, as sudo does
+# not pass the caller's environment through); empty when neither sets it.
+pg_shared_buffers_override() {
+  if [ -n "${POSTGRESQL_SHARED_BUFFERS_GB:-}" ]; then
+    echo "$POSTGRESQL_SHARED_BUFFERS_GB"
+  elif [ -f "$1" ]; then
+    _pgm_value=$(grep -E '^[[:space:]]*POSTGRESQL_SHARED_BUFFERS_GB=' "$1" | tail -n 1 || true)
+    _pgm_value=${_pgm_value#*=}
+    _pgm_value=${_pgm_value%%#*}
+    printf '%s\n' "$_pgm_value" | tr -d "\"' \t"
+  fi
 }
 
 # pg_shared_buffers_gb TOTAL_KB [OVERRIDE_GB] prints shared_buffers in GB, and on stderr how it was
@@ -82,6 +99,18 @@ pg_shared_buffers_gb() {
 # those buffers, overhead included, in GB.
 pg_shared_segment_gb() {
   echo $(($1 + ($1 * PG_SHARED_SEGMENT_OVERHEAD_PERCENT + 99) / 100))
+}
+
+# pg_huge_page_size_kb ROOT prints the default huge page size (Hugepagesize in ROOT/proc/meminfo)
+# in kB, the size vm.nr_hugepages counts and PostgreSQL's huge_page_size = 0 uses.
+pg_huge_page_size_kb() {
+  awk '/^Hugepagesize:/ { print $2 }' "${1%/}/proc/meminfo"
+}
+
+# pg_huge_pages_count SHARED_BUFFERS_GB HUGE_PAGE_KB prints the vm.nr_hugepages that hold the
+# shared segment of those buffers.
+pg_huge_pages_count() {
+  echo $(($(pg_shared_segment_gb "$1") * _PGM_KB_PER_GB / $2))
 }
 
 # pg_zfs_arc_max_gb TOTAL_KB SHARED_BUFFERS_GB prints the ZFS ARC limit in GB.

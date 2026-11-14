@@ -7,6 +7,10 @@
 # PostgreSQL reads haf_postgresql_conf.d in file-name order and the last setting wins: "zz-memory.conf"
 # sorts after pgtune.conf, zfs.conf and custom_postgres.conf, so it replaces the 16GB that older
 # pgtune.conf copies in existing datadirs still carry.
+#
+# PostgreSQL keeps huge_pages = try.  Once it accepts connections, a background job logs
+# huge_pages_status and how the huge pages the host reserved (reserve_huge_pages.sh) compare with the
+# shared memory PostgreSQL needed.
 
 set -euo pipefail
 
@@ -33,5 +37,27 @@ effective_cache_size = ${effective_cache_size_gb}GB
 EOF
 sudo -n chown postgres:postgres "$CONF_FILE"
 echo "Wrote $CONF_FILE"
+
+# report_huge_pages EXPECTED_HUGE_PAGES HUGE_PAGE_KB waits until PostgreSQL accepts connections,
+# then logs whether its shared memory is on huge pages
+report_huge_pages() {
+  local result status needed total free rsvd
+  until result=$(sudo -n -u postgres psql -XAtc "SELECT current_setting('huge_pages_status'), current_setting('shared_memory_size_in_huge_pages')" 2> /dev/null); do
+    sleep 10
+  done
+  IFS='|' read -r status needed <<< "$result"
+  total=$(awk '/^HugePages_Total:/ { print $2 }' /proc/meminfo)
+  free=$(awk '/^HugePages_Free:/ { print $2 }' /proc/meminfo)
+  rsvd=$(awk '/^HugePages_Rsvd:/ { print $2 }' /proc/meminfo)
+  echo "huge_pages_status = $status: PostgreSQL's shared memory needs $needed huge pages of ${2}kB; the host has HugePages_Total $total, HugePages_Free $free, HugePages_Rsvd $rsvd; reserve_huge_pages.sh reserves $1"
+  if [ "$status" != on ] && [ "$total" -gt 0 ]; then
+    echo "WARNING: PostgreSQL uses 4kB pages while $total huge pages are reserved and unused: reserve at least $needed (reserve_huge_pages.sh) or release them"
+  elif [ "$needed" -gt "$1" ]; then
+    echo "WARNING: reserve_huge_pages.sh's $1 huge pages are fewer than the $needed PostgreSQL needs"
+  fi
+}
+
+huge_page_kb=$(pg_huge_page_size_kb /)
+report_huge_pages "$(pg_huge_pages_count "$shared_buffers_gb" "$huge_page_kb")" "$huge_page_kb" &
 
 exec /home/hived/docker_entrypoint.sh "$@"

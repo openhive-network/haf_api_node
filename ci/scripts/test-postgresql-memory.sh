@@ -2,7 +2,8 @@
 #
 # Test the PostgreSQL memory sizing the haf container and reduce_writebacks.sh share
 # (postgresql_memory.sh) on fixture /proc/meminfo and cgroup files: hosts of 2GB, 64GB, 121GB and
-# 256GB, the POSTGRESQL_SHARED_BUFFERS_GB override, and a memory-limited container.  No root needed.
+# 256GB, the POSTGRESQL_SHARED_BUFFERS_GB override (and how it is read from .env), a memory-limited
+# container, and the huge page reservation for the shared segment.  No root needed.
 
 set -euo pipefail
 
@@ -23,7 +24,7 @@ trap 'rm -rf "$WORK"' EXIT
 host() {
   local root="$WORK/$1"
   mkdir -p "$root/proc" "$root/sys/fs/cgroup/memory"
-  printf 'MemTotal:       %s kB\nMemFree:         1000000 kB\n' "$2" > "$root/proc/meminfo"
+  printf 'MemTotal:       %s kB\nMemFree:         1000000 kB\nHugepagesize:       2048 kB\n' "$2" > "$root/proc/meminfo"
   if [ $# -gt 2 ]; then
     echo "$4" > "$root/sys/fs/cgroup/$3"
   fi
@@ -68,5 +69,36 @@ for bad in 16GB 0 -4 4.5; do
   grep -q "must be a whole number of GB" "$WORK/log" || fail "override '$bad': no error logged"
   echo "ok: override '$bad' refused"
 done
+
+# huge pages hold the shared segment the ARC formula reserves: 48GB + 5% rounded up = 51GB.
+# steem-20's PostgreSQL reported shared_memory_size_in_huge_pages = 25217 for 48GB of buffers, so
+# 26112 covers it.
+expect_huge_pages() {
+  local count
+  count=$(pg_huge_pages_count "$2" "$3")
+  [ "$count" = "$4" ] || fail "$1: $count huge pages, expected $4"
+  echo "ok: $1: $count huge pages"
+}
+huge_page_kb=$(pg_huge_page_size_kb "$WORK/h121")
+[ "$huge_page_kb" = 2048 ] || fail "Hugepagesize read as '$huge_page_kb', expected 2048"
+expect_huge_pages "48GB, 2MB pages" 48 "$huge_page_kb" 26112
+expect_huge_pages "48GB, 1GB pages" 48 1048576 51
+expect_huge_pages "1GB floor, 2MB pages" 1 2048 1024
+expect_huge_pages "64GB cap, 2MB pages" 64 2048 34816
+
+# expect_override NAME ENV_VALUE ENV_FILE_LINE EXPECTED
+expect_override() {
+  local value
+  printf 'PROJECT_NAME=haf\n%s\n' "$3" > "$WORK/.env"
+  value=$(POSTGRESQL_SHARED_BUFFERS_GB="$2" pg_shared_buffers_override "$WORK/.env")
+  [ "$value" = "$4" ] || fail "$1: override read as '$value', expected '$4'"
+  echo "ok: $1: override '$value'"
+}
+expect_override ".env plain" "" "POSTGRESQL_SHARED_BUFFERS_GB=32" 32
+expect_override ".env quoted, commented" "" "  POSTGRESQL_SHARED_BUFFERS_GB=\"40\"  # tuned" 40
+expect_override ".env commented out" "" "# POSTGRESQL_SHARED_BUFFERS_GB=48" ""
+expect_override "environment wins" 24 "POSTGRESQL_SHARED_BUFFERS_GB=32" 24
+[ -z "$(POSTGRESQL_SHARED_BUFFERS_GB='' pg_shared_buffers_override "$WORK/missing.env")" ] || fail "missing .env: override not empty"
+echo "ok: missing .env: no override"
 
 echo "All PostgreSQL memory sizing tests passed"
