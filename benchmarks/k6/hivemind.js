@@ -1,5 +1,10 @@
 // Hivemind (Social Graph API) benchmark
 // JSON-RPC at root / via drone
+//
+// Methods and parameters checked against hivemind on steem-20 (2026-11-14), both
+// through the stack and on its backend port. Each iteration draws an account, a ranked
+// feed and one of the account's own posts, so Drone's short per-method cache rarely
+// answers twice for the same request.
 
 import http from "k6/http";
 import { check, group, sleep } from "k6";
@@ -45,13 +50,23 @@ function rpc(method, params, name) {
   return res;
 }
 
+function resultOf(res) {
+  try { return JSON.parse(res.body).result; } catch { return undefined; }
+}
+
 export default function () {
   const account = randomItem(TEST_DATA.accounts);
+  let post;
 
   group("bridge_api", () => {
-    rpc("bridge.get_ranked_posts", { sort: "trending", tag: "", limit: 5 });
+    rpc("bridge.get_ranked_posts", {
+      sort: randomItem(TEST_DATA.ranked_sorts), tag: randomItem(TEST_DATA.tags), limit: 5,
+    });
     rpc("bridge.get_profile", { account });
-    rpc("bridge.get_account_posts", { sort: "blog", account, limit: 5 });
+    const posts = resultOf(rpc("bridge.get_account_posts", { sort: "posts", account, limit: 5 }));
+    if (Array.isArray(posts) && posts.length > 0) {
+      post = randomItem(posts);
+    }
     rpc("bridge.account_notifications", { account, limit: 5 });
     rpc("bridge.get_trending_topics", {});
   });
@@ -60,17 +75,21 @@ export default function () {
     rpc("condenser_api.get_followers", [account, "", "blog", 5]);
     rpc("condenser_api.get_following", [account, "", "blog", 5]);
     rpc("condenser_api.get_follow_count", [account]);
-    rpc("condenser_api.get_content", ["gtg", TEST_DATA.permlinks.gtg]);
+    if (post) {
+      rpc("condenser_api.get_content", [post.author, post.permlink]);
+    }
   });
 
-  group("database_api", () => {
-    rpc("database_api.list_votes", {
-      start: ["gtg", "witness-gtg", ""], limit: 5, order: "by_comment_voter",
+  if (post) {
+    group("database_api", () => {
+      rpc("database_api.list_votes", {
+        start: [post.author, post.permlink, ""], limit: 5, order: "by_comment_voter",
+      });
+      rpc("database_api.find_comments", {
+        comments: [[post.author, post.permlink]],
+      });
     });
-    rpc("database_api.find_comments", {
-      comments: [["gtg", "witness-gtg"]],
-    });
-  });
+  }
 
   group("hive_api", () => {
     rpc("hive.db_head_state", {});

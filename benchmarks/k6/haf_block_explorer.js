@@ -1,12 +1,16 @@
 // HAF Block Explorer API benchmark
 // REST API at /hafbe-api/
+//
+// Endpoints and parameters follow the OpenAPI spec the block explorer serves at
+// /hafbe-api/ (checked against steem-20, 2026-11-14). When a check fails on every
+// call, diff the paths below against that spec first.
 
 import http from "k6/http";
 import { check, group, sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
 import {
   HAFBE_URL, DEFAULT_THRESHOLDS, VUS, DURATION, RAMP_UP, RAMP_DOWN,
-  TEST_DATA, randomItem,
+  TEST_DATA, randomItem, randomInt, fetchLastBlock, randomBlock,
 } from "./config.js";
 
 const errorRate = new Rate("hafbe_errors");
@@ -37,24 +41,42 @@ function restGet(path, name) {
   return res;
 }
 
-export default function () {
+export function setup() {
+  const lastBlock = fetchLastBlock(`${HAFBE_URL}/last-synced-block`);
+  const res = http.get(`${HAFBE_URL}/witnesses?page-size=100`, { tags: { endpoint: "setup" } });
+  if (res.status !== 200) {
+    throw new Error(`cannot list witnesses from ${HAFBE_URL}: ${res.status} ${res.body}`);
+  }
+  const witnesses = JSON.parse(res.body).witnesses.map((w) => w.witness_name);
+  return { lastBlock, witnesses };
+}
+
+export default function (data) {
   const account = randomItem(TEST_DATA.accounts);
+  const witness = randomItem(data.witnesses);
+  const blockNum = randomBlock(data.lastBlock);
 
   group("accounts", () => {
     restGet(`/accounts/${account}`, "get_account");
     restGet(`/accounts/${account}/authority`, "get_account_authority");
-    restGet(`/accounts/${account}/comment-permlinks`, "get_comment_permlinks");
+    restGet(
+      `/accounts/${account}/comment-permlinks?page-size=10&to-block=${blockNum}`,
+      "get_comment_permlinks",
+    );
   });
 
   group("blocks", () => {
-    restGet(`/operation-type-counts`, "get_latest_blocks");
-    restGet(`/transaction-statistics`, "get_transaction_statistics");
+    restGet(`/operation-type-counts?block-num=${blockNum}`, "get_latest_blocks");
+    restGet(
+      `/transaction-statistics?granularity=daily&from-block=${blockNum}&to-block=${blockNum + 200000}`,
+      "get_transaction_statistics",
+    );
   });
 
   group("witnesses", () => {
-    restGet(`/witnesses`, "get_witnesses");
-    restGet(`/witnesses/gtg`, "get_witness");
-    restGet(`/witnesses/gtg/voters?_limit=10`, "get_witness_voters");
+    restGet(`/witnesses?page-size=20&page=${randomInt(1, 20)}`, "get_witnesses");
+    restGet(`/witnesses/${witness}`, "get_witness");
+    restGet(`/witnesses/${witness}/voters?page-size=10`, "get_witness_voters");
   });
 
   group("metadata", () => {

@@ -1,12 +1,16 @@
 // Balance Tracker API benchmark
 // REST API at /balance-api/
+//
+// Endpoints and parameters follow the OpenAPI spec the balance tracker serves at
+// /balance-api/ (checked against steem-20, 2026-11-14). When a check fails on every
+// call, diff the paths below against that spec first.
 
 import http from "k6/http";
 import { check, group, sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
 import {
   BALANCE_URL, STRICT_THRESHOLDS, VUS, DURATION, RAMP_UP, RAMP_DOWN,
-  TEST_DATA, randomItem,
+  TEST_DATA, randomItem, randomInt, fetchLastBlock, randomBlock,
 } from "./config.js";
 
 const errorRate = new Rate("balance_errors");
@@ -37,13 +41,25 @@ function restGet(path, name) {
   return res;
 }
 
-export default function () {
+export function setup() {
+  return { lastBlock: fetchLastBlock(`${BALANCE_URL}/last-synced-block`) };
+}
+
+export default function (data) {
   const account = randomItem(TEST_DATA.accounts);
+  const coin = randomItem(TEST_DATA.coin_types);
+  const blockNum = randomBlock(data.lastBlock);
 
   group("balances", () => {
     restGet(`/accounts/${account}/balances`, "get_account_balances");
-    restGet(`/accounts/${account}/balance-history`, "get_balance_history");
-    restGet(`/accounts/${account}/aggregated-history`, "get_balance_aggregation");
+    restGet(
+      `/accounts/${account}/balance-history?coin-type=${coin}&page-size=10&to-block=${blockNum}`,
+      "get_balance_history",
+    );
+    restGet(
+      `/accounts/${account}/aggregated-history?coin-type=${coin}&granularity=monthly&to-block=${blockNum}`,
+      "get_balance_aggregation",
+    );
   });
 
   group("delegations", () => {
@@ -53,7 +69,7 @@ export default function () {
   });
 
   group("global", () => {
-    restGet(`/top-holders`, "get_top_holders");
+    restGet(`/top-holders?coin-type=${coin}&page=${randomInt(1, 20)}`, "get_top_holders");
     restGet(`/total-value-locked`, "get_total_value_locked");
   });
 

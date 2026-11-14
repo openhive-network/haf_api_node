@@ -1,12 +1,16 @@
 // HAfAH (Account History API) benchmark
 // REST API at /hafah-api/
+//
+// Endpoints and parameters follow the OpenAPI spec HAfAH serves at /hafah-api/
+// (checked against steem-20, 2026-11-14). When a check fails on every call, diff the
+// paths below against that spec first.
 
 import http from "k6/http";
 import { check, group, sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
 import {
   HAFAH_URL, DEFAULT_THRESHOLDS, VUS, DURATION, RAMP_UP, RAMP_DOWN,
-  TEST_DATA, randomItem, randomInt,
+  TEST_DATA, randomItem, fetchLastBlock, randomBlock,
 } from "./config.js";
 
 const errorRate = new Rate("hafah_errors");
@@ -37,9 +41,13 @@ function restGet(path, name) {
   return res;
 }
 
-export default function () {
+export function setup() {
+  return { headBlock: fetchLastBlock(`${HAFAH_URL}/headblock`) };
+}
+
+export default function (data) {
   const account = randomItem(TEST_DATA.accounts);
-  const blockNum = randomItem(TEST_DATA.block_nums);
+  const blockNum = randomBlock(data.headBlock - 10);
 
   group("blocks", () => {
     restGet(`/blocks/${blockNum}`, "get_block");
@@ -48,16 +56,16 @@ export default function () {
   });
 
   group("operations", () => {
-    restGet(`/accounts/${account}/operations?page-size=10`, "get_ops_by_account");
+    restGet(`/accounts/${account}/operations?page-size=10&to-block=${blockNum}`, "get_ops_by_account");
     restGet(`/accounts/${account}/operation-types`, "get_acc_op_types");
     restGet(`/blocks/${blockNum}/operations?page-size=10`, "get_ops_by_block");
     restGet(`/operation-types`, "get_op_types");
-    restGet(`/operations?block-num=${blockNum}&page-size=5`, "get_operations");
+    restGet(`/operations?from-block=${blockNum}&to-block=${blockNum + 1}&page-size=5`, "get_operations");
   });
 
   group("metadata", () => {
-    restGet(`/global-state`, "get_global_state");
-    restGet(`/head-block-num`, "get_head_block_num");
+    restGet(`/global-state?block-num=${blockNum}`, "get_global_state");
+    restGet(`/headblock`, "get_head_block_num");
     restGet(`/version`, "get_version");
   });
 
