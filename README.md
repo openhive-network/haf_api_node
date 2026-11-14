@@ -391,6 +391,22 @@ keep that section and the `agent-addr 127.0.0.1 agent-port 270NN` form.
 `ci/scripts/test-haproxy-agent-recreate.sh` checks this against a throwaway docker
 network (it needs a docker daemon; CI does not run it).
 
+Each app's PostgREST rewriter (the `*-postgrest-rewriter` services) is nginx with
+a `proxy_pass` to its PostgREST service by name and no `resolver`, so it looks up
+that container's address once, when it starts. Its `depends_on` on the PostgREST
+service therefore carries `restart: true`: whenever compose recreates or restarts
+the PostgREST container (`docker compose up -d` after an image or environment
+change, `docker compose restart <app>-postgrest`), it restarts the rewriter too,
+which then resolves the new address. Without this, a rewriter keeps the old
+address, and once Docker hands it to another app's container, it serves that
+app's API with HTTP 200. This needs Docker Compose 2.17 or later (the stack
+already needs 2.24.7). It does not cover Docker restarting a crashed PostgREST
+container on its own (`restart: on-failure`), but that keeps the container and,
+normally, its address. If you add a rewriter in a local override, give it the same
+`restart: true`. `ci/scripts/test-postgrest-rewriter-recreate.sh` swaps the
+addresses of two PostgREST containers with `up -d` and checks each rewriter's
+answer by its OpenAPI title (it needs a docker daemon; CI does not run it).
+
 ### PostgreSQL connection limit
 
 `connections.conf` sets PostgreSQL's `max_connections` to 200 and documents the
