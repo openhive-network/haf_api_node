@@ -15,7 +15,7 @@
 #   --smoke             Run smoke test only (quick health check)
 #   --json DIR          Save k6 JSON output to directory
 #   --summary           Print summary comparison table at end
-#   --docker            Run k6 via Docker instead of local binary
+#   --docker            Run k6 via Docker (grafana/k6:2.4.0) instead of local binary
 #   -h, --help          Show this help
 
 set -euo pipefail
@@ -32,6 +32,8 @@ SMOKE_ONLY=false
 JSON_DIR=""
 SHOW_SUMMARY=true
 USE_DOCKER=false
+K6_IMAGE="grafana/k6:2.4.0"
+RESULTS_DIR=""
 APPS=()
 
 while [[ $# -gt 0 ]]; do
@@ -50,6 +52,13 @@ while [[ $# -gt 0 ]]; do
     *)           APPS+=("$1"); shift ;;
   esac
 done
+
+# k6 resolves output paths inside the Docker container, where the directory is
+# mounted at its absolute host path; create it now so it is owned by the caller.
+if [[ -n "$JSON_DIR" ]]; then
+  mkdir -p "$JSON_DIR"
+  JSON_DIR="$(cd "$JSON_DIR" && pwd)"
+fi
 
 # Map app names to k6 scripts
 declare -A APP_SCRIPTS=(
@@ -88,10 +97,18 @@ run_k6() {
   )
 
   if [[ "$USE_DOCKER" == "true" ]]; then
+    local mounts=(-v "$K6_DIR:/scripts:ro")
+    local dir
+    for dir in "$RESULTS_DIR" "$JSON_DIR"; do
+      if [[ -n "$dir" ]]; then
+        mounts+=(-v "$dir:$dir")
+      fi
+    done
     docker run --rm --network host \
+      --user "$(id -u):$(id -g)" \
       "${env_args[@]}" \
-      -v "$K6_DIR:/scripts:ro" \
-      grafana/k6 run "/scripts/$script" "$@"
+      "${mounts[@]}" \
+      "$K6_IMAGE" run "/scripts/$script" "$@"
   else
     if ! command -v k6 > /dev/null 2>&1; then
       echo "ERROR: k6 not found. Install it (https://k6.io/docs/get-started/installation/) or use --docker" >&2
@@ -124,7 +141,6 @@ if [[ "$SMOKE_ONLY" == "true" ]]; then
   echo "=== Smoke Test: ${STACK_URL} ==="
   local_args=()
   if [[ -n "$JSON_DIR" ]]; then
-    mkdir -p "$JSON_DIR"
     local_args+=(--out "json=$JSON_DIR/smoke.json")
   fi
   run_k6 smoke.js "${local_args[@]}"
@@ -175,7 +191,6 @@ for app in "${APPS[@]}"; do
 
   k6_args=()
   if [[ -n "$JSON_DIR" ]]; then
-    mkdir -p "$JSON_DIR"
     k6_args+=(--out "json=$JSON_DIR/${app}.json")
   fi
 

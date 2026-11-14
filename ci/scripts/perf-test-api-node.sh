@@ -44,7 +44,7 @@ if command -v k6 &>/dev/null; then
 elif command -v docker &>/dev/null; then
   echo "k6 not found locally, using Docker..."
   USE_DOCKER=true
-  K6_CMD="docker run --rm --user $(id -u):$(id -g) --network host -v ${TEST_DIR}:/tests -v ${RESULTS_DIR}:/results grafana/k6:latest"
+  K6_CMD="docker run --rm --user $(id -u):$(id -g) --network host -v ${TEST_DIR}:/tests -v ${RESULTS_DIR}:/results grafana/k6:2.4.0"
 fi
 
 if [[ -z "${K6_CMD}" ]]; then
