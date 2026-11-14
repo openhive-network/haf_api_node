@@ -300,8 +300,7 @@ services:
       - "io.hive.healthcheck.port=7017"
     environment:
       # nginx resolves the upstream at config-parse time, so a wrong name makes the
-      # container exit immediately rather than 502. Restart the rewriter after anything
-      # that recreates haf-fyp-postgrest.
+      # container exit immediately rather than 502.
       POSTGREST_HOST: haf-fyp-postgrest
       POSTGREST_PORT: 3000
     healthcheck:
@@ -313,6 +312,8 @@ services:
     depends_on:
       haf-fyp-postgrest:
         condition: service_healthy
+        # nginx resolves its upstream once, at startup; restart it with each new container.
+        restart: true
     restart: on-failure
     networks:
       - haf-network

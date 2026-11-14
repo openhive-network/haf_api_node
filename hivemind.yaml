@@ -153,6 +153,8 @@ services:
     depends_on:
       hivemind-postgrest-server:
         condition: service_healthy
+        # nginx resolves its upstream once, at startup; restart it with each new container.
+        restart: true
     restart: on-failure
     networks:
       - haf-network

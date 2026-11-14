@@ -133,6 +133,8 @@ services:
     depends_on:
       balance-tracker-postgrest:
         condition: service_healthy
+        # nginx resolves its upstream once, at startup; restart it with each new container.
+        restart: true
     restart: on-failure
     networks:
       - haf-network
