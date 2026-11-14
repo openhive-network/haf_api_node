@@ -9,6 +9,8 @@
 #
 # Options:
 #   --url URL           Stack base URL (default: http://localhost:8080)
+#   --app-url APP=URL   Send APP's requests to URL instead of through the stack, e.g.
+#                       hafah=http://localhost:17003 (repeatable; see README.md)
 #   --vus N             Virtual users per app (default: 10)
 #   --duration DUR      Steady-state duration (default: 2m)
 #   --max-vus N         Max VUs for stress tests (default: 50)
@@ -37,6 +39,7 @@ K6_IMAGE="grafana/k6:2.4.0"
 K6_SUMMARY_TREND_STATS="avg,min,med,max,p(90),p(95),p(99)"
 RESULTS_DIR=""
 APPS=()
+APP_URL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -49,7 +52,8 @@ while [[ $# -gt 0 ]]; do
     --no-summary) SHOW_SUMMARY=false; shift ;;
     --summary)   SHOW_SUMMARY=true; shift ;;
     --docker)    USE_DOCKER=true; shift ;;
-    -h|--help)   head -17 "$0" | tail -16; exit 0 ;;
+    --app-url)   APP_URL_ARGS+=("$2"); shift 2 ;;
+    -h|--help)   head -21 "$0" | tail -20; exit 0 ;;
     -*)          echo "Unknown option: $1" >&2; exit 1 ;;
     *)           APPS+=("$1"); shift ;;
   esac
@@ -74,31 +78,67 @@ declare -A APP_SCRIPTS=(
   [haf_fyp]="haf_fyp.js"
 )
 
-# Map app names to health check URLs
-declare -A APP_HEALTH=(
-  [hafah]="/hafah-api/version"
-  [hivemind]="/"
-  [balance_tracker]="/balance-api/version"
-  [reputation_tracker]="/reputation-api/version"
-  [haf_block_explorer]="/hafbe-api/version"
-  [nft_tracker]="/nft-tracker-api/version"
-  [haf_stats]="/haf-stats-api/version"
-  [haf_fyp]="/haf-fyp-api/version"
+# Map app names to their path prefix under the stack URL
+declare -A APP_PREFIX=(
+  [hafah]="/hafah-api"
+  [hivemind]=""
+  [balance_tracker]="/balance-api"
+  [reputation_tracker]="/reputation-api"
+  [haf_block_explorer]="/hafbe-api"
+  [nft_tracker]="/nft-tracker-api"
+  [haf_stats]="/haf-stats-api"
+  [haf_fyp]="/haf-fyp-api"
+)
+
+# Map app names to the k6/config.js variable that overrides their base URL
+declare -A APP_URL_VAR=(
+  [hafah]="HAFAH_URL"
+  [hivemind]="HIVEMIND_URL"
+  [balance_tracker]="BALANCE_URL"
+  [reputation_tracker]="REPUTATION_URL"
+  [haf_block_explorer]="HAFBE_URL"
+  [nft_tracker]="NFT_URL"
+  [haf_stats]="HAF_STATS_URL"
+  [haf_fyp]="HAF_FYP_URL"
 )
 
 ALL_APPS=(hafah hivemind balance_tracker reputation_tracker haf_block_explorer nft_tracker haf_stats haf_fyp)
 
+declare -A APP_URLS=()
+for arg in "${APP_URL_ARGS[@]}"; do
+  app="${arg%%=*}"
+  url="${arg#*=}"
+  if [[ "$arg" != *=* || -z "$url" || -z "${APP_URL_VAR[$app]:-}" ]]; then
+    echo "ERROR: --app-url takes APP=URL with APP one of: ${ALL_APPS[*]} (got '$arg')" >&2
+    exit 1
+  fi
+  APP_URLS[$app]="${url%/}"
+done
+
+app_url() {
+  local app="$1"
+  echo "${APP_URLS[$app]:-${STACK_URL}${APP_PREFIX[$app]}}"
+}
+
 run_k6() {
   local script="$1"
   shift
-  local env_args=(
-    -e "STACK_URL=$STACK_URL"
-    -e "VUS=$K6_VUS"
-    -e "DURATION=$K6_DURATION"
-    -e "MAX_VUS=$K6_MAX_VUS"
+  local env_vars=(
+    "STACK_URL=$STACK_URL"
+    "VUS=$K6_VUS"
+    "DURATION=$K6_DURATION"
+    "MAX_VUS=$K6_MAX_VUS"
   )
+  local app
+  for app in "${!APP_URLS[@]}"; do
+    env_vars+=("${APP_URL_VAR[$app]}=${APP_URLS[$app]}")
+  done
 
   if [[ "$USE_DOCKER" == "true" ]]; then
+    local env_args=() var
+    for var in "${env_vars[@]}"; do
+      env_args+=(-e "$var")
+    done
     local mounts=(-v "$K6_DIR:/scripts:ro")
     local dir
     for dir in "$RESULTS_DIR" "$JSON_DIR"; do
@@ -116,14 +156,14 @@ run_k6() {
       echo "ERROR: k6 not found. Install it (https://k6.io/docs/get-started/installation/) or use --docker" >&2
       exit 1
     fi
-    STACK_URL="$STACK_URL" VUS="$K6_VUS" DURATION="$K6_DURATION" MAX_VUS="$K6_MAX_VUS" \
-      k6 run "$K6_DIR/$script" "$@"
+    env "${env_vars[@]}" k6 run "$K6_DIR/$script" "$@"
   fi
 }
 
 check_app() {
   local app="$1"
-  local path="${APP_HEALTH[$app]}"
+  local base
+  base="$(app_url "$app")"
 
   if [[ "$app" == "hivemind" ]]; then
     # Hivemind uses JSON-RPC POST
@@ -131,10 +171,10 @@ check_app() {
     status=$(curl -sf -o /dev/null -w "%{http_code}" \
       -X POST -H "Content-Type: application/json" \
       -d '{"jsonrpc":"2.0","id":1,"method":"hive.db_head_state","params":{}}' \
-      "${STACK_URL}${path}" 2>/dev/null) || status="000"
+      "${base}/" 2>/dev/null) || status="000"
     [[ "$status" == "200" ]]
   else
-    curl -sf -o /dev/null "${STACK_URL}${path}" 2>/dev/null
+    curl -sf -o /dev/null "${base}/version" 2>/dev/null
   fi
 }
 
@@ -151,10 +191,10 @@ fi
 
 # --- Auto-detect available apps ---
 if [[ ${#APPS[@]} -eq 0 ]]; then
-  echo "=== Detecting available apps at ${STACK_URL} ==="
+  echo "=== Detecting available apps ==="
   for app in "${ALL_APPS[@]}"; do
     if check_app "$app"; then
-      echo "  [OK] $app"
+      echo "  [OK] $app ($(app_url "$app"))"
       APPS+=("$app")
     else
       echo "  [--] $app (not available)"
@@ -182,6 +222,11 @@ echo "  Stack URL:  $STACK_URL"
 echo "  Apps:       ${APPS[*]}"
 echo "  VUs:        $K6_VUS"
 echo "  Duration:   $K6_DURATION"
+for app in "${APPS[@]}"; do
+  if [[ -n "${APP_URLS[$app]:-}" ]]; then
+    echo "  Backend:    $app -> ${APP_URLS[$app]} (bypasses Caddy, Varnish, Drone and HAProxy)"
+  fi
+done
 echo ""
 
 RESULTS_DIR=$(mktemp -d)
@@ -212,10 +257,10 @@ done
 # --- Summary ---
 if [[ "$SHOW_SUMMARY" == "true" && -d "$RESULTS_DIR" ]]; then
   echo "=== Results Summary ==="
-  printf "%-25s %10s %10s %10s %10s %10s\n" \
-    "App" "Requests" "Avg (ms)" "p95 (ms)" "p99 (ms)" "Errors"
-  printf "%-25s %10s %10s %10s %10s %10s\n" \
-    "-------------------------" "----------" "----------" "----------" "----------" "----------"
+  printf "%-25s %10s %10s %10s %10s %10s %10s\n" \
+    "App" "Requests" "Avg (ms)" "p50 (ms)" "p95 (ms)" "p99 (ms)" "Errors"
+  printf "%-25s %10s %10s %10s %10s %10s %10s\n" \
+    "-------------------------" "----------" "----------" "----------" "----------" "----------" "----------"
 
   for app in "${APPS[@]}"; do
     summary="$RESULTS_DIR/${app}.json"
@@ -237,12 +282,13 @@ print('|'.join([
     app,
     field('http_reqs', 'count', '{}'),
     field('http_req_duration', 'avg', '{:.1f}'),
+    field('http_req_duration', 'med', '{:.1f}'),
     field('http_req_duration', 'p(95)', '{:.1f}'),
     field('http_req_duration', 'p(99)', '{:.1f}'),
     field('http_req_failed', 'value', '{:.2%}'),
 ]))
-" "$app" "$summary" 2>/dev/null | while IFS='|' read -r name reqs avg p95 p99 errs; do
-        printf "%-25s %10s %10s %10s %10s %10s\n" "$name" "$reqs" "$avg" "$p95" "$p99" "$errs"
+" "$app" "$summary" 2>/dev/null | while IFS='|' read -r name reqs avg p50 p95 p99 errs; do
+        printf "%-25s %10s %10s %10s %10s %10s %10s\n" "$name" "$reqs" "$avg" "$p50" "$p95" "$p99" "$errs"
       done
     fi
   done

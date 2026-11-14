@@ -1,5 +1,8 @@
 // NFT Tracker API benchmark
 // REST API at /nft-tracker-api/
+//
+// Endpoints and parameters follow the OpenAPI spec the NFT tracker serves at
+// /nft-tracker-api/ (checked against steem-20, 2026-11-14).
 
 import http from "k6/http";
 import { check, group, sleep } from "k6";

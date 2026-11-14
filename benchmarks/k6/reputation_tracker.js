@@ -1,5 +1,8 @@
 // Reputation Tracker API benchmark
 // REST API at /reputation-api/
+//
+// Endpoints and parameters follow the OpenAPI spec the reputation tracker serves at
+// /reputation-api/ (checked against steem-20, 2026-11-14).
 
 import http from "k6/http";
 import { check, group, sleep } from "k6";
