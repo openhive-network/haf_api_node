@@ -17,6 +17,9 @@ WORKDIR /haf-api-node
 COPY --chmod=755 ci/dind/entrypoint.sh entrypoint.sh
 COPY --chmod=755 create_directories.sh create_directories.sh
 COPY --chmod=755 repair_permissions.sh repair_permissions.sh
+# bind sources of the haf service (haf_base.yaml), which the *.sh excludes below would drop
+COPY --chmod=644 postgresql_memory.sh postgresql_memory.sh
+COPY --chmod=755 haf/entrypoint.sh haf/entrypoint.sh
 
 COPY --exclude=ci/* \
      --exclude=*.md \

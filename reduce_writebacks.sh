@@ -18,12 +18,12 @@ set -euo pipefail
 # Configuration
 SAVED_VALUES_FILE=".reduce_writebacks.original"
 
-# Memory allocation constants (in GB, easy to modify)
-# These are used to calculate ZFS ARC max
-POSTGRESQL_SHARED_BUFFERS_GB=16  # PostgreSQL shared_buffers setting
-KERNEL_OVERHEAD_GB=2              # Kernel slab, pagetables, etc.
-SAFETY_MARGIN_GB=10               # Free memory for bursts, containers
-# Note: Max dirty pages (12GB) is taken from vm.dirty_bytes setting
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# The memory sizing the haf container uses for PostgreSQL (shared_buffers, and the ZFS ARC
+# limit and reserved memory constants used below)
+# shellcheck source=postgresql_memory.sh
+. "$SCRIPT_DIR/postgresql_memory.sh"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -60,26 +60,39 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
+# The POSTGRESQL_SHARED_BUFFERS_GB override the haf container gets: from the environment, else
+# from the .env next to this script (sudo does not pass the caller's environment through)
+shared_buffers_override() {
+    if [[ -n "${POSTGRESQL_SHARED_BUFFERS_GB:-}" ]]; then
+        echo "$POSTGRESQL_SHARED_BUFFERS_GB"
+    elif [[ -f "$SCRIPT_DIR/.env" ]]; then
+        local value
+        value=$(grep -E '^[[:space:]]*POSTGRESQL_SHARED_BUFFERS_GB=' "$SCRIPT_DIR/.env" | tail -n 1 || true)
+        value=${value#*=}
+        value=${value%%#*}
+        echo "${value//[\"\'[:space:]]/}"
+    fi
+}
+
 # Calculate ZFS ARC max based on system memory
 # Returns the value in bytes
 calculate_arc_max() {
-    # Get total RAM in GB
-    local total_ram_bytes=$(free -b | grep Mem: | awk '{print $2}')
-    local total_ram_gb=$((total_ram_bytes / 1024 / 1024 / 1024))
+    local total_ram_kb
+    total_ram_kb=$(pg_memory_total_kb /)
+    local total_ram_gb=$((total_ram_kb / 1024 / 1024))
 
-    # Get max dirty pages from our setting (12GB)
-    local max_dirty_gb=12
+    # pg_shared_buffers_gb reports on stderr how it chose the value
+    local shared_buffers_gb
+    shared_buffers_gb=$(pg_shared_buffers_gb "$total_ram_kb" "$(shared_buffers_override)") || return 1
+    local shared_segment_gb
+    shared_segment_gb=$(pg_shared_segment_gb "$shared_buffers_gb")
 
-    # Calculate ARC max using the formula:
-    # ARC_MAX = Total_RAM - (PG_shared_buffers + Kernel_overhead + Max_dirty_pages + Safety_margin)
-    local reserved_gb=$((POSTGRESQL_SHARED_BUFFERS_GB + KERNEL_OVERHEAD_GB + max_dirty_gb + SAFETY_MARGIN_GB))
-    local arc_max_gb=$((total_ram_gb - reserved_gb))
-
-    # Ensure we don't set a negative or too small value
-    if [[ $arc_max_gb -lt 20 ]]; then
+    # ARC_MAX = Total_RAM - (PG_shared_segment + Kernel_overhead + Max_dirty_pages + Safety_margin)
+    local arc_max_gb
+    arc_max_gb=$(pg_zfs_arc_max_gb "$total_ram_kb" "$shared_buffers_gb")
+    if [[ $arc_max_gb -eq $PG_ZFS_ARC_MIN_GB ]]; then
         print_warning "System has insufficient memory for recommended settings" >&2
-        print_warning "Calculated ARC max would be ${arc_max_gb}GB, using minimum of 20GB" >&2
-        arc_max_gb=20
+        print_warning "Using the minimum ZFS ARC max of ${PG_ZFS_ARC_MIN_GB}GB" >&2
     fi
 
     # Convert to bytes
@@ -87,7 +100,7 @@ calculate_arc_max() {
 
     # Print info messages to stderr so they don't interfere with the return value
     print_info "System RAM: ${total_ram_gb}GB" >&2
-    print_info "Reserved: PostgreSQL=${POSTGRESQL_SHARED_BUFFERS_GB}GB, Kernel=${KERNEL_OVERHEAD_GB}GB, Dirty=${max_dirty_gb}GB, Safety=${SAFETY_MARGIN_GB}GB" >&2
+    print_info "Reserved: PostgreSQL=${shared_segment_gb}GB (shared_buffers ${shared_buffers_gb}GB + segment overhead), Kernel=${PG_KERNEL_OVERHEAD_GB}GB, Dirty=${PG_MAX_DIRTY_GB}GB, Safety=${PG_SAFETY_MARGIN_GB}GB" >&2
     print_info "Calculated ZFS ARC max: ${arc_max_gb}GB" >&2
 
     echo "$arc_max_bytes"
@@ -137,6 +150,8 @@ set_zfs_param() {
 
 # Show help message
 show_help() {
+    local shared_buffers_gb
+    shared_buffers_gb=$(pg_shared_buffers_gb "$(pg_memory_total_kb /)" "$(shared_buffers_override)" 2>&1 >/dev/null || true)
     cat << EOF
 Usage: sudo $0 [OPTIONS]
 
@@ -160,14 +175,19 @@ ZFS PARAMETERS:
   zfs_arc_max                    Calculated based on system RAM minus allocations
 
 MEMORY ALLOCATION:
-  The ZFS ARC max is calculated as:
-    Total RAM - (PostgreSQL shared_buffers + Kernel overhead + Max dirty pages + Safety margin)
+  The ZFS ARC max is calculated as (at least ${PG_ZFS_ARC_MIN_GB}GB):
+    Total RAM - (PostgreSQL shared segment + Kernel overhead + Max dirty pages + Safety margin)
+
+  PostgreSQL's shared_buffers is sized the way the haf container sizes it (postgresql_memory.sh):
+  POSTGRESQL_SHARED_BUFFERS_GB from the environment or $SCRIPT_DIR/.env when set, otherwise
+  ${PG_SHARED_BUFFERS_PERCENT}% of RAM capped at ${PG_SHARED_BUFFERS_MAX_GB}GB (at least ${PG_SHARED_BUFFERS_MIN_GB}GB). Its shared segment adds
+  ${PG_SHARED_SEGMENT_OVERHEAD_PERCENT}% overhead.
 
   Current configuration:
-    PostgreSQL shared_buffers: ${POSTGRESQL_SHARED_BUFFERS_GB}GB
-    Kernel overhead: ${KERNEL_OVERHEAD_GB}GB
-    Max dirty pages: 12GB (from vm.dirty_bytes)
-    Safety margin: ${SAFETY_MARGIN_GB}GB
+    PostgreSQL ${shared_buffers_gb}
+    Kernel overhead: ${PG_KERNEL_OVERHEAD_GB}GB
+    Max dirty pages: ${PG_MAX_DIRTY_GB}GB (from vm.dirty_bytes)
+    Safety margin: ${PG_SAFETY_MARGIN_GB}GB
 
 NOTES:
     - Must be run as root
