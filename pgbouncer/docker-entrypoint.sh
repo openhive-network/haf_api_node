@@ -94,6 +94,14 @@ transaction_timeout = ${PGBOUNCER_TRANSACTION_TIMEOUT:-0}
 client_idle_timeout = ${PGBOUNCER_CLIENT_IDLE_TIMEOUT:-0}
 client_login_timeout = ${PGBOUNCER_CLIENT_LOGIN_TIMEOUT:-60}
 
+;; Reconnect after a server restart.  Every pool refuses clients with its cached
+;; login error until server_login_retry has passed, and a restarted haf
+;; container usually comes back on a new address, which is picked up only once
+;; the cached lookup of its name is older than dns_max_ttl.
+server_login_retry = ${PGBOUNCER_SERVER_LOGIN_RETRY:-3}
+dns_max_ttl = ${PGBOUNCER_DNS_MAX_TTL:-5}
+dns_nxdomain_ttl = ${PGBOUNCER_DNS_NXDOMAIN_TTL:-5}
+
 ;; Low-level tuning
 pkt_buf = ${PGBOUNCER_PKT_BUF:-4096}
 max_packet_size = ${PGBOUNCER_MAX_PACKET_SIZE:-2147483647}
