@@ -33,6 +33,8 @@ JSON_DIR=""
 SHOW_SUMMARY=true
 USE_DOCKER=false
 K6_IMAGE="grafana/k6:2.4.0"
+# k6's default trend stats omit p(99), which the summary table reports.
+K6_SUMMARY_TREND_STATS="avg,min,med,max,p(90),p(95),p(99)"
 RESULTS_DIR=""
 APPS=()
 
@@ -196,6 +198,7 @@ for app in "${APPS[@]}"; do
 
   # Capture summary to file for later comparison
   k6_args+=(--summary-export="$RESULTS_DIR/${app}.json")
+  k6_args+=(--summary-trend-stats="$K6_SUMMARY_TREND_STATS")
 
   if run_k6 "$script" "${k6_args[@]}"; then
     echo "  $app: PASSED"
@@ -219,17 +222,26 @@ if [[ "$SHOW_SUMMARY" == "true" && -d "$RESULTS_DIR" ]]; then
     if [[ -f "$summary" ]]; then
       python3 -c "
 import json, sys
-with open('$summary') as f:
+app, path = sys.argv[1:3]
+with open(path) as f:
     d = json.load(f)
 m = d.get('metrics', {})
-reqs = m.get('http_reqs', {}).get('count', 0)
-dur = m.get('http_req_duration', {})
-avg = dur.get('avg', 0)
-p95 = dur.get('p(95)', 0)
-p99 = dur.get('p(99)', 0)
-fails = m.get('http_req_failed', {}).get('values', {}).get('rate', 0)
-print(f'$app|{reqs}|{avg:.1f}|{p95:.1f}|{p99:.1f}|{fails*100:.2f}%')
-" 2>/dev/null | while IFS='|' read -r name reqs avg p95 p99 errs; do
+
+# summary-export writes metric fields flat: a Rate as 'value', a Trend's stats
+# as 'avg', 'p(95)', ... A missing field reads 'n/a' rather than a false 0.
+def field(metric, key, fmt):
+    v = m.get(metric, {}).get(key)
+    return 'n/a' if v is None else fmt.format(v)
+
+print('|'.join([
+    app,
+    field('http_reqs', 'count', '{}'),
+    field('http_req_duration', 'avg', '{:.1f}'),
+    field('http_req_duration', 'p(95)', '{:.1f}'),
+    field('http_req_duration', 'p(99)', '{:.1f}'),
+    field('http_req_failed', 'value', '{:.2%}'),
+]))
+" "$app" "$summary" 2>/dev/null | while IFS='|' read -r name reqs avg p95 p99 errs; do
         printf "%-25s %10s %10s %10s %10s %10s\n" "$name" "$reqs" "$avg" "$p95" "$p99" "$errs"
       done
     fi
