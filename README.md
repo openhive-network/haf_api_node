@@ -246,6 +246,18 @@ suggested values.  Run:
 sudo ./reduce_writebacks.sh
 ```
 
+It also limits the ZFS ARC (`zfs_arc_max`) so that it, PostgreSQL and the dirty pages fit in RAM:
+
+```
+zfs_arc_max = RAM - (shared_buffers + 5% shared segment overhead + 2GB kernel + 12GB dirty pages + 10GB safety margin)
+```
+
+with a minimum of 20GB. `shared_buffers` is the value the haf container uses (see
+[PostgreSQL memory](#postgresql-memory)): 40% of RAM capped at 64GB, or
+`POSTGRESQL_SHARED_BUFFERS_GB`, which the script reads from the environment or from the `.env`
+next to it. On a 121GB host that is 48GB of shared buffers and a 46GB ARC.
+`sudo ./reduce_writebacks.sh --dry-run` prints the values without applying them.
+
 After sync, you can restore the original values with:
 ```
 sudo ./reduce_writebacks.sh --restore
@@ -394,6 +406,30 @@ the first `docker compose up -d` after upgrading recreates the haf container
 `connections.conf`, such as `pgtune.conf`. If you raise pgbouncer's
 `PGBOUNCER_MAX_DB_CONNECTIONS` or an app's connection counts past what that
 budget allows, raise `max_connections` with them.
+
+### PostgreSQL memory
+
+The haf container sizes PostgreSQL's `shared_buffers` from the RAM it can use each time it starts:
+40% of RAM, rounded down to whole GB and capped at 64GB, with a floor of 1GB (hosts under
+2.5GB of RAM; the container log says when the cap or floor applied). A 64GB host gets 25GB, a
+121GB host 48GB, a 256GB host 64GB. "RAM" is the host's total memory, or the haf container's
+cgroup memory limit if you give it a lower one. `effective_cache_size` is `shared_buffers` plus
+the ZFS ARC limit `reduce_writebacks.sh` computes (see Reducing Writebacks), at most RAM: 94GB on a
+121GB host.
+
+`haf/entrypoint.sh`, the haf service's entrypoint, writes both values to
+`haf_postgresql_conf.d/zz-memory.conf` and then runs the HAF image's own entrypoint. It rewrites
+the file at every start, so existing datadirs pick the sizing up at the next
+`docker compose up -d` after updating the checkout, which recreates the haf container. The file
+sorts after `pgtune.conf`, `zfs.conf` and `custom_postgres.conf`, so it replaces the
+`shared_buffers = 16GB` / `effective_cache_size = 48GB` that older `pgtune.conf` copies still
+carry; `pgtune.conf` no longer sets either.
+
+To choose `shared_buffers` yourself, set `POSTGRESQL_SHARED_BUFFERS_GB` (whole GB) in `.env`; it
+applies to both the haf container and `reduce_writebacks.sh`, and `effective_cache_size` follows
+it. Don't edit `zz-memory.conf`, and don't set `shared_buffers` in another
+`haf_postgresql_conf.d` file: a file sorting before `zz-memory.conf` is overridden, and one
+sorting after it is invisible to `reduce_writebacks.sh`'s ARC sizing.
 
 ## Networking: IPv6 and the p2p port
 

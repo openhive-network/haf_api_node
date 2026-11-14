@@ -9,6 +9,8 @@ services:
     tty: true
     stdin_open: true
     init: true
+    # sizes shared_buffers from the host's RAM, then runs the image's entrypoint; see haf/entrypoint.sh
+    entrypoint: /home/hived/haf_api_node/haf/entrypoint.sh
     command: "${ARGUMENTS:-}"
 
     # after requesting a shutdown with SIGTERM, allow the container two minutes to exit
@@ -156,6 +158,8 @@ services:
       # 10 minutes is probably long enough that anyone using NVMes will be able to recover their database at
       # startup.  If you're on slower drives or older hardware, you may need to increase this.
       PGCTLTIMEOUT: 600
+      # shared_buffers in GB; empty sizes it from RAM (postgresql_memory.sh)
+      POSTGRESQL_SHARED_BUFFERS_GB: ${POSTGRESQL_SHARED_BUFFERS_GB:-}
       # HACK, do not commit
       OVERRIDE_LD_PRELOAD: ""
     # when mounting volumes, declare the directories you want to bind-mount here,
@@ -187,6 +191,14 @@ services:
       - type: bind
         source: ./connections.conf
         target: /home/hived/datadir/haf_postgresql_conf.d/connections.conf
+        read_only: true
+      - type: bind
+        source: ./haf/entrypoint.sh
+        target: /home/hived/haf_api_node/haf/entrypoint.sh
+        read_only: true
+      - type: bind
+        source: ./postgresql_memory.sh
+        target: /home/hived/haf_api_node/postgresql_memory.sh
         read_only: true
     shm_size: ${HAF_SHM_SIZE:-8gb}
     depends_on:
