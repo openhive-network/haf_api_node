@@ -255,7 +255,9 @@ zfs_arc_max = RAM - (shared_buffers + 5% shared segment overhead + 2GB kernel + 
 with a minimum of 20GB. `shared_buffers` is the value the haf container uses (see
 [PostgreSQL memory](#postgresql-memory)): 40% of RAM capped at 64GB, or
 `POSTGRESQL_SHARED_BUFFERS_GB`, which the script reads from the environment or from the `.env`
-next to it. On a 121GB host that is 48GB of shared buffers and a 46GB ARC.
+next to it. On a 121GB host that is 48GB of shared buffers and a 46GB ARC. The huge pages
+`reserve_huge_pages.sh` reserves (see [Huge pages for PostgreSQL](#huge-pages-for-postgresql)) are
+part of the PostgreSQL share, not on top of it.
 `sudo ./reduce_writebacks.sh --dry-run` prints the values without applying them.
 
 After sync, you can restore the original values with:
@@ -446,6 +448,50 @@ applies to both the haf container and `reduce_writebacks.sh`, and `effective_cac
 it. Don't edit `zz-memory.conf`, and don't set `shared_buffers` in another
 `haf_postgresql_conf.d` file: a file sorting before `zz-memory.conf` is overridden, and one
 sorting after it is invisible to `reduce_writebacks.sh`'s ARC sizing.
+
+#### Huge pages for PostgreSQL
+
+PostgreSQL runs with `huge_pages = try`: it maps its shared memory (`shared_buffers` plus lock
+tables, buffer descriptors and `wal_buffers`, 50433MB for 48GB of buffers) on 2 MB huge pages when
+the host has reserved enough of them, and on 4 KB pages otherwise. Hosts reserve none by default.
+With 4 KB pages, random access to tens of GB of buffers spends much of its time on TLB misses;
+moving hived's state to 2 MB pages made its replay 18% faster. `reserve_huge_pages.sh` reserves
+them:
+
+```
+docker compose stop haf
+sudo ./reserve_huge_pages.sh --persist   # --dry-run shows the count first
+docker compose start haf
+```
+
+It sets `vm.nr_hugepages` to the shared segment `reduce_writebacks.sh` already leaves out of the ZFS
+ARC: `shared_buffers` + 5%, rounded up to whole GB (51GB = 26112 pages on a 121GB host). Reserved
+huge pages are taken out of general RAM until released, and only PostgreSQL uses them; because
+they are that same segment, the ARC limit counts them once. PostgreSQL uses huge pages only when
+its whole segment fits, so the reservation keeps a margin over what it needs (26112 against the
+25217 a 48GB PostgreSQL reported).
+
+Stop haf first: while its PostgreSQL holds its shared memory in 4 KB pages, the reservation would
+need that memory a second time, and the script refuses when the kernel does not report enough
+available memory. Huge pages also need unfragmented memory, which a host that has run for a while
+with ZFS seldom has; the script undoes a partial reservation and says so. `--persist` writes
+`/etc/sysctl.d/60-haf-huge-pages.conf`, so the reservation is also made at boot, before memory
+fragments; without it the reservation lasts until reboot. Rerun the script when RAM or
+`POSTGRESQL_SHARED_BUFFERS_GB` changes. `sudo ./reserve_huge_pages.sh --release` gives the pages
+back (PostgreSQL falls back to 4 KB pages at its next start).
+
+The haf container needs nothing extra to use them: PostgreSQL maps them anonymously, which needs
+no hugetlbfs mount or memlock limit, and Docker leaves the hugetlb cgroup limit unlimited. Once
+PostgreSQL accepts connections, the haf container's log reports whether it took effect:
+
+```
+huge_pages_status = on: PostgreSQL's shared memory needs 25217 huge pages of 2048kB; the host has HugePages_Total 26112, ...
+```
+
+followed by a warning when PostgreSQL fell back to 4 KB pages while huge pages are reserved (they
+sit unused), or when the reservation is smaller than what PostgreSQL needed. `SHOW
+huge_pages_status;` in psql and `HugePages_Total` / `HugePages_Rsvd` in `/proc/meminfo` show the
+same.
 
 ## Networking: IPv6 and the p2p port
 
