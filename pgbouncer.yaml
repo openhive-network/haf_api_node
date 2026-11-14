@@ -32,6 +32,10 @@ services:
       PGBOUNCER_QUERY_WAIT_TIMEOUT: 120
       PGBOUNCER_CLIENT_IDLE_TIMEOUT: 0
       PGBOUNCER_CLIENT_LOGIN_TIMEOUT: 60
+      # Reconnect after haf restarts (possibly on a new container address)
+      PGBOUNCER_SERVER_LOGIN_RETRY: 3
+      PGBOUNCER_DNS_MAX_TTL: 5
+      PGBOUNCER_DNS_NXDOMAIN_TTL: 5
       # Low-level tuning
       PGBOUNCER_PKT_BUF: 4096
       PGBOUNCER_TCP_KEEPALIVE: 1
