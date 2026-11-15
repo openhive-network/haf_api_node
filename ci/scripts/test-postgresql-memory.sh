@@ -46,21 +46,23 @@ expect() {
   echo "ok: $1: shared_buffers ${sb}GB, zfs_arc_max ${arc}GB, effective_cache_size ${ecs}GB ($log)"
 }
 
-# steem-20's MemTotal (121GB): 40% is 48.5GB; the segment takes 48 + 3, the ARC the rest of 121 - 24
-expect "121GB host" "$(host h121 127065876)" "" 48 46 94 "^shared_buffers = 48GB: 40% of 121GB RAM$"
-# 40% of 251GB is 100GB, over the cap
+# steem-20's MemTotal (121GB): 50% is 60.6GB; the segment takes 60 + 3, the ARC the rest of 121 - 24
+expect "121GB host" "$(host h121 127065876)" "" 60 34 94 "^shared_buffers = 60GB: 50% of 121GB RAM$"
+# 125.7GB: 50% is 62.9GB; the segment takes 62 + 4
+expect "125GB host" "$(host h125 131822380)" "" 62 35 97 "^shared_buffers = 62GB: 50% of 125GB RAM$"
+# 50% of 251GB is 125GB, over the cap
 expect "256GB host" "$(host h256 263842412)" "" 64 159 223 "capped at 64GB"
-# 62GB RAM: 25GB; the ARC formula comes out at 11GB, below its 20GB minimum
-expect "64GB host" "$(host h64 65777000)" "" 25 20 45 "^shared_buffers = 25GB: 40% of 62GB RAM$"
-# 40% of 1.9GB is under 1GB: the floor, and effective_cache_size no more than RAM
+# 62GB RAM: 31GB; the ARC formula comes out at 5GB, below its 20GB minimum
+expect "64GB host" "$(host h64 65777000)" "" 31 20 51 "^shared_buffers = 31GB: 50% of 62GB RAM$"
+# 50% of 1.9GB is under 1GB: the floor, and effective_cache_size no more than RAM
 expect "2GB host" "$(host h2 2000000)" "" 1 20 1 "below the 1GB floor"
 expect "121GB host, override" "$(host h121o 127065876)" 32 32 63 95 "from POSTGRESQL_SHARED_BUFFERS_GB"
 
 # a memory-limited container sizes from its limit; an unlimited one ("max" in cgroup v2, a huge
 # number in v1) from MemTotal
-expect "cgroup v2 limit 32GB" "$(host v2limit 127065876 memory.max 34359738368)" "" 12 20 32 "40% of 32GB RAM"
-expect "cgroup v2 unlimited" "$(host v2max 127065876 memory.max max)" "" 48 46 94 "40% of 121GB RAM"
-expect "cgroup v1 unlimited" "$(host v1max 127065876 memory/memory.limit_in_bytes 9223372036854771712)" "" 48 46 94 "40% of 121GB RAM"
+expect "cgroup v2 limit 32GB" "$(host v2limit 127065876 memory.max 34359738368)" "" 16 20 32 "50% of 32GB RAM"
+expect "cgroup v2 unlimited" "$(host v2max 127065876 memory.max max)" "" 60 34 94 "50% of 121GB RAM"
+expect "cgroup v1 unlimited" "$(host v1max 127065876 memory/memory.limit_in_bytes 9223372036854771712)" "" 60 34 94 "50% of 121GB RAM"
 
 for bad in 16GB 0 -4 4.5; do
   if pg_shared_buffers_gb 127065876 "$bad" > /dev/null 2> "$WORK/log"; then
@@ -83,6 +85,7 @@ huge_page_kb=$(pg_huge_page_size_kb "$WORK/h121")
 [ "$huge_page_kb" = 2048 ] || fail "Hugepagesize read as '$huge_page_kb', expected 2048"
 expect_huge_pages "48GB, 2MB pages" 48 "$huge_page_kb" 26112
 expect_huge_pages "48GB, 1GB pages" 48 1048576 51
+expect_huge_pages "60GB (121GB host), 2MB pages" 60 2048 32256
 expect_huge_pages "1GB floor, 2MB pages" 1 2048 1024
 expect_huge_pages "64GB cap, 2MB pages" 64 2048 34816
 
