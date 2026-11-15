@@ -12,6 +12,10 @@
 #   effective_cache_size shared_buffers + zfs_arc_max, at most RAM
 #   vm.nr_hugepages      the shared segment below, in huge pages
 #
+# The ZFS ARC limit is not applied by the haf container: reduce_writebacks.sh --zfs-only sets it on
+# the host (and --persist writes it to /etc/modprobe.d), and pg_zfs_arc_check below compares the
+# limit in force with it.
+#
 # PostgreSQL's shared segment is larger than shared_buffers (buffer descriptors, lock tables,
 # wal_buffers): 48GB of buffers made a 50425MB segment, so 5% of shared_buffers, rounded up, is
 # reserved for it.  The huge pages are that same reservation, so the ARC formula counts them once.
@@ -129,4 +133,81 @@ pg_effective_cache_size_gb() {
     _pgm_ecs_gb=$(($1 / _PGM_KB_PER_GB))
   fi
   echo "$_pgm_ecs_gb"
+}
+
+# pg_zfs_arc_default_bytes ROOT prints the ARC limit ZFS uses when zfs_arc_max is 0, in bytes:
+# OpenZFS 2.3 and later take all of MemTotal but 1GB or 5/8 of it, whichever is more; earlier
+# releases half of it.  The version comes from ROOT/sys/module/zfs/version; when it is unreadable
+# the larger, newer default is assumed.
+pg_zfs_arc_default_bytes() {
+  _pgm_mem=$(($(awk '/^MemTotal:/ { print $2 }' "${1%/}/proc/meminfo") * 1024))
+  _pgm_version=$(cat "${1%/}/sys/module/zfs/version" 2> /dev/null || true)
+  case $_pgm_version in
+    0.* | 1.* | 2.[012] | 2.[012][.-]*)
+      echo $((_pgm_mem / 2))
+      ;;
+    *)
+      _pgm_default=$((_pgm_mem - _PGM_KB_PER_GB * 1024))
+      if [ $((_pgm_mem * 5 / 8)) -gt "$_pgm_default" ]; then
+        _pgm_default=$((_pgm_mem * 5 / 8))
+      fi
+      echo "$_pgm_default"
+      ;;
+  esac
+}
+
+# pg_zfs_arc_check ROOT TOTAL_KB SHARED_BUFFERS_GB ZFS_ARC_MAX prints one line comparing the ARC
+# limit ZFS_ARC_MAX (bytes; 0 is ZFS's default, see pg_zfs_arc_default_bytes) with
+# pg_zfs_arc_max_gb's limit for those shared_buffers.  It returns 0 when the limit is within it and
+# 1 when it is larger, i.e. when the ARC, PostgreSQL's shared segment and the reserves can add up
+# to more than RAM.  On a host where pg_zfs_arc_max_gb's 20GB minimum applies, a limit of that
+# minimum passes.
+pg_zfs_arc_check() {
+  _pgm_formula_gb=$(pg_zfs_arc_max_gb "$2" "$3")
+  _pgm_formula=$((_pgm_formula_gb * _PGM_KB_PER_GB * 1024))
+  if [ "$4" -eq 0 ]; then
+    _pgm_arc=$(pg_zfs_arc_default_bytes "$1")
+    _pgm_source="zfs_arc_max = 0, ZFS's default of $_pgm_arc bytes"
+  else
+    _pgm_arc=$4
+    _pgm_source="zfs_arc_max = $4"
+  fi
+  _pgm_arc_gb=$(((_pgm_arc + _PGM_KB_PER_GB * 1024 - 1) / (_PGM_KB_PER_GB * 1024)))
+  if [ "$_pgm_arc" -le "$_pgm_formula" ]; then
+    echo "ZFS ARC limit ${_pgm_arc_gb}GB ($_pgm_source) is within the ${_pgm_formula_gb}GB (zfs_arc_max = $_pgm_formula) that RAM leaves beside shared_buffers ${3}GB"
+    return 0
+  fi
+  _pgm_segment_gb=$(pg_shared_segment_gb "$3")
+  _pgm_reserves_gb=$((PG_KERNEL_OVERHEAD_GB + PG_MAX_DIRTY_GB + PG_SAFETY_MARGIN_GB))
+  echo "ZFS ARC limit ${_pgm_arc_gb}GB ($_pgm_source) + PostgreSQL's ${_pgm_segment_gb}GB shared segment (shared_buffers ${3}GB) + ${_pgm_reserves_gb}GB kernel, dirty-page and safety reserves = $((_pgm_arc_gb + _pgm_segment_gb + _pgm_reserves_gb))GB, more than the $(($2 / _PGM_KB_PER_GB))GB of RAM; the limit for this shared_buffers is ${_pgm_formula_gb}GB (zfs_arc_max = $_pgm_formula)"
+  return 1
+}
+
+_PGM_MODPROBE_ARC_RE='^[[:space:]]*options[[:space:]]+zfs[[:space:]]+(.*[[:space:]])?zfs_arc_max='
+
+# pg_modprobe_zfs_arc_max DIR prints the zfs_arc_max the zfs module gets when it loads, from the
+# "options zfs" lines of DIR/*.conf (/etc/modprobe.d; the last one modprobe reads wins), or nothing
+# when none sets it (ZFS's default applies).
+pg_modprobe_zfs_arc_max() {
+  cat "${1%/}"/*.conf 2> /dev/null | grep -E "$_PGM_MODPROBE_ARC_RE" \
+    | sed -E 's/.*[[:space:]]zfs_arc_max=([0-9]*).*/\1/' | tail -n 1 || true
+}
+
+# pg_modprobe_set_zfs_arc_max DIR BYTES NEW_FILE sets zfs_arc_max to BYTES in every "options zfs"
+# line of DIR/*.conf that sets it, keeping the line's other options, and prints "FILE: OLD_VALUE"
+# for each such line.  When no line sets it, it writes DIR/NEW_FILE with one and prints nothing.
+pg_modprobe_set_zfs_arc_max() {
+  _pgm_found=
+  for _pgm_conf in "${1%/}"/*.conf; do
+    grep -qE "$_PGM_MODPROBE_ARC_RE" "$_pgm_conf" 2> /dev/null || continue
+    _pgm_found=1
+    grep -E "$_PGM_MODPROBE_ARC_RE" "$_pgm_conf" | sed -E 's/.*[[:space:]]zfs_arc_max=([0-9]*).*/\1/' \
+      | while read -r _pgm_old; do echo "$_pgm_conf: $_pgm_old"; done
+    sed -i -E "s/(^[[:space:]]*options[[:space:]]+zfs[[:space:]]+(.*[[:space:]])?zfs_arc_max=)[0-9]*/\\1$2/" "$_pgm_conf"
+  done
+  if [ -z "$_pgm_found" ]; then
+    printf '%s\noptions zfs zfs_arc_max=%s\n' \
+      "# Written by haf_api_node's reduce_writebacks.sh --zfs-only --persist: the ZFS ARC limit beside PostgreSQL's shared_buffers" \
+      "$2" > "${1%/}/$3"
+  fi
 }

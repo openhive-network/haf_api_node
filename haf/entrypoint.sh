@@ -11,6 +11,11 @@
 # PostgreSQL keeps huge_pages = try.  Once it accepts connections, a background job logs
 # huge_pages_status and how the huge pages the host reserved (reserve_huge_pages.sh) compare with the
 # shared memory PostgreSQL needed.
+#
+# effective_cache_size assumes the ZFS ARC limit postgresql_memory.sh computes, which the host has
+# to apply (reduce_writebacks.sh --zfs-only).  The entrypoint logs a warning, without failing the
+# start, when the runtime zfs_arc_max is larger; the boot-time value in the host's /etc/modprobe.d
+# is not visible here, reduce_writebacks.sh compares that one.
 
 set -euo pipefail
 
@@ -37,6 +42,14 @@ effective_cache_size = ${effective_cache_size_gb}GB
 EOF
 sudo -n chown postgres:postgres "$CONF_FILE"
 echo "Wrote $CONF_FILE"
+
+if [ -r /sys/module/zfs/parameters/zfs_arc_max ]; then
+  if arc_report=$(pg_zfs_arc_check / "$total_kb" "$shared_buffers_gb" "$(cat /sys/module/zfs/parameters/zfs_arc_max)"); then
+    echo "$arc_report"
+  else
+    echo "WARNING: $arc_report. To apply that limit now and at every boot, run on the host in the haf_api_node directory: sudo ./reduce_writebacks.sh --zfs-only --persist"
+  fi
+fi
 
 # report_huge_pages EXPECTED_HUGE_PAGES HUGE_PAGE_KB waits until PostgreSQL accepts connections,
 # then logs whether its shared memory is on huge pages
