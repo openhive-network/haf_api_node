@@ -117,6 +117,12 @@ services:
       # app is in sync. Nothing routes on it; chain staleness is measured by the
       # agent-check on 7017.
       HAF_FYP_HEALTHCHECK_MAX_AGE_SECONDS: ${HAF_FYP_HEALTHCHECK_MAX_AGE_SECONDS:-300}
+      # block-processing log, kept in the datadir (survives compose down; rotated by the logrotate service)
+      LOG_FILE: /logs/haf_fyp_block_processing.log
+    volumes:
+      - type: bind
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/apps
+        target: /logs
     networks:
       haf-network:
     restart: on-failure

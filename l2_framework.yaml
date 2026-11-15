@@ -31,6 +31,12 @@ services:
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: l2_framework_owner
+      # block-processing log, kept in the datadir (survives compose down; rotated by the logrotate service)
+      LOG_FILE: /logs/l2_framework_block_processing.log
+    volumes:
+      - type: bind
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/apps
+        target: /logs
     networks:
       haf-network:
     restart: on-failure
