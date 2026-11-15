@@ -130,6 +130,9 @@ services:
         required: false
       hivemind-install:
         condition: service_completed_successfully
+        # PostgREST reads its schema cache at start and can't LISTEN through pgbouncer:
+        # restart it after compose reruns an upgraded install, for the new endpoint signatures.
+        restart: true
       pgbouncer:
         condition: service_healthy
 
@@ -154,6 +157,11 @@ services:
       hivemind-postgrest-server:
         condition: service_healthy
         # nginx resolves its upstream once, at startup; restart it with each new container.
+        restart: true
+      # compose restarts only a restarted service's direct dependents, so the restart above
+      # doesn't pass through the PostgREST: follow its install too (it waits for the PostgREST).
+      hivemind-install:
+        condition: service_completed_successfully
         restart: true
     restart: on-failure
     networks:

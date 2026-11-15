@@ -96,6 +96,9 @@ services:
     depends_on:
       nft-tracker-install:
         condition: service_completed_successfully
+        # PostgREST reads its schema cache at start and can't LISTEN through pgbouncer:
+        # restart it after compose reruns an upgraded install, for the new endpoint signatures.
+        restart: true
       pgbouncer:
         condition: service_healthy
   nft-tracker-postgrest-rewriter:
@@ -119,6 +122,11 @@ services:
       nft-tracker-postgrest:
         condition: service_healthy
         # nginx resolves its upstream once, at startup; restart it with each new container.
+        restart: true
+      # compose restarts only a restarted service's direct dependents, so the restart above
+      # doesn't pass through the PostgREST: follow its install too (it waits for the PostgREST).
+      nft-tracker-install:
+        condition: service_completed_successfully
         restart: true
     restart: on-failure
     networks:
