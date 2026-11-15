@@ -409,6 +409,28 @@ normally, its address. If you add a rewriter in a local override, give it the sa
 addresses of two PostgREST containers with `up -d` and checks each rewriter's
 answer by its OpenAPI title (it needs a docker daemon; CI does not run it).
 
+PostgREST reads the endpoint functions into its schema cache when it starts. It
+cannot pick up `NOTIFY pgrst, 'reload schema'`, because it reaches PostgreSQL
+through transaction-mode pgbouncer, where LISTEN does not work, and PostgREST has
+no separate connection URI for its listener. So each `*-postgrest` service's
+`depends_on` on its app's install carries `restart: true`. When `docker compose
+up -d` recreates the install (after an image or environment change), compose
+restarts the PostgREST once the install completes, and it loads the new endpoint
+signatures. Compose restarts only the direct dependents of a recreated service,
+so the PostgREST restart does not pass on to the rewriter. Each rewriter
+therefore depends on the same install(s) with `restart: true` too. It restarts
+after its PostgREST is healthy again and resolves the PostgREST's new address. A
+plain `up -d` that reruns an unchanged install restarts neither service. This
+does not cover endpoint functions changed later, outside an install, such as by
+an app's block processing on start. In that case, reload the cache by hand with
+`docker compose kill -s SIGUSR1 <app>-postgrest`.
+`ci/scripts/test-postgrest-install-reload.sh` runs hafah's install, PostgREST
+and rewriter with a stub install that adds a parameter to an endpoint function
+in its second version. It checks that the new parameter works through the
+rewriter right after the upgraded install, that a plain rerun restarts nothing,
+and that every app in the stack has these dependencies (it needs a docker
+daemon; CI does not run it).
+
 ### PostgreSQL connection limit
 
 `connections.conf` sets PostgreSQL's `max_connections` to 200 and documents the
