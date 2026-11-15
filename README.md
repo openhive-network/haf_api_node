@@ -738,7 +738,8 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    the source) and pass `--source-images=source.images`.  `prepare` mounts the copy, copies the
    target-only directories from the live datadir (creating them empty when the live datadir lacks them
    too) and checks again.  Both fail if any service of the new configuration would still mount the
-   live datadir.
+   live datadir, or if `haf` would mount anything outside the copy other than read-only files of
+   this repository (such as `connections.conf`), which `check` lists as `ok`.
 6. **Boot the copy before any downtime:**
    ```bash
    sudo ./switch_zfs_datasets.sh --new-env=.env.new --source-env=source.env boot-check

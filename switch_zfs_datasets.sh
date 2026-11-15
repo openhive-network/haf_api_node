@@ -176,7 +176,7 @@ compose() {
 }
 
 # Prints "<service> <what>" lines from the rendered compose configuration on stdin;
-# <what> is binds (bind-mount sources), images or ports (host_ip:published).
+# <what> is binds ("ro|rw <source>" per bind mount), images or ports (host_ip:published).
 compose_query() {
   python3 -c '
 import json, sys
@@ -185,7 +185,7 @@ for name, svc in sorted(services.items()):
     if sys.argv[1] == "binds":
         for v in svc.get("volumes", []):
             if v.get("type") == "bind":
-                print(name, v["source"])
+                print(name, "ro" if v.get("read_only") else "rw", v["source"])
     elif sys.argv[1] == "images":
         print(name, svc.get("image", ""))
     elif sys.argv[1] == "ports":
@@ -209,6 +209,15 @@ _writes_database() {
   esac
 }
 
+# Whether a bind (MODE and SOURCE as compose_query binds prints them) is a read-only mount of a
+# regular file of this repository: node configuration, not data, which the live stack mounts too.
+_repo_config_file() {
+  local mode="$1" real
+  [ "$mode" = ro ] || return 1
+  real=$(realpath -e -- "$2" 2>/dev/null) || return 1
+  [ -f "$real" ] && [[ "$real" = "$(realpath -- "$REPO_DIR")"/* ]]
+}
+
 ######### check #########
 
 FAILURES=0
@@ -229,7 +238,7 @@ COPY_MOUNTED=0
 
 # check STRICT: STRICT=1 for steps that are about to use the copy (it must be mounted and complete).
 check() {
-  local strict="$1" name canmount mounted property unmounted=0 latest binds source rel service image
+  local strict="$1" name canmount mounted property unmounted=0 latest binds source rel service image mode
   local live_images new_images source_images source_image var live_value new_value file same_repo
   local -a changed=()
   FAILURES=0
@@ -278,13 +287,18 @@ check() {
     fail "docker compose could not render the new configuration"
     return
   fi
-  while read -r service source; do
+  while read -r service mode source; do
     case $source in
       "$NEW_MOUNTPOINT"|"$NEW_MOUNTPOINT"/*) ;;
       "$LIVE_MOUNTPOINT"|"$LIVE_MOUNTPOINT"/*)
         fail "$service still mounts the live datadir: $source (check the HAF_*_DIRECTORY settings)" ;;
       *)
-        [ "$service" != haf ] || fail "haf mounts $source, outside the copy: its data would not come from the copy" ;;
+        [ "$service" = haf ] || continue
+        if _repo_config_file "$mode" "$source"; then
+          ok "haf mounts repository file ${source#"$REPO_DIR/"} read-only"
+        else
+          fail "haf mounts $source, outside the copy: its data would not come from the copy"
+        fi ;;
     esac
   done <<< "$binds"
   while read -r source; do
@@ -304,7 +318,7 @@ check() {
       fi
       if [ "$strict" -eq 1 ]; then fail "$rel ($property)"; else warn "$rel ($property)"; fi
     fi
-  done < <(awk -v mp="$NEW_MOUNTPOINT" '$2 == mp || index($2, mp "/") == 1 { print $2 }' <<< "$binds" | sort -u)
+  done < <(awk -v mp="$NEW_MOUNTPOINT" '$3 == mp || index($3, mp "/") == 1 { print $3 }' <<< "$binds" | sort -u)
   [ "$COPY_MOUNTED" -eq 1 ] || warn "bind sources not checked: the copy is not mounted"
 
   echo ""
@@ -493,7 +507,7 @@ boot_cleanup() {
 }
 
 boot_check() {
-  local container status health deadline exit_code source port
+  local container status health deadline exit_code source port mode
   require_check
   BOOT_PROJECT="$(env_value "$LIVE_ENV" PROJECT_NAME)-boot-check"
   BOOT_PROJECT=${BOOT_PROJECT#-}
@@ -507,10 +521,11 @@ services:
 EOF
 
   # The boot check must not reach the live data or the live stack's published ports.
-  while read -r _ source; do
+  while read -r _ mode source; do
     case $source in
       "$NEW_MOUNTPOINT"/*) ;;
-      *) die "boot-check would mount $source, outside the copy" ;;
+      "$LIVE_MOUNTPOINT"|"$LIVE_MOUNTPOINT"/*) die "boot-check would mount $source, in the live datadir" ;;
+      *) _repo_config_file "$mode" "$source" || die "boot-check would mount $source, outside the copy" ;;
     esac
   done < <(boot_compose config --format json haf | compose_query binds | awk '$1 == "haf"')
   while read -r _ port; do
