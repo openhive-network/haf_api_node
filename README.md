@@ -253,9 +253,9 @@ zfs_arc_max = RAM - (shared_buffers + 5% shared segment overhead + 2GB kernel + 
 ```
 
 with a minimum of 20GB. `shared_buffers` is the value the haf container uses (see
-[PostgreSQL memory](#postgresql-memory)): 40% of RAM capped at 64GB, or
+[PostgreSQL memory](#postgresql-memory)): 50% of RAM capped at 64GB, or
 `POSTGRESQL_SHARED_BUFFERS_GB`, which the script reads from the environment or from the `.env`
-next to it. On a 121GB host that is 48GB of shared buffers and a 46GB ARC. The huge pages
+next to it. On a 121GB host that is 60GB of shared buffers and a 34GB ARC. The huge pages
 `reserve_huge_pages.sh` reserves (see [Huge pages for PostgreSQL](#huge-pages-for-postgresql)) are
 part of the PostgreSQL share, not on top of it.
 `sudo ./reduce_writebacks.sh --dry-run` prints the values without applying them.
@@ -428,12 +428,26 @@ budget allows, raise `max_connections` with them.
 ### PostgreSQL memory
 
 The haf container sizes PostgreSQL's `shared_buffers` from the RAM it can use each time it starts:
-40% of RAM, rounded down to whole GB and capped at 64GB, with a floor of 1GB (hosts under
-2.5GB of RAM; the container log says when the cap or floor applied). A 64GB host gets 25GB, a
-121GB host 48GB, a 256GB host 64GB. "RAM" is the host's total memory, or the haf container's
+50% of RAM, rounded down to whole GB and capped at 64GB, with a floor of 1GB (hosts under
+2GB of RAM; the container log says when the cap or floor applied). A 64GB host gets 31GB, a
+121GB host 60GB, a 128GB host 62GB, a 256GB host 64GB. "RAM" is the host's total memory, or the haf container's
 cgroup memory limit if you give it a lower one. `effective_cache_size` is `shared_buffers` plus
 the ZFS ARC limit `reduce_writebacks.sh` computes (see Reducing Writebacks), at most RAM: 94GB on a
 121GB host.
+
+50% is the share at which the full API mix (hivemind, HAfAH, hived, hivesense, block explorer,
+balance and reputation trackers) runs its working set from `shared_buffers` on a 121GB host; at
+48GB a repeated pass over the same traffic read more from disk than the first.
+
+The sizing does not shrink `shared_buffers` to fit small hosts. Below about 93GB of RAM the ARC
+formula comes out under its 20GB minimum, so the shared segment, the 20GB ARC and the 24GB of
+kernel, dirty-page and safety reserves add up to more than RAM: by 15GB on a 64GB host (33GB
+segment). What is given up is the safety margin and dirty-page headroom, not memory PostgreSQL
+or the ARC already hold. On such a host, set `POSTGRESQL_SHARED_BUFFERS_GB` lower if the stack
+runs short of memory. Neither budget counts hived's `shared_memory.bin` either: when it lives on
+a tmpfs or ramdisk (see [Shared Memory on Ramdisk](#shared-memory-on-ramdisk) and `HAF_SHM_DIRECTORY`), its size
+comes out of RAM on top of `shared_buffers` and the ARC, so lower
+`POSTGRESQL_SHARED_BUFFERS_GB` or the ARC limit by that much.
 
 `haf/entrypoint.sh`, the haf service's entrypoint, writes both values to
 `haf_postgresql_conf.d/zz-memory.conf` and then runs the HAF image's own entrypoint. It rewrites
@@ -465,7 +479,7 @@ docker compose start haf
 ```
 
 It sets `vm.nr_hugepages` to the shared segment `reduce_writebacks.sh` already leaves out of the ZFS
-ARC: `shared_buffers` + 5%, rounded up to whole GB (51GB = 26112 pages on a 121GB host). Reserved
+ARC: `shared_buffers` + 5%, rounded up to whole GB (63GB = 32256 pages on a 121GB host). Reserved
 huge pages are taken out of general RAM until released, and only PostgreSQL uses them; because
 they are that same segment, the ARC limit counts them once. PostgreSQL uses huge pages only when
 its whole segment fits, so the reservation keeps a margin over what it needs (26112 against the

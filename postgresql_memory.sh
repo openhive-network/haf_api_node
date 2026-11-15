@@ -5,8 +5,8 @@
 # PostgreSQL's shared segment), so all three work from the same shared_buffers.
 #
 # Sizes are whole GiB, which PostgreSQL calls GB:
-#   shared_buffers       POSTGRESQL_SHARED_BUFFERS_GB when set; otherwise 40% of RAM rounded down,
-#                        capped at 64GB, and at least 1GB (the floor applies below 2.5GB of RAM)
+#   shared_buffers       POSTGRESQL_SHARED_BUFFERS_GB when set; otherwise 50% of RAM rounded down,
+#                        capped at 64GB, and at least 1GB (the floor applies below 2GB of RAM)
 #   zfs_arc_max          RAM - (shared_buffers + PostgreSQL's shared segment overhead
 #                        + kernel overhead + max dirty pages + safety margin), at least 20GB
 #   effective_cache_size shared_buffers + zfs_arc_max, at most RAM
@@ -17,7 +17,7 @@
 # reserved for it.  The huge pages are that same reservation, so the ARC formula counts them once.
 # PostgreSQL uses huge pages only when its whole segment fits in them, hence the margin.
 
-PG_SHARED_BUFFERS_PERCENT=40
+PG_SHARED_BUFFERS_PERCENT=50
 PG_SHARED_BUFFERS_MAX_GB=64
 PG_SHARED_BUFFERS_MIN_GB=1
 PG_SHARED_SEGMENT_OVERHEAD_PERCENT=5
