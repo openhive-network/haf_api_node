@@ -2,7 +2,8 @@
 #
 # Test that switch_zfs_datasets.sh renders the stack each env file's COMPOSE_FILE selects, in check,
 # prepare, boot-check, swap and rollback, and that boot-check leaves the copy rolled back to the
-# snapshot it takes first.  The new configuration and the source layer an override pinning haf to a
+# snapshot it takes first, and that haf may bind read-only files of the repository but nothing else
+# outside the copy.  The new configuration and the source layer an override pinning haf to a
 # tag of its own, plus exposed/ (which publishes haf ports the boot check must drop).
 # No ZFS or docker daemon needed: the script runs from a copy of the repository whose
 # rollback_zfs_datasets.sh only logs its arguments, zfs and id are stubbed, and a docker wrapper logs
@@ -128,6 +129,39 @@ grep -qF "ok    haf: $PIN (same as the source)" "$WORK/check.log" || fail "check
 grep -qF "compose.not-on-this-host.yml, which is not here" "$WORK/check.log" || fail "check did not list the source's missing file"
 grep -qF "New compose files:  compose.yml exposed/compose.exposed.yml $WORK/pins.yml" "$WORK/check.log" || fail "check did not list the new compose files"
 grep -q "images that change on swap.*\bhaf\b" "$WORK/check.log" || fail "check did not see haf change against the live stack"
+
+for file in connections.conf haf/entrypoint.sh postgresql_memory.sh; do
+  grep -qxF "  ok    haf mounts repository file $file read-only" "$WORK/check.log" || fail "check did not accept the repository's $file: $(cat "$WORK/check.log")"
+done
+
+# haf binds that could bring data from outside the copy: each fails check, and boot-check refuses.
+echo data > "$WORK/outside.conf"
+echo data > "$REPO_DIR/writable.conf"
+ln -s "$WORK/outside.conf" "$REPO_DIR/outside-link.conf"
+mkdir -p "$WORK/mnt/live/haf_db_store"
+bad_bind() {
+  cat > "$WORK/bad-bind.yml" <<YML
+services:
+  haf:
+    volumes:
+      - type: bind
+        source: $1
+        target: /home/hived/extra
+        read_only: $2
+YML
+  write_env bad-bind.env copy "compose.yml:$WORK/pins.yml:$WORK/bad-bind.yml"
+  switch --new-env="$WORK/bad-bind.env" --source-env="$WORK/source.env" check > "$WORK/bad-bind.log" && fail "check accepted a haf bind of $1 (read_only: $2)"
+  grep -qF "FAIL  haf$3 $1" "$WORK/bad-bind.log" || fail "check did not report the haf bind of $1: $(cat "$WORK/bad-bind.log")"
+  : > "$WORK/docker.log"
+  switch --new-env="$WORK/bad-bind.env" --source-env="$WORK/source.env" boot-check > "$WORK/bad-bind.log" 2>&1 && fail "boot-check accepted a haf bind of $1"
+  ! grep -q -- ' up ' "$WORK/docker.log" || fail "boot-check started haf with a bind of $1"
+}
+bad_bind "$REPO_DIR/writable.conf" false " mounts"
+bad_bind "$REPO_DIR/haf" true " mounts"
+bad_bind "$WORK/outside.conf" true " mounts"
+bad_bind "$REPO_DIR/outside-link.conf" true " mounts"
+bad_bind "$WORK/mnt/live/haf_db_store" true " still mounts the live datadir:"
+rm -f "$REPO_DIR/writable.conf" "$REPO_DIR/outside-link.conf"
 
 switch --new-env="$WORK/new.env" --source-env="$WORK/unpinned-source.env" check > "$WORK/unpinned.log" && fail "check accepted a source built by $DEFAULT_HAF"
 grep -qF "FAIL  haf: $PIN, but the source database was built by $DEFAULT_HAF" "$WORK/unpinned.log" || fail "no haf mismatch: $(cat "$WORK/unpinned.log")"
