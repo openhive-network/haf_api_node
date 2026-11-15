@@ -55,6 +55,10 @@ services:
     image: ${HAF_STATS_IMAGE:-${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_stats}:${HAF_STATS_VERSION:-${HIVE_API_NODE_VERSION}}
     profiles:
       - haf-stats
+    # The image runs as uid 10001, which can't create its LOG_FILE in logs/apps (owned
+    # by HIVED_UID, 0755), and the driver exits on an unwritable LOG_FILE. Nothing in the
+    # image is owned by 10001, so it runs fine as the datadir's uid.
+    user: "${HAF_UID:-1000}:${HAF_GID:-1000}"
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: haf_stats_owner
@@ -66,6 +70,12 @@ services:
       # always uses one. 1 keeps the single-session sync. Images without haf_stats #140
       # ignore it.
       HAF_STATS_SYNC_PARALLELISM: ${HAF_STATS_SYNC_PARALLELISM:-1}
+      # block-processing log, kept in the datadir (survives compose down; rotated by the logrotate service)
+      LOG_FILE: /logs/haf_stats_block_processing.log
+    volumes:
+      - type: bind
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/apps
+        target: /logs
     networks:
       haf-network:
     restart: on-failure

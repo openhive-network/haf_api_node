@@ -29,6 +29,13 @@ services:
       - apps
       - hivemind
     restart: on-failure
+    environment:
+      # block-processing log, kept in the datadir (survives compose down; rotated by the logrotate service)
+      LOG_FILE: /logs/hivemind_block_processing.log
+    volumes:
+      - type: bind
+        source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/apps
+        target: /logs
     networks:
       haf-network:
     command:
