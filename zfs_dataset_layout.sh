@@ -19,19 +19,20 @@ zfs_dataset_layout() {
   # an unmountable dataset to serve as the parent for pgdata & tablespaces
   echo "haf_db_store required atime=off compression=lz4 canmount=off"
 
-  # several sites recommend 8k blocks for optimizing postgres on zfs, but we have found that it
-  # kills compression ratios for haf_block_log, so the PostgreSQL datasets keep the default 128k
-  # recordsize (consider also recordsize=16k, logbias=throughput)
+  # PostgreSQL reads 8K pages but ZFS reads whole records, so 128K records read ~8x the data on
+  # every ARC miss; smaller records compress worse.  32K is the measured compromise (README,
+  # "ZFS recordsize of the database"; haf_api_node#70).  Override with HAF_DB_RECORDSIZE.
+  db_recordsize=${HAF_DB_RECORDSIZE:-32K}
 
   # everything in PostgreSQL except for HAF (system tables and the like).  Having this directory
   # uncompressed improved performance in tests, and it's not very big
-  echo "haf_db_store/pgdata required atime=off compression=off canmount=on"
+  echo "haf_db_store/pgdata required atime=off compression=off canmount=on recordsize=$db_recordsize"
 
   # the write-ahead logs, simply to reduce the size of snapshots of other datasets
-  echo "haf_db_store/pgdata/pg_wal required atime=off compression=off canmount=on"
+  echo "haf_db_store/pgdata/pg_wal required atime=off compression=off canmount=on recordsize=$db_recordsize"
 
   # the main HAF database itself
-  echo "haf_db_store/tablespace required atime=off compression=lz4 canmount=on"
+  echo "haf_db_store/tablespace required atime=off compression=lz4 canmount=on recordsize=$db_recordsize"
 
   # logs (hived and postgresql, for now)
   echo "logs required atime=off compression=lz4 canmount=on"

@@ -114,9 +114,41 @@ is not compressed because hived directly manages compression of the block_log fi
 If you have a LOT of nvme storage (e.g. 6TB+), you can get better API performance at the cost of disk
 storage by disabling ZFS compression on the database dataset, but for most nodes this isn't recommended.
 
-The datasets and their properties (`compression`, `atime`, `canmount`) are listed in
+The datasets and their properties (`compression`, `atime`, `canmount`, `recordsize`) are listed in
 `zfs_dataset_layout.sh`, which `create_zfs_datasets.sh` creates them from. To change the layout,
 edit that file.
+
+##### ZFS recordsize of the database
+
+`haf_db_store/tablespace`, `haf_db_store/pgdata` and `haf_db_store/pgdata/pg_wal` are created
+with `recordsize=32K`; the other datasets keep the ZFS default of 128K. To use another value, set
+`HAF_DB_RECORDSIZE` in `.env` (or in the environment) before running `create_zfs_datasets.sh`,
+written the way `zfs get` prints it (`16K`, `32K`, `128K`).
+
+PostgreSQL reads 8K pages, while ZFS reads, checksums and decompresses whole records, so every
+page read that misses the ARC reads a full record. Smaller records waste less of each read but
+compress worse with lz4, because each record is compressed on its own. Measured on a 12 GB sample
+of HAF 1.28.8 data (operations, transactions and account_operations heaps, their btree
+indexes, hivemind posts and votes, the hivesense HNSW index and embeddings), copied into
+lz4-compressed datasets on a two-NVMe pool (ashift=12), with random 8K reads that bypass the ARC:
+
+| recordsize | compression ratio (size-weighted) | disk vs 128K | bytes read per 8K read | read latency p50 |
+|---|---|---|---|---|
+| 128K | 2.27x | - | 69-71 KB | 280-405 us |
+| 32K | 2.01x | +13% | 19-22 KB | 130-205 us |
+| 16K | 1.76x | +29% | 12 KB | 120-130 us |
+
+32K gets most of the read gain for less than half the extra disk of 16K. Choose 16K if the pool
+has room for about 30% more database, or 128K if disk space matters more than read latency. On a
+pool with `ashift=13` (8K sectors), a compressed 16K record is stored as either 8K or 16K, so 16K
+compresses no better, and probably worse, than in the table above.
+
+`recordsize` only applies to files created after it is set. An existing node keeps its 128K
+records until its data is rewritten. A new relation file (a `REINDEX`, `VACUUM FULL`, `CLUSTER`,
+a table or index created later, or the next 1 GB segment of a growing table) gets the new size. To rewrite everything, create a new
+datadir with this script and restore or replay into it. A plain `zfs send | zfs recv` keeps the
+existing block size. `repair_permissions.sh` reports a `recordsize` that differs from the layout,
+but `--fix-zfs` does not change it.
 
 ##### Checking dataset properties
 

@@ -260,6 +260,10 @@ check_zfs_layout() {
             echo "    not applied: --fix-zfs only sets canmount=off"
           fi
           ;;
+        recordsize)
+          apply=false
+          echo "    not applied: recordsize only affects files created after it is set; see the README"
+          ;;
         *)
           apply=false
           ;;
