@@ -197,3 +197,4 @@ services:
       - -remote_auth=${SMTP_AUTH_TYPE:-plain}
     networks:
       - haf-network
+    restart: unless-stopped

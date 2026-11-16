@@ -9,6 +9,7 @@ services:
     - ui
     networks:
       haf-network:
+    restart: unless-stopped
     healthcheck:
       test:
       - CMD-SHELL
@@ -72,6 +73,7 @@ services:
       REACT_APP_WALLET_ENDPOINT: https://${PUBLIC_HOSTNAME}/wallet
       REACT_APP_BLOG_DOMAIN: https://${PUBLIC_HOSTNAME}/blog
       DENSER_SERVER_SECRET_COOKIE_PASSWORD: ${DENSER_SECRET_COOKIE_PASSWORD:-}
+    restart: unless-stopped
     healthcheck:
       test:
       - CMD-SHELL

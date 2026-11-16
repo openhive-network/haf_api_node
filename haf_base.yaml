@@ -205,6 +205,8 @@ services:
       hived-pme:
         condition: service_started
         required: false
+    # No restart policy, on purpose (#53): ARGUMENTS can make hived exit by design, and a
+    # restart would rerun them. See "Restart policies" in README.md.
     healthcheck:
       test: ["CMD-SHELL", "wget -T2 -nv -t1 --spider http://127.0.0.1:8091/ || exit 1"]
       interval: 10s
@@ -217,6 +219,7 @@ services:
       - servers
     networks:
       - haf-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:80/openapi.json || exit 1"]
       interval: 10s
@@ -236,6 +239,7 @@ services:
     init: true
     networks:
       - haf-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pidof crond || exit 1"]
       interval: 30s
@@ -280,6 +284,7 @@ services:
       ofelia.enabled: "true"
       ofelia.job-exec.datecron.schedule: "@daily"
       ofelia.job-exec.datecron.command: "/bin/sh -c '/usr/local/bin/pgbadger -I -O /pgbadger_output /postgresql_logs/*'"
+    restart: unless-stopped
   ofelia:
     image: mcuadros/ofelia:v0.3.22
     profiles:
@@ -287,3 +292,4 @@ services:
     command: daemon --docker
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped

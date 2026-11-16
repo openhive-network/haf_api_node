@@ -7,6 +7,7 @@ services:
     environment:
       DATABASE_URL: postgres://pghero@haf:5432/haf_block_log
       RAILS_RELATIVE_URL_ROOT: /admin/pghero
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 8080 || exit 1"]
       interval: 30s
@@ -28,6 +29,7 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: "admin@haf.world"
       PGADMIN_DEFAULT_PASSWORD: "admin"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1/misc/ping || exit 1"]
       interval: 10s
@@ -62,6 +64,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - haf-network
+    restart: unless-stopped
 
 configs:
   # this config pre-loads the haf database server into pgadmin so you don't have to add it by hand

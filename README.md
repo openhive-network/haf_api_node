@@ -382,11 +382,31 @@ Currently available profiles are:
 - `apps`: core HAF apps: hivemind, HAfAH, haf-block-explorer
 - `servers`: services for routing/caching API calls: haproxy, drone, varnish
 
-The front-end services (caddy, haproxy, haproxy-healthchecks, varnish, drone,
-pgbouncer) use `restart: unless-stopped`: if one of them exits — for example
-haproxy after its worker process crashes — Docker starts it again, and it also
-comes back when the Docker daemon or host restarts. A service you stop yourself
-with `docker compose stop` stays stopped.
+Restart policies:
+
+- The front-end services (caddy, haproxy, haproxy-healthchecks, varnish, drone,
+  pgbouncer) and the other long-running services that are not apps (the API
+  specs, status, swagger, the UIs, logging, monitoring and admin tools) use
+  `restart: unless-stopped`: if one of them exits — for example haproxy after its
+  worker process crashes — Docker starts it again, and it also comes back when the
+  Docker daemon or host restarts.
+- The app services use the policy their module file sets. Most use `on-failure`:
+  Docker restarts them after an error exit. When the Docker daemon starts after a
+  host reboot, it restarts such a container only if its last exit was an error,
+  so one that stopped cleanly at shutdown stays down until `docker compose up -d`.
+- `haf` (and `hive` in a hived-only stack) has no restart policy, on purpose:
+  `ARGUMENTS` can make hived exit by design (`--stop-at-block`,
+  `--dump-snapshot`), which Docker would rerun in a loop, and a restarted
+  container reuses the command it was created with, so a `--replay-blockchain`
+  already removed from `.env` would run again. With the shared memory file on a
+  ramdisk, haf must also not start before the ramdisk is mounted again.
+- The one-shot jobs (the `*-install` and `*-uninstall` services) have no restart
+  policy, apart from `lite-social-install`, which retries until hivemind has
+  registered with HAF.
+
+After a host reboot, bring the node back with `docker compose up -d` (after
+re-mounting a shared-memory ramdisk). A service you stop yourself with
+`docker compose stop` stays stopped until you start it.
 
 haproxy reaches the haproxy-healthchecks agents through a loopback relay
 (`listen haproxy-healthchecks-agents` in `haproxy/30-proxies.cfg`) that re-resolves

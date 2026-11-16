@@ -89,6 +89,7 @@ services:
         target: /var/run/docker.sock
     networks:
       - haf-network
+    restart: unless-stopped
 
 volumes:
   # this volume stores your SSL certificates, every time you destroy this volume,

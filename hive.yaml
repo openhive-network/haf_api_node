@@ -47,6 +47,8 @@ services:
         source: ${HAF_ROCKSDB_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/shared_memory}/comments-rocksdb-storage
         target: /home/hived/shm_dir/comments-rocksdb-storage
     shm_size: 4gb
+    # No restart policy, on purpose (#53): ARGUMENTS can make hived exit by design, and a
+    # restart would rerun them. See "Restart policies" in README.md.
     healthcheck:
       test: ["CMD-SHELL", "wget -T2 -nv -t1 --spider http://127.0.0.1:8091/ || exit 1"]
       interval: 10s
@@ -67,3 +69,4 @@ services:
     # by default, uses public API servers, so hivefeed doesn't specifically need access to hived over haf-network
     #networks:
     #  - haf-network
+    restart: unless-stopped

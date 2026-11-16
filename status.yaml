@@ -19,6 +19,7 @@ services:
       PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-}
     networks:
       - haf-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/health"]
       interval: 10s
