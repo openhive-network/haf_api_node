@@ -392,21 +392,27 @@ Restart policies:
   Docker daemon or host restarts.
 - The app services use the policy their module file sets. Most use `on-failure`:
   Docker restarts them after an error exit. When the Docker daemon starts after a
-  host reboot, it restarts such a container only if its last exit was an error,
-  so one that stopped cleanly at shutdown stays down until `docker compose up -d`.
+  host reboot, it restarts such a container only if its last exit was an error, so
+  whether one comes back depends on how its process exited at shutdown (0, or an
+  error code after SIGTERM/SIGKILL). Those that do come back start before haf and
+  retry until it is up.
 - `haf` (and `hive` in a hived-only stack) has no restart policy, on purpose:
   `ARGUMENTS` can make hived exit by design (`--stop-at-block`,
   `--dump-snapshot`), which Docker would rerun in a loop, and a restarted
   container reuses the command it was created with, so a `--replay-blockchain`
   already removed from `.env` would run again. With the shared memory file on a
   ramdisk, haf must also not start before the ramdisk is mounted again.
-- The one-shot jobs (the `*-install` and `*-uninstall` services) have no restart
-  policy, apart from `lite-social-install`, which retries until hivemind has
-  registered with HAF.
+- The one-shot jobs (e.g. the `*-install` and `*-uninstall` services,
+  `hivesense-pca`, `haf-db-ready`) have no restart policy, apart from
+  `lite-social-install`, which retries until hivemind has registered with HAF.
 
 After a host reboot, bring the node back with `docker compose up -d` (after
-re-mounting a shared-memory ramdisk). A service you stop yourself with
-`docker compose stop` stays stopped until you start it.
+re-mounting a shared-memory ramdisk). An `unless-stopped` service you stop
+yourself with `docker compose stop` stays stopped, also across a reboot, until
+you start it. The admin tools come back after a reboot too: dozzle, for example,
+has a shell into every container, so when you no longer need it, remove it
+(`docker compose --profile dozzle rm -s -f dozzle`) and take `dozzle` out of
+`COMPOSE_PROFILES`.
 
 haproxy reaches the haproxy-healthchecks agents through a loopback relay
 (`listen haproxy-healthchecks-agents` in `haproxy/30-proxies.cfg`) that re-resolves
