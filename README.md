@@ -660,8 +660,10 @@ becoming a public API node), or to seed a new node from an existing one.  Don't 
   and `docker compose up` then fails halfway.
 
 Two scripts cover the procedure.  `transfer_zfs_datasets.sh` sends one compressed stream per dataset,
-parents first, so clones need no origin on the target; datasets are received unmounted, re-running it
-skips datasets that already arrived, and an incremental mode refreshes a long first copy in minutes.
+parents first, so clones need no origin on the target (`zfs send -R` refuses such a tree:
+"local origin for clone ... does not exist"); datasets are received unmounted and resumable,
+re-running it skips datasets that already arrived and resumes an interrupted one, and an
+incremental mode refreshes a long first copy in minutes.
 `switch_zfs_datasets.sh` checks, prepares and boot-tests the copy on the target while the target's
 live stack keeps serving, then swaps to it, with a one-command rollback.  The live stack is only
 stopped in step 7.
@@ -695,17 +697,30 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    dst-host$ sudo ./transfer_zfs_datasets.sh receive --port=7700 haf-pool/haf-datadir-20261030   # prints a token
    src-host$ sudo ./transfer_zfs_datasets.sh send --token=<token> 20261030-move tcp://dst-host:7700
    ```
-   Each connection carries one request with the token in its header; a connection that closes without
-   a request is dropped, and one with the wrong token is refused (`ERR wrong token`, the sender stops),
-   both before `zfs recv` runs.  The sender retries, for up to `--connect-timeout` (default an hour), a
-   connection that is refused or that closes or resets before the receiver's first reply (nothing has
-   been streamed then), so probes, start-up order and the listener re-arming between datasets don't
-   matter.  An explicit refusal (`ERR ...`) and a failure after the receiver said `GO` are not retried.
-   The sender waits for the receiver to confirm each dataset; if that confirmation is lost after the
-   whole stream was sent, it asks the receiver whether the dataset now holds the snapshot and, if so,
-   warns and goes on.  This transport is not encrypted; use it on trusted networks only.
+   Each connection starts with a header line carrying the token.  A state request is answered with
+   the target's datasets, partial receives and the outcome of the last stream; a stream connection
+   carries only the `zfs send` stream, piped into `zfs recv -s` with no reply.  A connection that
+   closes without a header is dropped, and one with the wrong token is refused (`ERR wrong token`,
+   the sender stops), both before `zfs recv` runs.  After each stream the sender asks for the
+   target's state, repeating that read-only request until it gets a whole answer, within
+   `--connect-timeout` (default an hour), as it does for a refused connection; probes, start-up order
+   and the listener re-arming between datasets therefore don't matter.  A stream the receiver never
+   started (its connection closed first) is sent again.  A dataset that does not arrive stops the
+   sender with an error naming it and the target's `zfs recv` error, e.g.
+   `ERROR: receiving blockchain failed on the target: ... space quota exceeded`.  After the last
+   stream the sender checks that every dataset is on the target with the snapshot, and otherwise
+   exits non-zero listing each missing one (`MISSING on the target: ...`).  This transport is not
+   encrypted; use it on trusted networks only.
    Streams are buffered with `mbuffer` (or `pv`) when installed (`--buffer=`).  If the transfer
-   breaks, run the same command again: datasets that already hold the snapshot are skipped.
+   breaks, run the same command again: datasets that already hold the snapshot are skipped, and a
+   dataset whose stream was cut resumes from the target's `receive_resume_token` (`zfs send -t`;
+   `--check` shows it as `resume`) instead of starting over.
+   The receiver logs a stream that ends before its dataset is complete and waits for the sender to
+   resume.  Once a stream has arrived, it gives up with an error when no request comes for
+   `--idle-timeout` (default an hour; `0` waits forever), and it cuts a stream that delivers nothing
+   for that long (a sender host that vanished).  What arrived stays on the target: restart the
+   receiver with the same `--token` and re-run the send.  Both hosts must run the same version of
+   the script: the receiver refuses a sender of the earlier request/reply protocol.
 4. **Catch up just before the swap.**  Repeat step 1 with a new name, then send only the changes;
    the target rolls each dataset back to `@20261030-move` (`zfs recv -F`) before applying them:
    ```bash
@@ -794,7 +809,9 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    that clone first.
 
 `ci/scripts/test-zfs-transfer.sh` exercises the transfer end to end on two throwaway file-backed
-pools (run it as root on a host with ZFS; it skips, naming the reason, elsewhere).  CI does not run
+pools: datasets of a few KiB, a clone of an out-of-tree origin, a stream cut partway and resumed, a
+target out of space, and an incremental catch-up (run it as root on a host with ZFS; it skips,
+naming the reason, elsewhere).  CI does not run
 it: its runners have no ZFS.  `ci/scripts/test-switch-compose-files.sh` checks that every step of
 `switch_zfs_datasets.sh` uses the compose files each env file's `COMPOSE_FILE` selects; it needs only
 `docker compose` (no daemon, no ZFS, no root).
