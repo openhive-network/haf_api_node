@@ -701,7 +701,9 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    connection that is refused or that closes or resets before the receiver's first reply (nothing has
    been streamed then), so probes, start-up order and the listener re-arming between datasets don't
    matter.  An explicit refusal (`ERR ...`) and a failure after the receiver said `GO` are not retried.
-   The sender waits for the receiver to confirm each dataset.  This transport is not encrypted; use it on trusted networks only.
+   The sender waits for the receiver to confirm each dataset; if that confirmation is lost after the
+   whole stream was sent, it asks the receiver whether the dataset now holds the snapshot and, if so,
+   warns and goes on.  This transport is not encrypted; use it on trusted networks only.
    Streams are buffered with `mbuffer` (or `pv`) when installed (`--buffer=`).  If the transfer
    breaks, run the same command again: datasets that already hold the snapshot are skipped.
 4. **Catch up just before the swap.**  Repeat step 1 with a new name, then send only the changes;

@@ -120,6 +120,20 @@ human() {
 
 ######### receive #########
 
+# Ends one listener connection.  Closing nc's stdin lets it copy the last reply to the socket and
+# exit once the sender closes its side; killing it at once could drop that reply.  A peer that
+# keeps the connection open is cut off after a few seconds so it cannot hold the listener.
+_close_nc() {
+  local nc_pid="$1" waited=0
+  exec {nc_in}<&- {nc_out}>&-
+  while kill -0 "$nc_pid" 2>/dev/null && [ "$waited" -lt 50 ]; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  kill "$nc_pid" 2>/dev/null || true
+  wait "$nc_pid" 2>/dev/null || true
+}
+
 receive_main() {
   local target="$1" token="$TOKEN" line magic peer_token cmd rel kind nc_in nc_out nc_pid
   [ -n "$target" ] || die "no target dataset given"
@@ -175,8 +189,7 @@ receive_main() {
           ;;
         END)
           echo BYE >&"$nc_out" || true
-          exec {nc_in}<&- {nc_out}>&-
-          wait "$nc_pid" 2>/dev/null || true
+          _close_nc "$nc_pid"
           echo "Sender reports all datasets received."
           zfs list -r -o name,used,mounted,mountpoint "$target"
           return 0
@@ -186,9 +199,7 @@ receive_main() {
           ;;
       esac
     fi
-    exec {nc_in}<&- {nc_out}>&-
-    kill "$nc_pid" 2>/dev/null || true
-    wait "$nc_pid" 2>/dev/null || true
+    _close_nc "$nc_pid"
   done
 }
 
@@ -295,10 +306,23 @@ send_one() {
     _tcp_request STREAM "$rel" "$kind"
     [ "$TCP_REPLY" = GO ] || { _tcp_close; die "receiver refused $rel: $TCP_REPLY"; }
     "${send_cmd[@]}" | _buffer "$size" >&3
-    IFS= read -r reply <&3 || reply="ERR connection closed before the receiver confirmed"
+    if ! IFS= read -r reply <&3; then
+      _tcp_close
+      _tcp_received "$rel" "${snapshot##*@}" || die "receiving $rel failed: the connection closed before the receiver confirmed, and the target does not hold @${snapshot##*@}"
+      echo "WARNING: the receiver's reply for $rel was lost, but the target holds $rel@${snapshot##*@}; continuing" >&2
+      return 0
+    fi
     _tcp_close
     [ "$reply" = OK ] || die "receiving $rel failed: $reply"
   fi
+}
+
+# Whether the tcp receiver's target holds <rel>@<snapshot-name>: the arbiter when a stream was sent
+# in full but its reply was lost.
+_tcp_received() {
+  local state
+  state=$(fetch_target_state) || return 1
+  grep -qxF "have $1@$2" <<< "$state"
 }
 
 send_main() {

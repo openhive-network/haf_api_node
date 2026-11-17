@@ -6,7 +6,10 @@
 # transfer behind a probe connection, a re-run that skips everything and an incremental catch-up
 # whose first dataset connection is closed before the receiver replies (retried), after checking that a
 # wrong token stops the sender at once and a listener that goes away makes it give up, and a re-run
-# whose END connection is closed without a reply (a warning, not a failure).
+# whose END connection is closed without a reply (a warning, not a failure).  Then a send that
+# stops at a dataset whose reply was lost without it arriving, and, with an nc that writes each OK
+# reply late, a transfer whose receiver has to wait for nc to deliver it and one whose replies are
+# all lost although the datasets arrived (warnings, not a failure).
 # Needs root, ZFS and nc; skips (exit 0) with the reason when the host lacks them.
 # With XFER_SSH_HOST set to an ssh destination that reaches this same host (e.g. localhost,
 # logged in with $SUDO_USER's keys), the full transfer and the catch-up are repeated over ssh.
@@ -50,6 +53,23 @@ fail() {
   exit 1
 }
 
+# An nc for the receiver (first on its PATH) that writes each OK reply to the socket $1 seconds
+# late, as a loaded host can, and takes its helpers down when killed.
+make_slow_nc() {
+  mkdir -p "$WORK/slow-nc"
+  cat > "$WORK/slow-nc/nc" <<SHIM
+#!/usr/bin/env bash
+exec {lines}< <(while IFS= read -r line; do [ "\$line" != OK ] || sleep $1; printf '%s\n' "\$line"; done)
+delay_pid=\$!
+$(command -v nc) "\$@" <&"\$lines" &
+nc_pid=\$!
+exec {lines}<&-
+trap 'kill "\$nc_pid" "\$delay_pid" 2>/dev/null; exit 143' TERM
+wait "\$nc_pid"
+SHIM
+  chmod +x "$WORK/slow-nc/nc"
+}
+
 start_receiver() {
   "$REPO_DIR/transfer_zfs_datasets.sh" receive --port="${1:-$PORT}" --token="$TOKEN" "$DST/copy" > "$WORK/receiver.log" 2>&1 &
   RECEIVER_PID=$!
@@ -60,13 +80,24 @@ wait_receiver() {
   RECEIVER_PID=""
 }
 
+# Opens fd $up to the receiver on port $1, which may still be re-arming its listener after the
+# previous connection.
+connect_receiver() {
+  local tries=0
+  until { exec {up}<>"/dev/tcp/127.0.0.1/$1"; } 2>/dev/null; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 50 ] || fail "the receiver on port $1 is not listening"
+    sleep 0.2
+  done
+}
+
 # Ends the receiver on port $1 the way a finished sender does.
 end_receiver() {
-  local fd
-  exec {fd}<>"/dev/tcp/127.0.0.1/$1"
-  echo "HAFZFS1 $TOKEN END" >&"$fd"
-  IFS= read -r _ <&"$fd" || true
-  exec {fd}>&-
+  local up
+  connect_receiver "$1"
+  echo "HAFZFS1 $TOKEN END" >&"$up"
+  IFS= read -r _ <&"$up" || true
+  exec {up}>&-
   wait_receiver
 }
 
@@ -83,7 +114,7 @@ flaky_receiver() {
     IFS= read -r line <&"$nc_in" || true
     case $line in
       *" STATE")
-        exec {up}<>"/dev/tcp/127.0.0.1/$HELPER_PORT"
+        connect_receiver "$HELPER_PORT"
         echo "$line" >&"$up"
         while IFS= read -r line <&"$up"; do
           echo "$line" >&"$nc_out"
@@ -95,6 +126,41 @@ flaky_receiver() {
       *" STREAM "*|*" END")
         echo "closed without a reply: $line"
         drops=$((drops - 1))
+        ;;
+    esac
+    exec {nc_in}<&- {nc_out}>&-
+    kill "$nc_pid" 2>/dev/null || true
+    wait "$nc_pid" 2>/dev/null || true
+  done
+}
+
+# Stands in for the receiver on $PORT: answers STATE requests through the real receiver on
+# $HELPER_PORT, takes the first STREAM and discards it, closing without a reply, and stops
+# listening after the second STATE request.
+swallowing_receiver() {
+  local states=0 line nc_in nc_out nc_pid up
+  while [ "$states" -lt 2 ]; do
+    coproc NC { exec nc -l "$PORT"; }
+    # shellcheck disable=SC2153  # set by coproc
+    nc_pid=$NC_PID
+    exec {nc_in}<&"${NC[0]}" {nc_out}>&"${NC[1]}"
+    line=""
+    IFS= read -r line <&"$nc_in" || true
+    case $line in
+      *" STATE")
+        connect_receiver "$HELPER_PORT"
+        echo "$line" >&"$up"
+        while IFS= read -r line <&"$up"; do
+          echo "$line" >&"$nc_out"
+          [ "$line" != END ] || break
+        done
+        exec {up}>&-
+        states=$((states + 1))
+        ;;
+      *" STREAM "*)
+        echo "swallowed: $line"
+        echo GO >&"$nc_out"
+        timeout 3 cat <&"$nc_in" > /dev/null || true
         ;;
     esac
     exec {nc_in}<&- {nc_out}>&-
@@ -235,5 +301,46 @@ cmp "$DATADIR/shared_memory/shared_memory.bin" "$WORK/mnt/$DST/copy/shared_memor
 cmp "$DATADIR/blockchain/block_log" "$WORK/mnt/$DST/copy/blockchain/block_log" 2>/dev/null \
   || { zfs mount "$DST/copy/blockchain" && cmp "$DATADIR/blockchain/block_log" "$WORK/mnt/$DST/copy/blockchain/block_log"; } \
   || fail "block_log differs"
+
+./snapshot_zfs_datasets.sh --env-file="$WORK/src.env" --force s3
+start_receiver "$HELPER_PORT"
+until nc -z 127.0.0.1 "$HELPER_PORT"; do sleep 1; done
+swallowing_receiver > "$WORK/swallow.log" &
+FLAKY_PID=$!
+send --incremental-from=s2 s3 "tcp://127.0.0.1:$PORT" > "$WORK/swallowed.log" 2>&1 \
+  && fail "send went on past a dataset that was not received: $(cat "$WORK/swallowed.log")"
+grep -q "receiving \. failed: .*does not hold @s3" "$WORK/swallowed.log" \
+  || fail "the dataset that was not received was not named: $(cat "$WORK/swallowed.log")"
+wait "$FLAKY_PID" || fail "the stand-in receiver failed: $(cat "$WORK/swallow.log")"
+FLAKY_PID=""
+end_receiver "$HELPER_PORT"
+zfs list "$DST/copy@s3" >/dev/null 2>&1 && fail "the swallowed stream reached the target"
+
+# each OK reaches the socket 2s late: the receiver has to let nc deliver it instead of killing it
+make_slow_nc 2
+PATH="$WORK/slow-nc:$PATH" start_receiver
+send --incremental-from=s2 s3 "tcp://127.0.0.1:$PORT" > "$WORK/slow-reply.log" 2>&1 \
+  || fail "send failed against a receiver whose nc is slow to reply: $(cat "$WORK/slow-reply.log")"
+wait_receiver
+grep -q "WARNING" "$WORK/slow-reply.log" && fail "a slow reply was lost: $(cat "$WORK/slow-reply.log")"
+grep -q "Sender reports all datasets received." "$WORK/receiver.log" || fail "the receiver did not see the end: $(cat "$WORK/receiver.log")"
+for ds in . blockchain shared_memory haf_db_store/pgdata haf_db_store/pgdata/pg_wal logs hivesense/ollama; do
+  name="$DST/copy"
+  [ "$ds" = . ] || name="$DST/copy/$ds"
+  zfs list "$name@s3" >/dev/null || fail "$name@s3 was not received"
+done
+
+# nc outlasts the receiver's wait, so every OK is lost and the sender asks the target instead
+./snapshot_zfs_datasets.sh --env-file="$WORK/src.env" --force s4
+make_slow_nc 30
+PATH="$WORK/slow-nc:$PATH" start_receiver
+send --incremental-from=s3 s4 "tcp://127.0.0.1:$PORT" > "$WORK/lost-reply.log" 2>&1 \
+  || fail "send stopped at a dataset whose reply was lost: $(cat "$WORK/lost-reply.log")"
+wait_receiver
+streams=$(grep -c " sending .*@s4 " "$WORK/lost-reply.log" || true)
+[ "$streams" -gt 0 ] || fail "no streams of s4 were sent: $(cat "$WORK/lost-reply.log")"
+[ "$(grep -c "WARNING: the receiver's reply for .* was lost, but the target holds" "$WORK/lost-reply.log")" = "$streams" ] \
+  || fail "expected a lost-reply warning for each of the $streams streams: $(cat "$WORK/lost-reply.log")"
+zfs list "$DST/copy/haf_db_store/pgdata/pg_wal@s4" >/dev/null || fail "the last dataset of s4 was not received"
 
 echo "PASS zfs-transfer"
