@@ -110,9 +110,9 @@ services:
       SHED_POLL_INTERVAL: "${SHED_POLL_INTERVAL:-5}"
       SHED_CONFIRMATIONS: "${SHED_CONFIRMATIONS:-2}"
       SHED_COOLDOWN: "${SHED_COOLDOWN:-3}"
-      SHED_OVERLOAD_ACTIVE: "${SHED_OVERLOAD_ACTIVE:-8}"
+      SHED_OVERLOAD_ACTIVE: "${SHED_OVERLOAD_ACTIVE:-24}"
       SHED_OVERLOAD_AGE_S: "${SHED_OVERLOAD_AGE_S:-2}"
-      SHED_OVERLOAD_TOTAL_ACTIVE: "${SHED_OVERLOAD_TOTAL_ACTIVE:-25}"
+      SHED_OVERLOAD_TOTAL_ACTIVE: "${SHED_OVERLOAD_TOTAL_ACTIVE:-45}"
       # pgbouncer admin view for the pool-saturation signal ("stats" is a
       # read-only stats_users entry; with the default auth_type=trust no
       # password is needed. Under PGBOUNCER_AUTH_TYPE=md5, add stats:<pass>
@@ -122,8 +122,8 @@ services:
       # Per-app "normal reduced floor" maxconn triples reported by the agent
       # checks. "normal" should match the *_SERVER_MAXCONN static caps on the
       # haproxy service; floor is never 0, so shedding can't cause an outage.
-      HIVEMIND_SHED_MAXCONNS: "${HIVEMIND_SHED_MAXCONNS:-64 12 6}"
-      HAFAH_SHED_MAXCONNS: "${HAFAH_SHED_MAXCONNS:-48 10 5}"
+      HIVEMIND_SHED_MAXCONNS: "${HIVEMIND_SHED_MAXCONNS:-64 36 18}"
+      HAFAH_SHED_MAXCONNS: "${HAFAH_SHED_MAXCONNS:-48 20 10}"
       HAFBE_SHED_MAXCONNS: "${HAFBE_SHED_MAXCONNS:-32 8 4}"
       BTRACKER_SHED_MAXCONNS: "${BTRACKER_SHED_MAXCONNS:-32 8 4}"
       REPTRACKER_SHED_MAXCONNS: "${REPTRACKER_SHED_MAXCONNS:-32 8 4}"

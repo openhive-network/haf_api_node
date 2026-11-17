@@ -19,5 +19,5 @@ check_sync_status "hafah" 60 "${HAFAH_LIVE_URL:-http://hafah-postgrest:3001/live
 
 # Cap from the live postgrest pool (see pool_cap_up in shed_functions.sh).
 pool_cap_up "hafah" "${HAFAH_METRICS_URL:-http://hafah-postgrest:3001/metrics}" \
-  "${HAFAH_SERVER_MAXCONN:-48}" "${HAFAH_SHED_MAXCONNS:-48 10 5}"
+  "${HAFAH_SERVER_MAXCONN:-48}" "${HAFAH_SHED_MAXCONNS:-48 20 10}"
 exit 0

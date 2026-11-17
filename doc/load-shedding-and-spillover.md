@@ -12,7 +12,7 @@ Every postgrest-backed HAProxy backend has a static per-server `maxconn`
 short `timeout queue` (`API_QUEUE_TIMEOUT=5s`). Requests beyond the cap wait
 briefly in HAProxy's queue and then get a fast 503, instead of piling into
 the postgrest pool and collapsing the database. The caps are deliberately
-generous (several times each app's `PGRST_DB_POOL`), so normal traffic is
+generous (at least twice each app's `PGRST_DB_POOL`), so normal traffic is
 unaffected. For an app under sustained load, lower its cap to about 1-2x its
 pool (`*_PGRST_DB_POOL`) so the excess queues in HAProxy rather than inside
 postgrest; `.env.example` explains the sizing, including pgbouncer's shared
@@ -39,9 +39,12 @@ With hysteresis (tighten after `SHED_CONFIRMATIONS` overloaded polls, loosen
 after `SHED_COOLDOWN` quiet polls) it publishes a level 0/1/2 to
 `/run/shed.level`. Each agent-check script reads that level and reports a
 per-app `maxconn:` in its agent response — stepping the backend's effective
-cap down `normal -> reduced -> floor` (e.g. hivemind `64 12 6`, floor never
-0) and back up on recovery. The floor keeps the local stack serving its
-fastest path even while shedding.
+cap down `normal -> reduced -> floor` (e.g. hivemind `64 36 18`, floor never
+0) and back up on recovery. The default triples scale with the default pools
+(hivemind 30, hafah 16): "reduced" sits just above the pool, so the pool stays
+busy and the excess waits in HAProxy's queue instead of postgrest's; "floor"
+is about 60% of the pool, cutting the app's database concurrency. The floor
+keeps the local stack serving its fastest path even while shedding.
 
 `SHED_ARMED=false` (default) is log-only: overload is still detected and
 logged, but the published level stays 0 so nothing is actually shed. Arm it

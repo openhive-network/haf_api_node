@@ -23,5 +23,5 @@ check_sync_status "hivemind" 60 "${HIVEMIND_LIVE_URL:-http://hivemind-postgrest-
 
 # Cap from the live postgrest pool (see pool_cap_up in shed_functions.sh).
 pool_cap_up "hivemind" "${HIVEMIND_METRICS_URL:-http://hivemind-postgrest-server:3001/metrics}" \
-  "${HIVEMIND_SERVER_MAXCONN:-64}" "${HIVEMIND_SHED_MAXCONNS:-64 12 6}"
+  "${HIVEMIND_SERVER_MAXCONN:-64}" "${HIVEMIND_SHED_MAXCONNS:-64 36 18}"
 exit 0
