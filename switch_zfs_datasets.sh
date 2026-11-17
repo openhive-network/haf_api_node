@@ -20,8 +20,10 @@ from this directory: its COMPOSE_FILE, or compose.yml (and compose.override.yml)
   check       print the plan without changing anything: the copy's datasets and mount state,
               directories the new configuration bind-mounts that are missing from the copy
               (target-only directories), image differences, and the settings that change
-  prepare     mount the copy, then copy target-only directories from the live datadir (create
-              them empty when the live datadir lacks them too)
+  prepare     set canmount=off on the datasets zfs_dataset_layout.sh keeps unmounted (unmounting
+              them first, without covering their children), mount the copy, then copy target-only
+              directories from the live datadir (create them empty when the live datadir lacks
+              them too)
   boot-check  snapshot the copy as @switch-boot-check, start HAF alone on it under a separate
               compose project, network and p2p port, wait until it is healthy, stop it cleanly,
               then roll the copy back to that snapshot (undoing whatever HAF synced, keeping what
@@ -50,6 +52,8 @@ die() {
 }
 
 REPO_DIR=$(cd "$(dirname "$0")" && pwd)
+# shellcheck source=zfs_dataset_layout.sh
+. "$REPO_DIR/zfs_dataset_layout.sh"
 
 if ! OPTIONS=$(getopt -o he:f --long help,env-file:,new-env:,source-env:,source-images:,boot-timeout:,restore-from:,force -n "$0" -- "$@"); then
   print_help
@@ -220,6 +224,13 @@ _repo_config_file() {
 
 ######### check #########
 
+# The canmount zfs_dataset_layout requires for a dataset of the copy, or nothing.
+_layout_canmount() {
+  local rel=${1#"$NEW_DATASET"}
+  rel=${rel#/}
+  zfs_layout_property "${rel:-.}" canmount
+}
+
 FAILURES=0
 fail() {
   echo "  FAIL  $*"
@@ -239,8 +250,8 @@ COPY_MOUNTED=0
 # check STRICT: STRICT=1 for steps that are about to use the copy (it must be mounted and complete).
 check() {
   local strict="$1" name canmount mounted property unmounted=0 latest binds source rel service image mode
-  local live_images new_images source_images source_image var live_value new_value file same_repo
-  local -a changed=()
+  local live_images new_images source_images source_image var live_value new_value file same_repo note
+  local -a changed=() layout_notes=()
   FAILURES=0
   MISSING_BINDS=()
 
@@ -266,12 +277,23 @@ check() {
   else
     fail "$NEW_DATASET mounts on $property but the new configuration expects $NEW_MOUNTPOINT"
   fi
+  # A dataset the layout keeps unmounted (haf_db_store) may arrive with canmount=on from a source
+  # whose property drifted: it need not be mounted, and mounted after its children it hides them.
   while read -r name canmount mounted; do
-    if [ "$canmount" = on ] && [ "$mounted" != yes ]; then
+    if [ "$(_layout_canmount "$name")" = off ]; then
+      if [ "$mounted" = yes ]; then
+        layout_notes+=("$name is mounted, but the layout requires canmount=off: if it was mounted after its children, it hides them (prepare unmounts it)")
+      elif [ "$canmount" != off ]; then
+        layout_notes+=("$name has canmount=$canmount, but the layout requires canmount=off (prepare sets it)")
+      fi
+    elif [ "$canmount" = on ] && [ "$mounted" != yes ]; then
       unmounted=$((unmounted + 1))
     fi
     printf '        %-56s canmount=%-4s mounted=%s\n' "$name" "$canmount" "$mounted"
   done < <(zfs list -r -H -o name,canmount,mounted -t filesystem "$NEW_DATASET")
+  for note in "${layout_notes[@]}"; do
+    warn "$note"
+  done
   if [ "$unmounted" -eq 0 ]; then
     COPY_MOUNTED=1
     ok "all datasets of the copy are mounted"
@@ -428,12 +450,52 @@ down_tolerating_network() {
 
 ######### prepare #########
 
+# Whether DATASET was mounted after one of its descendants, covering it, as /proc/mounts lists
+# mounts in the order they were made.
+_mounted_over_children() {
+  awk -v ds="$1" '$3 != "zfs" { next } index($1, ds "/") == 1 { child = 1 } $1 == ds && child { over = 1 } END { exit !over }' /proc/mounts
+}
+
+# Unmounts DATASET without leaving any of its descendants covered.  Mounted after them, it is
+# unmounted alone, by mountpoint (zfs unmount also unmounts its descendants, whose mountpoints it
+# covers); mounted before them, they are unmounted leaf-first before it, and the caller
+# remounts them.
+_unmount_dataset() {
+  local dataset="$1" mountpoint i own
+  local -a descendants=()
+  mountpoint=$(zfs get -H -o value mountpoint "$dataset")
+  if _mounted_over_children "$dataset"; then
+    echo "  $dataset was mounted over its children: umount $mountpoint"
+    umount "$mountpoint"
+    return
+  fi
+  mapfile -t descendants < <(zfs_mounted_descendants "$dataset")
+  for ((i = ${#descendants[@]} - 1; i >= 0; i--)); do
+    echo "  zfs unmount ${descendants[i]}"
+    zfs unmount "${descendants[i]}"
+  done
+  own=$(find "$mountpoint" -mindepth 1 -maxdepth 1 \( ! -type d -o ! -empty \) -printf '%f ')
+  [ -z "$own" ] || warn "unmounting $dataset hides what it holds besides its children's mountpoints (it stays in the dataset): $own"
+  echo "  zfs unmount $dataset"
+  zfs unmount "$dataset"
+}
+
 prepare() {
   local name canmount mounted rel parent
   check 0
   if [ "$NEW_DATASET" = "$LIVE_DATASET" ] || ! zfs list "$NEW_DATASET" >/dev/null 2>&1; then
     die "no copy to prepare"
   fi
+
+  echo ""
+  echo "Applying the layout's canmount=off:"
+  while read -r name canmount; do
+    if [ "$(_layout_canmount "$name")" = off ] && [ "$canmount" != off ]; then
+      [ "$(zfs get -H -o value mounted "$name")" != yes ] || _unmount_dataset "$name"
+      echo "  zfs set canmount=off $name"
+      zfs set canmount=off "$name"
+    fi
+  done < <(zfs list -r -H -o name,canmount -t filesystem "$NEW_DATASET")
 
   echo ""
   echo "Mounting the copy:"
@@ -580,6 +642,8 @@ EOF
     die "could not roll the copy back after the boot check"
   fi
   [ "$exit_code" = 0 ] || die "HAF exited with code $exit_code on shutdown; check its logs before swapping"
+  check 1 > /dev/null
+  [ "$FAILURES" -eq 0 ] || die "after the rollback the copy fails the check swap runs; run check to see why"
   echo "Boot check passed.  The copy is back at its received state plus what prepare added."
 }
 

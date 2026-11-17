@@ -739,7 +739,12 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    comparison, save the source's images instead (`docker compose config --images > source.images` on
    the source) and pass `--source-images=source.images`.  `prepare` mounts the copy, copies the
    target-only directories from the live datadir (creating them empty when the live datadir lacks them
-   too) and checks again.  Both fail if any service of the new configuration would still mount the
+   too) and checks again.  The transfer sends dataset properties as the source has them, so a source
+   whose `haf_db_store` drifted to `canmount=on` passes that on.  Before mounting, `prepare` sets
+   `canmount=off` on every dataset that `zfs_dataset_layout.sh` keeps unmounted.  If such a dataset is
+   mounted, `prepare` first unmounts it so that its children stay visible: when it was mounted over
+   its children, it is unmounted alone; otherwise its children are unmounted leaf-first, then
+   remounted.  `check` does not count such a dataset as unmounted, and warns when it is mounted.  Both fail if any service of the new configuration would still mount the
    live datadir, or if `haf` would mount anything outside the copy other than read-only files of
    this repository (such as `connections.conf`), which `check` lists as `ok`.
 6. **Boot the copy before any downtime:**
@@ -755,7 +760,7 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    database irreversible top block ... is above hived head block"), so the boot check finally rolls
    the copy back to `@switch-boot-check` with `rollback_zfs_datasets.sh` (which syncs and drops caches
    first) and destroys that snapshot.  The copy is left as received plus what `prepare` added; it
-   does this after a failed boot check too.  If the rollback cannot run (e.g. a container still holds
+   does this after a failed boot check too.  A passed boot check then runs the check `swap` runs.  If the rollback cannot run (e.g. a container still holds
    the copy), the boot check prints the two commands that finish it, and refuses to run again while
    `@switch-boot-check` exists.  A copy that was started any other way must likewise be rolled back
    to its received snapshot (and `prepare` re-run) before `swap` starts it for real.
