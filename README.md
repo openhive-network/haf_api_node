@@ -738,6 +738,13 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
      versions.  If the source runs apps through compose additions of its own, bring those over too
      (including their `pg_hba` rows in `PG_ACCESS`).  Image pins that the source keeps in compose files
      (e.g. a pins file in its `COMPOSE_FILE`) belong in a compose file here, added to `COMPOSE_FILE`.
+     Transcribe pins only for services this host's `COMPOSE_FILE` defines.  Docker Compose does not
+     reject a pin for any other service: it *creates* that service from the image alone (no profiles,
+     no volumes, the image's default entrypoint), and `up` starts it.  A `haf-db-ready` pin copied from
+     a source that runs `early-app-start/compose.early-app-start.yml`, on a host that does not, starts
+     a second HAF that syncs from genesis into its container layer until `/` is full.  Compare
+     `docker compose config --services` with and without the pins file, and read `check`'s
+     "services added by the new configuration" line.
 
    Hostnames, TLS/proxy settings, `COMPOSE_PROFILES` and other site settings stay the target's own.
    Then check it (copy the source's env file over as e.g. `source.env` so the image check can run):
@@ -761,7 +768,12 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    its children, it is unmounted alone; otherwise its children are unmounted leaf-first, then
    remounted.  `check` does not count such a dataset as unmounted, and warns when it is mounted.  Both fail if any service of the new configuration would still mount the
    live datadir, or if `haf` would mount anything outside the copy other than read-only files of
-   this repository (such as `connections.conf`), which `check` lists as `ok`.
+   this repository (such as `connections.conf`), which `check` lists as `ok`.  `check` lists the
+   services the new configuration starts that the live one does not (and those it drops), and fails
+   on any service other than `haf` that runs the HAF image repository with its default entrypoint and
+   no bind mount (a `command` alone still runs that entrypoint; under `--force` this is a warning).
+   `prepare`, `boot-check` and `swap` run the check first and refuse on any failure before they
+   mount, boot or stop anything.
 6. **Boot the copy before any downtime:**
    ```bash
    sudo ./switch_zfs_datasets.sh --new-env=.env.new --source-env=source.env boot-check
