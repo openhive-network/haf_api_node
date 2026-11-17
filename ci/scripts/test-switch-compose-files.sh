@@ -3,7 +3,8 @@
 # Test that switch_zfs_datasets.sh renders the stack each env file's COMPOSE_FILE selects, in check,
 # prepare, boot-check, swap and rollback, and that boot-check leaves the copy rolled back to the
 # snapshot it takes first, and that haf may bind read-only files of the repository but nothing else
-# outside the copy.  The new configuration and the source layer an override pinning haf to a
+# outside the copy, and that a pin creating a HAF-image service with the default entrypoint fails
+# every step.  The new configuration and the source layer an override pinning haf to a
 # tag of its own, plus exposed/ (which publishes haf ports the boot check must drop).
 # No ZFS or docker daemon needed: the script runs from a copy of the repository whose
 # rollback_zfs_datasets.sh only logs its arguments, zfs and id are stubbed, and a docker wrapper logs
@@ -173,6 +174,33 @@ echo "${PIN%:*}:other-tag" > "$WORK/source.images"
 switch --new-env="$WORK/new.env" --source-images="$WORK/source.images" check > "$WORK/images.log" && fail "check accepted a different source haf tag"
 grep -qF "FAIL  haf: $PIN, but the source database was built by ${PIN%:*}:other-tag" "$WORK/images.log" || fail "no --source-images mismatch: $(cat "$WORK/images.log")"
 
+grep -qxF "        services added by the new configuration (0): none" "$WORK/check.log" || fail "check listed added services: $(cat "$WORK/check.log")"
+
+# A pin for a service no base file defines creates it from the HAF image with its own entrypoint.
+{ cat "$WORK/pins.yml"; printf '  haf-db-ready:\n    image: %s\n' "$PIN"; } > "$WORK/phantom-pins.yml"
+write_env phantom.env copy "compose.yml:$WORK/phantom-pins.yml"
+phantom_finding="FAIL  haf-db-ready: runs the HAF image with its default entrypoint and mounts nothing"
+switch --new-env="$WORK/phantom.env" --source-env="$WORK/source.env" check > "$WORK/phantom.log" && fail "check accepted a phantom haf-db-ready"
+grep -qxF "        services added by the new configuration (1): haf-db-ready" "$WORK/phantom.log" || fail "check did not list the added service: $(cat "$WORK/phantom.log")"
+grep -qF "$phantom_finding" "$WORK/phantom.log" || fail "check did not name the phantom haf-db-ready: $(cat "$WORK/phantom.log")"
+switch --new-env="$WORK/phantom.env" --source-env="$WORK/source.env" --force check > "$WORK/phantom.log" || fail "check --force failed on a phantom haf-db-ready: $(cat "$WORK/phantom.log")"
+grep -qF "WARN  haf-db-ready: runs the HAF image with its default entrypoint" "$WORK/phantom.log" || fail "check --force did not warn about the phantom: $(cat "$WORK/phantom.log")"
+: > "$WORK/zfs.log"
+: > "$WORK/docker.log"
+switch --new-env="$WORK/phantom.env" --source-env="$WORK/source.env" prepare > "$WORK/phantom.log" 2>&1 && fail "prepare accepted a phantom haf-db-ready"
+grep -qF "$phantom_finding" "$WORK/phantom.log" || fail "prepare did not name the phantom: $(cat "$WORK/phantom.log")"
+! grep -qE '^(mount|set) ' "$WORK/zfs.log" || fail "prepare changed the copy despite the phantom: $(cat "$WORK/zfs.log")"
+switch --new-env="$WORK/phantom.env" --source-env="$WORK/source.env" boot-check > "$WORK/phantom.log" 2>&1 && fail "boot-check accepted a phantom haf-db-ready"
+grep -qF "$phantom_finding" "$WORK/phantom.log" || fail "boot-check did not name the phantom: $(cat "$WORK/phantom.log")"
+! grep -q '^snapshot ' "$WORK/zfs.log" || fail "boot-check snapshotted the copy despite the phantom"
+switch --new-env="$WORK/phantom.env" --source-env="$WORK/source.env" swap < /dev/null > "$WORK/phantom.log" 2>&1 && fail "swap accepted a phantom haf-db-ready"
+grep -qF "$phantom_finding" "$WORK/phantom.log" || fail "swap did not name the phantom: $(cat "$WORK/phantom.log")"
+! grep -qE -- ' (up|down)( |$)' "$WORK/docker.log" || fail "a step stopped or started a stack despite the phantom: $(cat "$WORK/docker.log")"
+
+write_env early.env copy "compose.yml:early-app-start/compose.early-app-start.yml:$WORK/phantom-pins.yml"
+switch --new-env="$WORK/early.env" --source-env="$WORK/source.env" check > "$WORK/early.log" || fail "check refused early-app-start's haf-db-ready: $(cat "$WORK/early.log")"
+grep -qxF "        services added by the new configuration (1): haf-db-ready" "$WORK/early.log" || fail "check did not list early-app-start's haf-db-ready: $(cat "$WORK/early.log")"
+
 echo "COMPOSE_FILE=compose.yml:compose.not-on-this-host.yml" >> "$WORK/broken.env"
 cat "$WORK/new.env" "$WORK/broken.env" > "$WORK/broken-new.env"
 switch --new-env="$WORK/broken-new.env" check > "$WORK/broken.log" 2>&1 && fail "check accepted a new configuration naming a missing compose file"
@@ -234,7 +262,7 @@ switch --new-env="$WORK/new.env" --source-env="$WORK/source.env" swap < /dev/nul
 grep -qF "refusing: no terminal to confirm; pass --force" "$WORK/notty.log" || fail "swap without a terminal did not refuse naming --force: $(cat "$WORK/notty.log")"
 switch rollback < /dev/null > "$WORK/notty.log" 2>&1 && fail "rollback ran without a terminal or --force"
 grep -qF -- "--force" "$WORK/notty.log" || fail "rollback without a terminal did not name --force: $(cat "$WORK/notty.log")"
-[ ! -s "$WORK/docker.log" ] || fail "a refused swap or rollback ran docker: $(cat "$WORK/docker.log")"
+! grep -qE -- ' (up|down)( |$)' "$WORK/docker.log" || fail "a refused swap or rollback stopped or started a stack: $(cat "$WORK/docker.log")"
 
 touch "$WORK/down-fails" "$WORK/containers-left"
 : > "$WORK/docker.log"

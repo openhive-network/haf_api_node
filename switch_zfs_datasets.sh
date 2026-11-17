@@ -180,7 +180,8 @@ compose() {
 }
 
 # Prints "<service> <what>" lines from the rendered compose configuration on stdin;
-# <what> is binds ("ro|rw <source>" per bind mount), images or ports (host_ip:published).
+# <what> is binds ("ro|rw <source>" per bind mount), images, ports (host_ip:published), or for
+# bare the image of each service that keeps its image's entrypoint and has no bind mount.
 compose_query() {
   python3 -c '
 import json, sys
@@ -195,6 +196,9 @@ for name, svc in sorted(services.items()):
     elif sys.argv[1] == "ports":
         for p in svc.get("ports", []):
             print(name, "%s:%s" % (p.get("host_ip", ""), p.get("published", "")))
+    elif sys.argv[1] == "bare":
+        if svc.get("entrypoint") is None and not any(v.get("type") == "bind" for v in svc.get("volumes", [])):
+            print(name, svc.get("image", ""))
 ' "$1"
 }
 
@@ -251,7 +255,8 @@ COPY_MOUNTED=0
 check() {
   local strict="$1" name canmount mounted property unmounted=0 latest binds source rel service image mode
   local live_images new_images source_images source_image var live_value new_value file same_repo note
-  local -a changed=() layout_notes=()
+  local live_services new_services haf_repository
+  local -a changed=() layout_notes=() added=() removed=()
   FAILURES=0
   MISSING_BINDS=()
 
@@ -395,6 +400,29 @@ check() {
   done <<< "$new_images"
   echo "        images that change on swap (${#changed[@]}): ${changed[*]:-none}"
 
+  echo ""
+  echo "Services:"
+  live_services=$(compose "$LIVE_ENV" config --services | sort)
+  new_services=$(compose "$NEW_ENV" config --services | sort)
+  mapfile -t added < <(comm -13 <(echo "$live_services") <(echo "$new_services"))
+  mapfile -t removed < <(comm -23 <(echo "$live_services") <(echo "$new_services"))
+  echo "        services added by the new configuration (${#added[@]}): ${added[*]:-none}"
+  echo "        services the new configuration drops (${#removed[@]}): ${removed[*]:-none}"
+  # A pin for a service no other compose file defines creates it from the image alone; with the HAF
+  # image's entrypoint (a command only passes arguments to it) it syncs from genesis into its layer.
+  haf_repository=$(_image_repository "$(awk '$1 == "haf" { print $2 }' <<< "$new_images")")
+  while read -r service image; do
+    if [ "$service" = haf ] || [ -z "$haf_repository" ] || [ "$(_image_repository "$image")" != "$haf_repository" ]; then
+      continue
+    fi
+    note="$service: runs the HAF image with its default entrypoint and mounts nothing — it would sync from genesis into its container layer on /. Define it in a compose file (e.g. early-app-start/compose.early-app-start.yml) or remove its pin"
+    if [ "$FORCE" -eq 1 ]; then
+      warn "$note"
+    else
+      fail "$note"
+    fi
+  done < <(compose "$NEW_ENV" config --format json | compose_query bare)
+
   changed=()
   echo ""
   echo "Settings that differ between $(basename "$LIVE_ENV") and $(basename "$NEW_ENV") (values not shown):"
@@ -486,6 +514,7 @@ prepare() {
   if [ "$NEW_DATASET" = "$LIVE_DATASET" ] || ! zfs list "$NEW_DATASET" >/dev/null 2>&1; then
     die "no copy to prepare"
   fi
+  [ "$FAILURES" -eq 0 ] || die "fix the problems above before prepare"
 
   echo ""
   echo "Applying the layout's canmount=off:"
@@ -683,8 +712,8 @@ report_stopped_state() {
 
 swap() {
   local backup
-  require_prompt_or_force
   require_check
+  require_prompt_or_force
   backup="$LIVE_ENV.before-switch.$(date -u +%Y%m%dT%H%M%SZ)"
   echo ""
   echo "This stops the live stack on $LIVE_DATASET and starts it on $NEW_DATASET."
