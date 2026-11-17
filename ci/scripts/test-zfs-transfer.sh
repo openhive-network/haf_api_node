@@ -94,36 +94,66 @@ connect_receiver() {
   done
 }
 
+# Sends request $2 to the receiver on port $1 and sets REPLY_LINES to its reply, read up to and
+# including a line equal to $3.  A connection made while the receiver's nc for the previous one is
+# still exiting lands in that nc's backlog and is reset unanswered, so it is repeated.
+request_receiver() {
+  local tries=0 line up
+  while true; do
+    connect_receiver "$1"
+    REPLY_LINES=""
+    line=""
+    # the subshell takes the SIGPIPE of a connection already reset
+    if ( echo "$2" >&"$up" ) 2>/dev/null; then
+      while IFS= read -r line <&"$up" 2>/dev/null; do
+        REPLY_LINES+="$line"$'\n'
+        [ "$line" != "$3" ] || break
+      done
+    fi
+    exec {up}>&-
+    [ "$line" != "$3" ] || return 0
+    tries=$((tries + 1))
+    [ "$tries" -lt 10 ] || fail "the receiver on port $1 did not answer '$2'"
+  done
+}
+
 # Ends the receiver on port $1 the way a finished sender does.
 end_receiver() {
-  local up
-  connect_receiver "$1"
-  echo "HAFZFS1 $TOKEN END" >&"$up"
-  IFS= read -r _ <&"$up" || true
-  exec {up}>&-
+  request_receiver "$1" "HAFZFS1 $TOKEN END" BYE
   wait_receiver
+}
+
+# Ends a stand-in's connection to nc $1.  With $2 = replied, nc first gets to deliver the reply and
+# exit once the sender closes its side, as the receiver's _close_nc does: killing it at once can
+# truncate the reply.  A request to drop is cut off at once.
+end_stand_in_connection() {
+  local nc_pid="$1" waited=0
+  exec {nc_in}<&- {nc_out}>&-
+  while [ "$2" = replied ] && kill -0 "$nc_pid" 2>/dev/null && [ "$waited" -lt 50 ]; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  kill "$nc_pid" 2>/dev/null || true
+  wait "$nc_pid" 2>/dev/null || true
 }
 
 # Stands in for the receiver on $PORT: answers one STATE request through the real receiver on
 # $HELPER_PORT, then closes the next $1 STREAM or END connections without a reply and stops listening.
 flaky_receiver() {
-  local drops="$1" answered=0 line nc_in nc_out nc_pid up
+  local drops="$1" answered=0 line nc_in nc_out nc_pid ending
   while [ "$answered" -eq 0 ] || [ "$drops" -gt 0 ]; do
     coproc NC { exec nc -l "$PORT"; }
     # shellcheck disable=SC2153  # set by coproc
     nc_pid=$NC_PID
     exec {nc_in}<&"${NC[0]}" {nc_out}>&"${NC[1]}"
     line=""
+    ending=drop
     IFS= read -r line <&"$nc_in" || true
     case $line in
       *" STATE")
-        connect_receiver "$HELPER_PORT"
-        echo "$line" >&"$up"
-        while IFS= read -r line <&"$up"; do
-          echo "$line" >&"$nc_out"
-          [ "$line" != END ] || break
-        done
-        exec {up}>&-
+        request_receiver "$HELPER_PORT" "$line" END
+        printf '%s' "$REPLY_LINES" >&"$nc_out"
+        ending=replied
         answered=1
         ;;
       *" STREAM "*|*" END")
@@ -131,9 +161,7 @@ flaky_receiver() {
         drops=$((drops - 1))
         ;;
     esac
-    exec {nc_in}<&- {nc_out}>&-
-    kill "$nc_pid" 2>/dev/null || true
-    wait "$nc_pid" 2>/dev/null || true
+    end_stand_in_connection "$nc_pid" "$ending"
   done
 }
 
@@ -141,23 +169,20 @@ flaky_receiver() {
 # $HELPER_PORT, takes the first STREAM and discards it, closing without a reply, and stops
 # listening after the second STATE request.
 swallowing_receiver() {
-  local states=0 line nc_in nc_out nc_pid up
+  local states=0 line nc_in nc_out nc_pid ending
   while [ "$states" -lt 2 ]; do
     coproc NC { exec nc -l "$PORT"; }
     # shellcheck disable=SC2153  # set by coproc
     nc_pid=$NC_PID
     exec {nc_in}<&"${NC[0]}" {nc_out}>&"${NC[1]}"
     line=""
+    ending=drop
     IFS= read -r line <&"$nc_in" || true
     case $line in
       *" STATE")
-        connect_receiver "$HELPER_PORT"
-        echo "$line" >&"$up"
-        while IFS= read -r line <&"$up"; do
-          echo "$line" >&"$nc_out"
-          [ "$line" != END ] || break
-        done
-        exec {up}>&-
+        request_receiver "$HELPER_PORT" "$line" END
+        printf '%s' "$REPLY_LINES" >&"$nc_out"
+        ending=replied
         states=$((states + 1))
         ;;
       *" STREAM "*)
@@ -166,9 +191,7 @@ swallowing_receiver() {
         timeout 3 cat <&"$nc_in" > /dev/null || true
         ;;
     esac
-    exec {nc_in}<&- {nc_out}>&-
-    kill "$nc_pid" 2>/dev/null || true
-    wait "$nc_pid" 2>/dev/null || true
+    end_stand_in_connection "$nc_pid" "$ending"
   done
 }
 
