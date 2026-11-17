@@ -37,7 +37,7 @@ shed_level() {
 }
 
 # shed_maxconn "<normal> <reduced> <floor>" — print the maxconn for the
-# current shed level, e.g. shed_maxconn "64 12 6".
+# current shed level, e.g. shed_maxconn "64 36 18".
 shed_maxconn() {
   # shellcheck disable=SC2086 # word-split "<normal> <reduced> <floor>" into $1 $2 $3
   set -- $1

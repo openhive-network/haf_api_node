@@ -30,13 +30,14 @@ SHED_CONFIRMATIONS="${SHED_CONFIRMATIONS:-2}"
 SHED_COOLDOWN="${SHED_COOLDOWN:-3}"
 # IMPORTANT: scale these to the deployment's ACTUAL postgrest pool sizes.
 # SHED_OVERLOAD_ACTIVE should be ~80% of hivemind's PGRST_DB_POOL (default
-# pool 10 -> 8); SHED_OVERLOAD_TOTAL_ACTIVE should sit above the server's
-# normal busy concurrency (roughly 65% of the sum of all postgrest pools).
-# If a deployment raises the pools (e.g. hivemind 30), raise these too or
-# normal load will read as overload.
-SHED_OVERLOAD_ACTIVE="${SHED_OVERLOAD_ACTIVE:-8}"
+# pool 30 -> 24); SHED_OVERLOAD_TOTAL_ACTIVE should sit above the server's
+# normal busy concurrency and below pgbouncer's max_db_connections (default
+# 50 -> 45), so it fires before pgbouncer queues every app. If a deployment
+# changes the pools, change these too: thresholds above the pool never fire,
+# thresholds well below it read normal load as overload.
+SHED_OVERLOAD_ACTIVE="${SHED_OVERLOAD_ACTIVE:-24}"
 SHED_OVERLOAD_AGE_S="${SHED_OVERLOAD_AGE_S:-2}"
-SHED_OVERLOAD_TOTAL_ACTIVE="${SHED_OVERLOAD_TOTAL_ACTIVE:-25}"
+SHED_OVERLOAD_TOTAL_ACTIVE="${SHED_OVERLOAD_TOTAL_ACTIVE:-45}"
 SHED_ARMED="${SHED_ARMED:-false}"
 SHED_MAX_LEVEL=2
 
@@ -120,7 +121,7 @@ while true; do
     # Log the maxconn hivemind WOULD be capped to, to make the effect concrete.
     if [ "$level" -gt 0 ] || [ "$overloaded" -eq 1 ]; then
       # shellcheck disable=SC2086 # word-split "<normal> <reduced> <floor>" into $1 $2 $3
-      would=$(SHED_LEVEL_FILE=/dev/null; set -- ${HIVEMIND_SHED_MAXCONNS:-64 12 6}; \
+      would=$(SHED_LEVEL_FILE=/dev/null; set -- ${HIVEMIND_SHED_MAXCONNS:-64 36 18}; \
               case "$level" in 1) echo "${2}";; 2) echo "${3}";; *) echo "${1}";; esac)
       log "log-only (SHED_ARMED=false): computed level=${level} (would cap hivemind maxconn -> ${would})${reason:+ [${reason}]}"
     fi

@@ -74,11 +74,11 @@ cat >> /etc/pgbouncer/pgbouncer.ini <<EOF
 
 ;; Pool configuration
 pool_mode = ${PGBOUNCER_POOL_MODE:-transaction}
-default_pool_size = ${PGBOUNCER_DEFAULT_POOL_SIZE:-25}
+default_pool_size = ${PGBOUNCER_DEFAULT_POOL_SIZE:-40}
 reserve_pool_size = ${PGBOUNCER_RESERVE_POOL_SIZE:-5}
 reserve_pool_timeout = ${PGBOUNCER_RESERVE_POOL_TIMEOUT:-3}
 max_client_conn = ${PGBOUNCER_MAX_CLIENT_CONN:-200}
-max_db_connections = ${PGBOUNCER_MAX_DB_CONNECTIONS:-30}
+max_db_connections = ${PGBOUNCER_MAX_DB_CONNECTIONS:-50}
 
 ;; Timeouts
 server_idle_timeout = ${PGBOUNCER_SERVER_IDLE_TIMEOUT:-600}

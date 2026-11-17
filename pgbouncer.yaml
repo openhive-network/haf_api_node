@@ -18,13 +18,16 @@ services:
       PGBOUNCER_DB_HOST: haf
       PGBOUNCER_DB_PORT: 5432
       PGBOUNCER_DB_NAME: haf_block_log
-      # Pool configuration
+      # Pool configuration. default_pool_size is per user/database pair, so it
+      # must hold the largest PostgREST pool on one user (hivemind_user, 30);
+      # max_db_connections caps the sum over every user and counts against
+      # PostgreSQL's max_connections (connections.conf budgets for 50).
       PGBOUNCER_POOL_MODE: transaction
-      PGBOUNCER_DEFAULT_POOL_SIZE: 25
+      PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-40}
       PGBOUNCER_RESERVE_POOL_SIZE: 5
       PGBOUNCER_RESERVE_POOL_TIMEOUT: 3
       PGBOUNCER_MAX_CLIENT_CONN: 200
-      PGBOUNCER_MAX_DB_CONNECTIONS: ${PGBOUNCER_MAX_DB_CONNECTIONS:-30}
+      PGBOUNCER_MAX_DB_CONNECTIONS: ${PGBOUNCER_MAX_DB_CONNECTIONS:-50}
       # Timeouts
       PGBOUNCER_SERVER_IDLE_TIMEOUT: 600
       PGBOUNCER_SERVER_LIFETIME: 3600
