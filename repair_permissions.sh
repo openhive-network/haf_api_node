@@ -202,7 +202,7 @@ MOUNT
 # descendants leaf-first and the dataset itself, set the property, remount the descendants parent-first
 print_canmount_off_sequence() {
   dataset=$1
-  descendants=$(zfs list -r -H -o name,mounted -t filesystem "$dataset" | awk -v ds="$dataset" '$1 != ds && $2 == "yes" { print $1 }')
+  descendants=$(zfs_mounted_descendants "$dataset")
   echo "    --fix-zfs leaves this to you, as $dataset is mounted. With the stack stopped, and after checking that $dataset"
   echo "    holds nothing but its children's mountpoints (anything else is hidden once it is unmounted), run:"
   echo "$descendants" | awk 'NF { line[n++] = $0 } END { while (n) print "      zfs unmount " line[--n] }'

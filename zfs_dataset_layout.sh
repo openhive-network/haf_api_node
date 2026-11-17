@@ -1,6 +1,7 @@
 # shellcheck shell=sh
-# The ZFS dataset layout of a HAF datadir, sourced by create_zfs_datasets.sh (which creates it)
-# and repair_permissions.sh (which checks a datadir against it).
+# The ZFS dataset layout of a HAF datadir, sourced by create_zfs_datasets.sh (which creates it),
+# repair_permissions.sh (which checks a datadir against it) and switch_zfs_datasets.sh (which
+# applies its canmount to a received copy).
 #
 # zfs_dataset_layout prints one line per dataset, parents before children:
 #   <dataset relative to $ZPOOL/$TOP_LEVEL_DATASET, "." for the top level> <required|optional> <property=value>...
@@ -41,4 +42,16 @@ zfs_dataset_layout() {
 
   # ollama models are already compressed, so no ZFS compression
   echo "hivesense/ollama optional atime=off compression=off canmount=on"
+}
+
+# zfs_layout_property prints the value zfs_dataset_layout requires for PROPERTY of the dataset
+# RELATIVE_DATASET (as zfs_dataset_layout names it), or nothing when it requires none.
+zfs_layout_property() {
+  zfs_dataset_layout | awk -v ds="$1" -v prop="$2=" '
+    $1 == ds { for (i = 3; i <= NF; i++) if (index($i, prop) == 1) print substr($i, length(prop) + 1) }'
+}
+
+# zfs_mounted_descendants prints the mounted descendants of DATASET, parents before children.
+zfs_mounted_descendants() {
+  zfs list -r -H -o name,mounted -t filesystem "$1" | awk -v ds="$1" '$1 != ds && $2 == "yes" { print $1 }'
 }

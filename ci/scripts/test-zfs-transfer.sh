@@ -9,7 +9,10 @@
 # whose END connection is closed without a reply (a warning, not a failure).  Then a send that
 # stops at a dataset whose reply was lost without it arriving, and, with an nc that writes each OK
 # reply late, a transfer whose receiver has to wait for nc to deliver it and one whose replies are
-# all lost although the datasets arrived (warnings, not a failure).
+# all lost although the datasets arrived (warnings, not a failure).  Finally switch_zfs_datasets.sh
+# takes the copy, with haf_db_store set to canmount=on as a drifted source sends it, through check,
+# prepare (also with haf_db_store mounted over or under its children), boot-check (HAF stubbed, the
+# rollback real) and swap, and pgdata/PG_VERSION and the tablespace's files must stay visible.
 # Needs root, ZFS and nc; skips (exit 0) with the reason when the host lacks them.
 # With XFER_SSH_HOST set to an ssh destination that reaches this same host (e.g. localhost,
 # logged in with $SUDO_USER's keys), the full transfer and the catch-up are repeated over ssh.
@@ -342,5 +345,89 @@ streams=$(grep -c " sending .*@s4 " "$WORK/lost-reply.log" || true)
 [ "$(grep -c "WARNING: the receiver's reply for .* was lost, but the target holds" "$WORK/lost-reply.log")" = "$streams" ] \
   || fail "expected a lost-reply warning for each of the $streams streams: $(cat "$WORK/lost-reply.log")"
 zfs list "$DST/copy/haf_db_store/pgdata/pg_wal@s4" >/dev/null || fail "the last dataset of s4 was not received"
+
+######### switch_zfs_datasets.sh on a copy whose haf_db_store has canmount=on #########
+
+COPY_DIR="$WORK/mnt/$DST/copy"
+mkdir -p "$WORK/switch-bin"
+# renders an empty stack; the boot-check HAF writes to the copy (undone by the rollback) and is healthy
+cat > "$WORK/switch-bin/docker" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *" config "*) echo '{"services": {}}' ;;
+  *"boot-check up "*) echo synced > "$COPY_DIR/haf_db_store/pgdata/synced" ;;
+  *" ps -q haf") echo 0123456789ab ;;
+  "inspect "*Health*) echo healthy ;;
+  "inspect "*Status*) echo running ;;
+  "inspect "*ExitCode*) echo 0 ;;
+esac
+EOF
+chmod +x "$WORK/switch-bin/docker"
+cp "$WORK/src.env" "$WORK/live.env"
+cat > "$WORK/copy.env" <<EOF
+ZPOOL=$DST
+TOP_LEVEL_DATASET=copy
+ZPOOL_MOUNT_POINT=$WORK/mnt/$DST
+EOF
+switch() {
+  PATH="$WORK/switch-bin:$PATH" ZPOOL_MOUNT_POINT="$WORK/mnt/$DST" \
+    ./switch_zfs_datasets.sh --env-file="$WORK/live.env" --new-env="$WORK/copy.env" "$@"
+}
+children_visible() {
+  [ -e "$COPY_DIR/haf_db_store/pgdata/PG_VERSION" ] || fail "$1: pgdata/PG_VERSION is hidden: $(zfs list -r -o name,canmount,mounted "$DST/copy")"
+  [ -z "${2:-}" ] || [ -e "$COPY_DIR/haf_db_store/tablespace/marker" ] || fail "$1: the tablespace's files are hidden"
+}
+canmount_off() {
+  [ "$(zfs get -H -o value canmount "$DST/copy/haf_db_store")" = off ] || fail "$1: haf_db_store has canmount=$(zfs get -H -o value canmount "$DST/copy/haf_db_store")"
+}
+
+zfs set canmount=on "$DST/copy/haf_db_store"
+switch check > "$WORK/switch-check.log" || fail "check failed on the received copy: $(cat "$WORK/switch-check.log")"
+grep -q "WARN  $DST/copy/haf_db_store .*the layout requires canmount=off" "$WORK/switch-check.log" \
+  || fail "check did not report haf_db_store's canmount: $(cat "$WORK/switch-check.log")"
+
+switch prepare > "$WORK/switch-prepare.log" || fail "prepare failed: $(cat "$WORK/switch-prepare.log")"
+canmount_off "prepare"
+children_visible "prepare"
+echo data > "$COPY_DIR/haf_db_store/tablespace/marker"
+
+# what a second prepare of the earlier script did: mount haf_db_store over its mounted children
+zfs set canmount=on "$DST/copy/haf_db_store"
+[ "$(zfs get -H -o value mounted "$DST/copy/haf_db_store")" = yes ] || zfs mount -O "$DST/copy/haf_db_store"
+[ ! -e "$COPY_DIR/haf_db_store/pgdata/PG_VERSION" ] || fail "mounting haf_db_store did not cover pgdata"
+switch check > "$WORK/switch-check.log" || true
+grep -q "WARN  $DST/copy/haf_db_store is mounted, but the layout requires canmount=off" "$WORK/switch-check.log" \
+  || fail "check did not warn about the mounted haf_db_store: $(cat "$WORK/switch-check.log")"
+switch prepare > "$WORK/switch-prepare.log" || fail "prepare failed with haf_db_store mounted over its children: $(cat "$WORK/switch-prepare.log")"
+grep -q "was mounted over its children" "$WORK/switch-prepare.log" || fail "prepare did not uncover the children: $(cat "$WORK/switch-prepare.log")"
+canmount_off "prepare over a covering haf_db_store"
+children_visible "prepare over a covering haf_db_store" tablespace
+[ "$(zfs get -H -o value mounted "$DST/copy/haf_db_store")" = no ] || fail "prepare left haf_db_store mounted"
+
+# haf_db_store mounted before its children holds them: prepare unmounts them first and remounts them
+zfs set canmount=on "$DST/copy/haf_db_store"
+for ds in pgdata/pg_wal pgdata tablespace; do zfs unmount "$DST/copy/haf_db_store/$ds"; done
+for ds in "" /pgdata /pgdata/pg_wal /tablespace; do zfs mount -O "$DST/copy/haf_db_store$ds"; done
+children_visible "haf_db_store mounted under its children" tablespace
+switch prepare > "$WORK/switch-prepare.log" || fail "prepare failed with haf_db_store mounted under its children: $(cat "$WORK/switch-prepare.log")"
+grep -qx "  zfs unmount $DST/copy/haf_db_store" "$WORK/switch-prepare.log" || fail "prepare did not unmount haf_db_store: $(cat "$WORK/switch-prepare.log")"
+canmount_off "prepare over a haf_db_store holding its children"
+children_visible "prepare over a haf_db_store holding its children" tablespace
+[ "$(zfs get -H -o value mounted "$DST/copy/haf_db_store")" = no ] || fail "prepare left haf_db_store mounted"
+
+switch prepare > "$WORK/switch-prepare.log" || fail "a repeated prepare failed: $(cat "$WORK/switch-prepare.log")"
+children_visible "a repeated prepare" tablespace
+
+switch boot-check > "$WORK/switch-boot.log" 2>&1 || fail "boot-check failed: $(cat "$WORK/switch-boot.log")"
+grep -qF "Boot check passed." "$WORK/switch-boot.log" || fail "boot-check did not pass: $(cat "$WORK/switch-boot.log")"
+[ ! -e "$COPY_DIR/haf_db_store/pgdata/synced" ] || fail "boot-check did not roll back what HAF wrote"
+canmount_off "boot-check"
+children_visible "boot-check" tablespace
+switch check > "$WORK/switch-check.log" || fail "check failed after boot-check: $(cat "$WORK/switch-check.log")"
+grep -qF "ok    all datasets of the copy are mounted" "$WORK/switch-check.log" || fail "check after boot-check: $(cat "$WORK/switch-check.log")"
+
+switch --force swap > "$WORK/switch-swap.log" 2>&1 || fail "swap refused the boot-checked copy: $(cat "$WORK/switch-swap.log")"
+grep -qF "Stack started on $DST/copy" "$WORK/switch-swap.log" || fail "swap did not start the stack: $(cat "$WORK/switch-swap.log")"
+children_visible "swap" tablespace
 
 echo "PASS zfs-transfer"
