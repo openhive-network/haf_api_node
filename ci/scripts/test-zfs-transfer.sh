@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 #
 # End-to-end test of transfer_zfs_datasets.sh over tcp:// on this host, between two throwaway
-# file-backed pools: a source laid out by create_zfs_datasets.sh with blockchain cloned from a
-# dataset outside the tree, snapshots taken by snapshot_zfs_datasets.sh, then --check, a full
-# transfer behind a probe connection, a re-run that skips everything and an incremental catch-up
-# whose first dataset connection is closed before the receiver replies (retried), after checking that a
-# wrong token stops the sender at once and a listener that goes away makes it give up, and a re-run
-# whose END connection is closed without a reply (a warning, not a failure).  Then a send that
-# stops at a dataset whose reply was lost without it arriving, and, with an nc that writes each OK
-# reply late, a transfer whose receiver has to wait for nc to deliver it and one whose replies are
-# all lost although the datasets arrived (warnings, not a failure).  Finally switch_zfs_datasets.sh
+# file-backed pools: a source laid out by create_zfs_datasets.sh (datasets of a few KiB) with
+# blockchain cloned from a dataset outside the tree, snapshots taken by snapshot_zfs_datasets.sh,
+# then --check, a full transfer behind a probe connection and a re-run that skips everything.  A
+# send killed partway through blockchain must leave a receiver that reports it and gives up after
+# --idle-timeout, and a re-run that resumes blockchain from its resume token to the same snapshot
+# GUIDs.  A target that runs out of space must stop the sender, naming the dataset.  Then an
+# incremental catch-up whose first stream connection is closed before the receiver reads it (sent
+# again), after checking that a wrong token stops the sender at once and a listener that goes away
+# makes it give up, and a re-run whose END connection is closed without a reply (a warning, not a
+# failure).  Finally switch_zfs_datasets.sh
 # takes the copy, with haf_db_store set to canmount=on as a drifted source sends it, through check,
 # prepare (also with haf_db_store mounted over or under its children), boot-check (HAF stubbed, the
 # rollback real) and swap, and pgdata/PG_VERSION and the tablespace's files must stay visible.
@@ -56,26 +57,44 @@ fail() {
   exit 1
 }
 
-# An nc for the receiver (first on its PATH) that writes each OK reply to the socket $1 seconds
-# late, as a loaded host can, and takes its helpers down when killed.
-make_slow_nc() {
-  mkdir -p "$WORK/slow-nc"
-  cat > "$WORK/slow-nc/nc" <<SHIM
-#!/usr/bin/env bash
-exec {lines}< <(while IFS= read -r line; do [ "\$line" != OK ] || sleep $1; printf '%s\n' "\$line"; done)
-delay_pid=\$!
-$(command -v nc) "\$@" <&"\$lines" &
-nc_pid=\$!
-exec {lines}<&-
-trap 'kill "\$nc_pid" "\$delay_pid" 2>/dev/null; exit 143' TERM
-wait "\$nc_pid"
-SHIM
-  chmod +x "$WORK/slow-nc/nc"
+# Starts a receiver on port $1 (default $PORT) into $DST/$2 (default copy), with further options.
+start_receiver() {
+  local port="${1:-$PORT}" target="$DST/${2:-copy}"
+  shift $(($# > 2 ? 2 : $#))
+  "$REPO_DIR/transfer_zfs_datasets.sh" receive --port="$port" --token="$TOKEN" "$@" "$target" > "$WORK/receiver.log" 2>&1 &
+  RECEIVER_PID=$!
 }
 
-start_receiver() {
-  "$REPO_DIR/transfer_zfs_datasets.sh" receive --port="${1:-$PORT}" --token="$TOKEN" "$DST/copy" > "$WORK/receiver.log" 2>&1 &
-  RECEIVER_PID=$!
+# Waits for a receiver expected to give up, and checks that it says why.
+wait_receiver_gives_up() {
+  wait "$RECEIVER_PID" && fail "the receiver exited 0 although the sender went away: $(cat "$WORK/receiver.log")"
+  RECEIVER_PID=""
+  grep -q "ERROR: the sender went away before the transfer was complete" "$WORK/receiver.log" \
+    || fail "the receiver did not say why it gave up: $(cat "$WORK/receiver.log")"
+}
+
+# A pv for the sender (first on its PATH) that passes $1 bytes of each stream and, when the stream
+# is longer, kills the sender: the stream is cut partway through.
+make_cutting_pv() {
+  mkdir -p "$WORK/cut-bin"
+  cat > "$WORK/cut-bin/pv" <<SHIM
+#!/usr/bin/env bash
+head -c $1
+[ "\$(head -c 1 | wc -c)" -eq 0 ] || pkill -KILL -f "transfer_zfs_datasets.sh send"
+SHIM
+  chmod +x "$WORK/cut-bin/pv"
+}
+
+# Checks that every dataset of the source is on $DST/$1 at @$2, with the source snapshot's GUID.
+same_snapshots() {
+  local ds src dst
+  for ds in . blockchain shared_memory haf_db_store/pgdata haf_db_store/pgdata/pg_wal logs hivesense/ollama; do
+    src="$SRC/haf-datadir"
+    dst="$DST/$1"
+    [ "$ds" = . ] || { src="$src/$ds"; dst="$dst/$ds"; }
+    [ "$(zfs get -H -o value guid "$dst@$2" 2>/dev/null)" = "$(zfs get -H -o value guid "$src@$2")" ] \
+      || fail "$dst@$2 is missing or differs from the source's snapshot"
+  done
 }
 
 wait_receiver() {
@@ -119,7 +138,7 @@ request_receiver() {
 
 # Ends the receiver on port $1 the way a finished sender does.
 end_receiver() {
-  request_receiver "$1" "HAFZFS1 $TOKEN END" BYE
+  request_receiver "$1" "HAFZFS2 $TOKEN END" BYE
   wait_receiver
 }
 
@@ -137,8 +156,9 @@ end_stand_in_connection() {
   wait "$nc_pid" 2>/dev/null || true
 }
 
-# Stands in for the receiver on $PORT: answers one STATE request through the real receiver on
-# $HELPER_PORT, then closes the next $1 STREAM or END connections without a reply and stops listening.
+# Stands in for the receiver on $PORT: answers STATE requests through the real receiver on
+# $HELPER_PORT, closes the next $1 STREAM or END connections after their header and, once it has
+# answered a STATE request and closed those, stops listening.
 flaky_receiver() {
   local drops="$1" answered=0 line nc_in nc_out nc_pid ending
   while [ "$answered" -eq 0 ] || [ "$drops" -gt 0 ]; do
@@ -159,36 +179,6 @@ flaky_receiver() {
       *" STREAM "*|*" END")
         echo "closed without a reply: $line"
         drops=$((drops - 1))
-        ;;
-    esac
-    end_stand_in_connection "$nc_pid" "$ending"
-  done
-}
-
-# Stands in for the receiver on $PORT: answers STATE requests through the real receiver on
-# $HELPER_PORT, takes the first STREAM and discards it, closing without a reply, and stops
-# listening after the second STATE request.
-swallowing_receiver() {
-  local states=0 line nc_in nc_out nc_pid ending
-  while [ "$states" -lt 2 ]; do
-    coproc NC { exec nc -l "$PORT"; }
-    # shellcheck disable=SC2153  # set by coproc
-    nc_pid=$NC_PID
-    exec {nc_in}<&"${NC[0]}" {nc_out}>&"${NC[1]}"
-    line=""
-    ending=drop
-    IFS= read -r line <&"$nc_in" || true
-    case $line in
-      *" STATE")
-        request_receiver "$HELPER_PORT" "$line" END
-        printf '%s' "$REPLY_LINES" >&"$nc_out"
-        ending=replied
-        states=$((states + 1))
-        ;;
-      *" STREAM "*)
-        echo "swallowed: $line"
-        echo GO >&"$nc_out"
-        timeout 3 cat <&"$nc_in" > /dev/null || true
         ;;
     esac
     end_stand_in_connection "$nc_pid" "$ending"
@@ -241,8 +231,9 @@ zfs list "$DST/copy" >/dev/null 2>&1 && fail "--check received something"
 send --max-capacity=0 s1 "tcp://127.0.0.1:$PORT" > "$WORK/full.log" 2>&1 && fail "send ignored the space warning"
 grep -q "SPACE: WARNING" "$WORK/full.log" || fail "no space warning: $(cat "$WORK/full.log")"
 
-send --buffer=none s1 "tcp://127.0.0.1:$PORT"
+send --buffer=none s1 "tcp://127.0.0.1:$PORT" > "$WORK/full.log" 2>&1 || fail "the full transfer failed: $(cat "$WORK/full.log")"
 wait_receiver
+grep -q "all datasets of @s1 are on the target" "$WORK/full.log" || fail "the sender did not verify the copy: $(cat "$WORK/full.log")"
 grep -q "Sender reports all datasets received." "$WORK/receiver.log" || fail "the receiver did not see the end: $(cat "$WORK/receiver.log")"
 if [ -n "${XFER_SSH_HOST:-}" ]; then
   send s1 "$XFER_SSH_HOST:$DST/copy-ssh"
@@ -255,6 +246,7 @@ for ds in . blockchain shared_memory haf_db_store/pgdata haf_db_store/pgdata/pg_
   zfs list "$name@s1" >/dev/null || fail "$name@s1 was not received"
   [ "$(zfs get -H -o value mounted "$name")" = no ] || fail "$name is mounted after receive"
 done
+same_snapshots copy s1
 [ "$(zfs get -H -o value origin "$DST/copy/blockchain")" = - ] || fail "the received blockchain is still a clone"
 [ "$(zfs get -H -o value compression "$DST/copy/blockchain")" = off ] || fail "blockchain lost compression=off"
 [ "$(zfs get -H -o value canmount "$DST/copy/haf_db_store")" = off ] || fail "haf_db_store lost canmount=off"
@@ -264,6 +256,47 @@ start_receiver
 send s1 "tcp://127.0.0.1:$PORT" | tee "$WORK/rerun.log"
 wait_receiver
 grep -q "To send: 0 stream" "$WORK/rerun.log" || fail "the re-run did not skip the received datasets"
+
+######### a stream cut partway through, then resumed #########
+
+# blockchain (8 MiB, uncompressed) is cut after 3 MiB; the datasets before it are smaller
+make_cutting_pv 3145728
+start_receiver "$PORT" resumed --idle-timeout=3
+PATH="$WORK/cut-bin:$PATH" send --buffer=pv s1 "tcp://127.0.0.1:$PORT" > "$WORK/cut.log" 2>&1 \
+  && fail "the cut send succeeded: $(cat "$WORK/cut.log")"
+wait_receiver_gives_up
+grep -q "the stream ended before blockchain was complete" "$WORK/receiver.log" \
+  || fail "the receiver did not report the cut stream: $(cat "$WORK/receiver.log")"
+token=$(zfs get -H -o value receive_resume_token "$DST/resumed/blockchain")
+[ "$token" != - ] || fail "the cut receive left no resume token"
+remaining=$(zfs send -n -P -t "$token" | awk '$1 == "size" { print $2 }')
+full=$(zfs send -n -P -L -e -c -p "$SRC/haf-datadir/blockchain@s1" | awk '$1 == "size" { print $2 }')
+[ "$remaining" -le $((full - 2 * 1048576)) ] || fail "the resume would send $remaining of $full bytes again"
+
+start_receiver "$PORT" resumed
+send --check s1 "tcp://127.0.0.1:$PORT" > "$WORK/resume-check.log" 2>&1 || fail "--check failed on a cut copy: $(cat "$WORK/resume-check.log")"
+grep -Eq "^blockchain +resume " "$WORK/resume-check.log" || fail "--check does not plan to resume blockchain: $(cat "$WORK/resume-check.log")"
+send s1 "tcp://127.0.0.1:$PORT" > "$WORK/resume.log" 2>&1 || fail "the resumed send failed: $(cat "$WORK/resume.log")"
+wait_receiver
+grep -q "receiving resume stream for blockchain" "$WORK/receiver.log" || fail "blockchain was not resumed: $(cat "$WORK/receiver.log")"
+grep -q "receiving full stream for blockchain" "$WORK/receiver.log" && fail "blockchain was sent again in full"
+same_snapshots resumed s1
+[ "$(zfs get -H -o value origin "$DST/resumed/blockchain")" = - ] || fail "the resumed blockchain is a clone"
+[ "$(zfs get -H -o value compression "$DST/resumed/blockchain")" = off ] || fail "the resumed blockchain lost compression=off"
+zfs destroy -r "$DST/resumed"
+
+######### a target that cannot take a dataset #########
+
+zfs create -o quota=4M "$DST/limited"
+start_receiver "$PORT" limited/copy --idle-timeout=3
+send s1 "tcp://127.0.0.1:$PORT" > "$WORK/no-space.log" 2>&1 && fail "send reported success to a target out of space: $(cat "$WORK/no-space.log")"
+grep -q "ERROR: receiving blockchain failed on the target: " "$WORK/no-space.log" \
+  || fail "the dataset the target could not take was not named: $(cat "$WORK/no-space.log")"
+grep -q "all datasets of @s1 are on the target" "$WORK/no-space.log" && fail "send claimed the copy is complete"
+wait_receiver_gives_up
+zfs destroy -r "$DST/limited"
+
+######### incremental catch-up #########
 
 zfs mount "$DST/copy"
 zfs mount "$DST/copy/shared_memory"
@@ -284,7 +317,7 @@ flaky_receiver 0 > "$WORK/flaky.log" &
 FLAKY_PID=$!
 send --connect-timeout=10 --incremental-from=s1 s2 "tcp://127.0.0.1:$PORT" > "$WORK/gone.log" 2>&1 \
   && fail "send succeeded without a listener"
-grep -q "no reply to 'STREAM " "$WORK/gone.log" || fail "a vanished listener was not reported: $(cat "$WORK/gone.log")"
+grep -q "could not connect to the receiver" "$WORK/gone.log" || fail "a vanished listener was not reported: $(cat "$WORK/gone.log")"
 wait "$FLAKY_PID"
 
 flaky_receiver 1 > "$WORK/flaky.log" &
@@ -295,17 +328,18 @@ wait "$FLAKY_PID" || fail "the stand-in receiver failed: $(cat "$WORK/flaky.log"
 FLAKY_PID=""
 end_receiver "$HELPER_PORT"
 start_receiver
-wait "$SEND_PID" || fail "send did not survive a connection closed before the reply: $(cat "$WORK/incremental.log")"
+wait "$SEND_PID" || fail "send did not survive a stream connection closed before the receiver read it: $(cat "$WORK/incremental.log")"
 wait_receiver
 cat "$WORK/incremental.log"
-[ "$(grep -c "closed the STREAM connection before replying" "$WORK/incremental.log")" = 1 ] \
-  || fail "expected exactly one retry of the closed STREAM connection"
+[ "$(grep -c "did not reach the receiver" "$WORK/incremental.log")" = 1 ] \
+  || fail "expected exactly one stream to be sent again"
 grep -q "incremental" "$WORK/incremental.log" || fail "no incremental streams were planned"
 if [ -n "${XFER_SSH_HOST:-}" ]; then
   send --incremental-from=s1 s2 "$XFER_SSH_HOST:$DST/copy-ssh"
   zfs list "$DST/copy-ssh/shared_memory@s2" >/dev/null || fail "the ssh catch-up did not arrive"
 fi
 zfs list "$DST/copy/shared_memory@s2" >/dev/null || fail "the incremental snapshot was not received"
+same_snapshots copy s2
 
 start_receiver "$HELPER_PORT"
 until nc -z 127.0.0.1 "$HELPER_PORT"; do sleep 1; done
@@ -327,47 +361,6 @@ cmp "$DATADIR/shared_memory/shared_memory.bin" "$WORK/mnt/$DST/copy/shared_memor
 cmp "$DATADIR/blockchain/block_log" "$WORK/mnt/$DST/copy/blockchain/block_log" 2>/dev/null \
   || { zfs mount "$DST/copy/blockchain" && cmp "$DATADIR/blockchain/block_log" "$WORK/mnt/$DST/copy/blockchain/block_log"; } \
   || fail "block_log differs"
-
-./snapshot_zfs_datasets.sh --env-file="$WORK/src.env" --force s3
-start_receiver "$HELPER_PORT"
-until nc -z 127.0.0.1 "$HELPER_PORT"; do sleep 1; done
-swallowing_receiver > "$WORK/swallow.log" &
-FLAKY_PID=$!
-send --incremental-from=s2 s3 "tcp://127.0.0.1:$PORT" > "$WORK/swallowed.log" 2>&1 \
-  && fail "send went on past a dataset that was not received: $(cat "$WORK/swallowed.log")"
-grep -q "receiving \. failed: .*does not hold @s3" "$WORK/swallowed.log" \
-  || fail "the dataset that was not received was not named: $(cat "$WORK/swallowed.log")"
-wait "$FLAKY_PID" || fail "the stand-in receiver failed: $(cat "$WORK/swallow.log")"
-FLAKY_PID=""
-end_receiver "$HELPER_PORT"
-zfs list "$DST/copy@s3" >/dev/null 2>&1 && fail "the swallowed stream reached the target"
-
-# each OK reaches the socket 2s late: the receiver has to let nc deliver it instead of killing it
-make_slow_nc 2
-PATH="$WORK/slow-nc:$PATH" start_receiver
-send --incremental-from=s2 s3 "tcp://127.0.0.1:$PORT" > "$WORK/slow-reply.log" 2>&1 \
-  || fail "send failed against a receiver whose nc is slow to reply: $(cat "$WORK/slow-reply.log")"
-wait_receiver
-grep -q "WARNING" "$WORK/slow-reply.log" && fail "a slow reply was lost: $(cat "$WORK/slow-reply.log")"
-grep -q "Sender reports all datasets received." "$WORK/receiver.log" || fail "the receiver did not see the end: $(cat "$WORK/receiver.log")"
-for ds in . blockchain shared_memory haf_db_store/pgdata haf_db_store/pgdata/pg_wal logs hivesense/ollama; do
-  name="$DST/copy"
-  [ "$ds" = . ] || name="$DST/copy/$ds"
-  zfs list "$name@s3" >/dev/null || fail "$name@s3 was not received"
-done
-
-# nc outlasts the receiver's wait, so every OK is lost and the sender asks the target instead
-./snapshot_zfs_datasets.sh --env-file="$WORK/src.env" --force s4
-make_slow_nc 30
-PATH="$WORK/slow-nc:$PATH" start_receiver
-send --incremental-from=s3 s4 "tcp://127.0.0.1:$PORT" > "$WORK/lost-reply.log" 2>&1 \
-  || fail "send stopped at a dataset whose reply was lost: $(cat "$WORK/lost-reply.log")"
-wait_receiver
-streams=$(grep -c " sending .*@s4 " "$WORK/lost-reply.log" || true)
-[ "$streams" -gt 0 ] || fail "no streams of s4 were sent: $(cat "$WORK/lost-reply.log")"
-[ "$(grep -c "WARNING: the receiver's reply for .* was lost, but the target holds" "$WORK/lost-reply.log")" = "$streams" ] \
-  || fail "expected a lost-reply warning for each of the $streams streams: $(cat "$WORK/lost-reply.log")"
-zfs list "$DST/copy/haf_db_store/pgdata/pg_wal@s4" >/dev/null || fail "the last dataset of s4 was not received"
 
 ######### switch_zfs_datasets.sh on a copy whose haf_db_store has canmount=on #########
 

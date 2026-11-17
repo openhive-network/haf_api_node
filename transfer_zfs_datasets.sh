@@ -9,7 +9,7 @@ print_help() {
   cat <<EOF
 Usage:
   $0 send [options] snapshot-name destination
-  $0 receive [--port=N] [--listen-address=addr] [--token=T] pool/dataset
+  $0 receive [--port=N] [--listen-address=addr] [--token=T] [--idle-timeout=S] pool/dataset
 
 send (on the source host) copies <ZPOOL>/<TOP_LEVEL_DATASET>@snapshot-name, which must have been
 taken by snapshot_zfs_datasets.sh, to the destination:
@@ -17,8 +17,10 @@ taken by snapshot_zfs_datasets.sh, to the destination:
                              the remote user is root; when run under sudo, ssh runs as \$SUDO_USER)
   tcp://host:port            to a 'receive' listener on the target (no ssh keys needed)
 Each dataset goes as its own compressed stream, parents first, received unmounted (-u) with the
-target's mountpoint inherited.  Datasets that already hold @snapshot-name on the target are skipped,
-so re-running after a failure resumes with the first dataset not yet received.
+target's mountpoint inherited and resumable (-s).  Datasets that already hold @snapshot-name on the
+target are skipped and an interrupted stream resumes from the target's receive_resume_token, so
+re-running the same command after a failure continues where it stopped.  The send ends by checking
+that every dataset is on the target with @snapshot-name, and exits non-zero naming any that is not.
 
 send options:
   --env-file=file            read ZPOOL and TOP_LEVEL_DATASET from this file (default: .env)
@@ -43,15 +45,21 @@ send options:
   --force, -f                send even if the space check warns
 
 receive (on the target host) listens for 'send ... tcp://' and receives into pool/dataset.  Each
-connection is one request; one that closes without a request is dropped and one that presents
-the wrong token is refused, both without touching the pool.  The sender retries a connection that
-is refused or closes before the receiver replies, so probes, an early sender or the listener
-re-arming between datasets only cost it a retry (a connection that stays open silently holds the
-listener until it closes).  It exits after the
-sender reports that every dataset arrived.  The stream is not encrypted: use trusted networks only.
+connection starts with a header line carrying the token: a state request, answered with the
+target's datasets and resume tokens, or a stream, piped into zfs recv with no reply.  A connection
+that closes without a header is dropped and one that presents the wrong token is refused, both
+without touching the pool.  The sender learns how each stream went from the next state request,
+which it repeats until it gets a whole answer, so probes, an early sender or the listener re-arming
+between datasets only cost it a retry (a connection that stays open silently holds the listener
+until it closes).  It exits after the sender reports that every dataset arrived; once a stream has
+arrived it exits non-zero if the sender stays away for --idle-timeout.  The stream is not
+encrypted: use trusted networks only.
   --port=N                   listen port (default 7700)
   --listen-address=addr      listen on this address only
   --token=T                  token the sender must present (default: a random one, printed)
+  --idle-timeout=SECONDS     once a stream has arrived, give up (exit 1) when no request comes for
+                             this long, and cut a stream that delivers nothing for this long
+                             (default 3600; 0 waits forever)
 EOF
 }
 
@@ -63,29 +71,37 @@ die() {
 ######### Helpers that run on the receiving host (locally, or through ssh) #########
 
 # Prints "pool <name> <size> <allocated> <available>", then "have <rel>" for every dataset and snapshot
-# under the target, <rel> being the name relative to the target ("." for the target itself).
+# under the target, <rel> being the name relative to the target ("." for the target itself), and
+# "resume <rel> <token>" for every dataset holding a partial receive that zfs send -t can resume.
 _target_state() {
-  local target="$1" pool="${1%%/*}" name rel
+  local target="$1" pool="${1%%/*}" name token rel
   # shellcheck disable=SC2046
   echo pool "$pool" $(zpool list -H -p -o size,allocated "$pool") $(zfs get -H -p -o value available "$pool")
-  zfs list -H -o name -t filesystem,snapshot -r "$target" 2>/dev/null | while read -r name; do
+  zfs list -H -o name,receive_resume_token -t filesystem,snapshot -r "$target" 2>/dev/null | while IFS=$'\t' read -r name token; do
     rel=${name#"$target"}
     case $rel in
       ""|@*) rel=".$rel" ;;
       *) rel=${rel#/} ;;
     esac
     echo "have $rel"
+    [ "$token" = - ] || echo "resume $rel $token"
   done
 }
 
-# Receives one stream from stdin into <target>/<rel>.  Incremental streams roll the dataset back
-# (-F), so refuse them for a dataset something is using: that is a live node, not a copy.
+# Receives one stream from stdin into <target>/<rel>, keeping a partial receive resumable (-s).
+# Incremental streams roll the dataset back (-F), so refuse them for a dataset something is using:
+# that is a live node, not a copy.  A resumed stream continues a full receive into a dataset that
+# has no snapshot yet, and an incremental one otherwise.
 _recv_into() {
   local target="$1" rel="$2" kind="$3" ds="$1" mountpoint
   [ "$rel" = . ] || ds="$target/$rel"
+  if [ "$kind" = resume ]; then
+    kind=full
+    [ -z "$(zfs list -H -o name -t snapshot -d 1 "$ds" 2>/dev/null)" ] || kind=incremental
+  fi
   case $kind in
     full)
-      zfs recv -u -x mountpoint "$ds"
+      zfs recv -s -u -x mountpoint "$ds"
       ;;
     incremental)
       if [ "$(zfs get -H -o value mounted "$ds")" = yes ]; then
@@ -95,7 +111,7 @@ _recv_into() {
           return 3
         fi
       fi
-      zfs recv -u -F -x mountpoint "$ds"
+      zfs recv -s -u -F -x mountpoint "$ds"
       ;;
     *)
       echo "unknown stream kind $kind" >&2
@@ -134,13 +150,72 @@ _close_nc() {
   wait "$nc_pid" 2>/dev/null || true
 }
 
+# Cuts the stream connection of nc $1 once nc has read nothing for --idle-timeout seconds: a sender
+# host that vanished without closing the connection would otherwise hold zfs recv forever.  Cutting
+# it makes the receive fail with its partial state kept.
+_watch_stall() {
+  local nc_pid="$1" step=10 idle=0 last="" now
+  [ "$IDLE_TIMEOUT" -gt 0 ] || return 0
+  [ "$IDLE_TIMEOUT" -ge "$step" ] || step=$IDLE_TIMEOUT
+  while sleep "$step"; do
+    now=$(awk '$1 == "rchar:" { print $2 }' "/proc/$nc_pid/io" 2>/dev/null) || return 0
+    [ -n "$now" ] || return 0
+    if [ "$now" != "$last" ]; then
+      last=$now
+      idle=0
+      continue
+    fi
+    idle=$((idle + step))
+    if [ "$idle" -ge "$IDLE_TIMEOUT" ]; then
+      echo "$(date -u +%FT%TZ)   nothing arrived for ${idle}s; cutting the connection"
+      kill "$nc_pid" 2>/dev/null || true
+      return 0
+    fi
+  done
+}
+
+# Pipes the rest of the stream connection on fd $nc_in into zfs recv and sets RESULT to
+# "<id> ok" or "<id> failed <zfs recv's first error line>" for the sender's next state request.
+_receive_stream() {
+  local target="$1" rel="$2" kind="$3" id="$4" nc_pid="$5" ds="$1" err_file watch_pid reason token
+  [ "$rel" = . ] || ds="$target/$rel"
+  echo "$(date -u +%FT%TZ) receiving $kind stream for $rel"
+  err_file=$(mktemp)
+  _watch_stall "$nc_pid" &
+  watch_pid=$!
+  if _recv_into "$target" "$rel" "$kind" <&"$nc_in" 2> "$err_file"; then
+    RESULT="$id ok"
+    echo "$(date -u +%FT%TZ)   done"
+  else
+    reason=$(head -n 1 "$err_file")
+    RESULT="$id failed ${reason:-zfs recv failed}"
+    token=$(zfs get -H -o value receive_resume_token "$ds" 2>/dev/null || true)
+    if [ -n "$token" ] && [ "$token" != - ]; then
+      echo "$(date -u +%FT%TZ)   the stream ended before $rel was complete: $reason"
+      echo "  The partial receive is kept; re-running the same send resumes it."
+    else
+      echo "$(date -u +%FT%TZ)   FAILED: $reason"
+    fi
+    if [ "$IDLE_TIMEOUT" -gt 0 ]; then
+      echo "  Waiting for the sender to resume (giving up after ${IDLE_TIMEOUT}s without a request)."
+    else
+      echo "  Waiting for the sender to resume (--idle-timeout=0: waiting forever)."
+    fi
+  fi
+  kill "$watch_pid" 2>/dev/null || true
+  wait "$watch_pid" 2>/dev/null || true
+  rm -f "$err_file"
+}
+
 receive_main() {
-  local target="$1" token="$TOKEN" line magic peer_token cmd rel kind nc_in nc_out nc_pid
+  local target="$1" token="$TOKEN" line rc magic peer_token cmd rel kind id nc_in nc_out nc_pid
+  local -a wait_limit=()
   [ -n "$target" ] || die "no target dataset given"
   _valid_dataset "$target" || die "invalid dataset name $target"
   zpool list "${target%%/*}" >/dev/null || die "pool ${target%%/*} does not exist"
   command -v nc >/dev/null || die "receive needs nc (netcat)"
   [ -n "$token" ] || token=$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  RESULT=""
 
   echo "Receiving into $target on port $PORT${LISTEN_ADDRESS:+ (address $LISTEN_ADDRESS)}."
   echo "On the source host run:"
@@ -159,32 +234,39 @@ receive_main() {
     exec {nc_in}<&"${NC[0]}" {nc_out}>&"${NC[1]}"
 
     line=""
-    IFS= read -r line <&"$nc_in" || true
-    read -r magic peer_token cmd rel kind <<< "$line" || true
-    if [ "$magic" != HAFZFS1 ]; then
+    rc=0
+    IFS= read -r "${wait_limit[@]}" line <&"$nc_in" || rc=$?
+    if [ "$rc" -gt 128 ]; then
+      _close_nc "$nc_pid"
+      echo "$(date -u +%FT%TZ) no request from the sender for ${IDLE_TIMEOUT}s, and it has not reported the end of the transfer."
+      echo "What arrived stays on $target.  To finish, restart this receiver with --token=$token and re-run the same send."
+      die "the sender went away before the transfer was complete"
+    fi
+    read -r magic peer_token cmd rel kind id <<< "$line" || true
+    if [ "$magic" = HAFZFS1 ]; then
+      echo "$(date -u +%FT%TZ) refused a sender running an older transfer_zfs_datasets.sh"
+      echo "ERR the receiver runs a newer transfer_zfs_datasets.sh; update the sender's checkout" >&"$nc_out" || true
+    elif [ "$magic" != HAFZFS2 ]; then
       [ -z "$line" ] || echo "$(date -u +%FT%TZ) ignored a connection without a valid header"
     elif [ "$peer_token" != "$token" ]; then
-      # a sender retries a connection closed without a reply, so tell it why it was refused
+      # the sender stops at this reply, so tell it why it was refused
       echo "$(date -u +%FT%TZ) refused a sender with the wrong token"
       echo "ERR wrong token" >&"$nc_out" || true
     else
       case $cmd in
         STATE)
-          { _target_state "$target"; echo END; } >&"$nc_out" || true
+          { _target_state "$target"; [ -z "$RESULT" ] || echo "result $RESULT"; echo END; } >&"$nc_out" || true
           ;;
         STREAM)
-          if ! _valid_rel "$rel"; then
-            echo "ERR invalid dataset $rel" >&"$nc_out" || true
+          [ "$IDLE_TIMEOUT" -eq 0 ] || wait_limit=(-t "$IDLE_TIMEOUT")
+          if ! [[ "$id" =~ ^[A-Za-z0-9-]+$ ]]; then
+            echo "$(date -u +%FT%TZ) ignored a stream without a valid id"
+          elif ! _valid_rel "$rel"; then
+            RESULT="$id failed invalid dataset name $rel"
+          elif [[ ! "$kind" =~ ^(full|incremental|resume)$ ]]; then
+            RESULT="$id failed unknown stream kind $kind"
           else
-            echo "$(date -u +%FT%TZ) receiving $kind stream for $rel"
-            echo GO >&"$nc_out" || true
-            if _recv_into "$target" "$rel" "$kind" <&"$nc_in"; then
-              echo "$(date -u +%FT%TZ)   done"
-              echo OK >&"$nc_out" || true
-            else
-              echo "$(date -u +%FT%TZ)   FAILED; waiting for the sender to retry"
-              echo "ERR receive failed on the target, see its output" >&"$nc_out" || true
-            fi
+            _receive_stream "$target" "$rel" "$kind" "$id" "$nc_pid"
           fi
           ;;
         END)
@@ -205,23 +287,13 @@ receive_main() {
 
 ######### send #########
 
-# One request over tcp:// on fd 3; sets TCP_REPLY to the receiver's first reply line.  Retries,
-# within --connect-timeout, a refused connect and a connection that closes or resets before that
-# reply (a receiver not listening yet, dropping a probe, or re-arming its listener after a
-# dataset): nothing past the header has been sent then, so the request is safe to repeat.
-_tcp_request() {
+# Opens fd 3 to the receiver, retrying a refused connect (a receiver not listening yet, or
+# re-arming its listener after a stream) within --connect-timeout.
+_tcp_connect() {
   local deadline=$((SECONDS + CONNECT_TIMEOUT))
-  while true; do
-    if { exec 3<>"/dev/tcp/$TCP_HOST/$TCP_PORT"; } 2>/dev/null; then
-      # the subshell takes the SIGPIPE of a connection already reset
-      if ( printf 'HAFZFS1 %s %s\n' "$TOKEN" "$*" >&3 ) 2>/dev/null && IFS= read -r TCP_REPLY <&3 2>/dev/null; then
-        return 0
-      fi
-      _tcp_close
-      echo "$(date -u +%FT%TZ) the receiver closed the $1 connection before replying; retrying" >&2
-    fi
-    [ "$SECONDS" -lt "$deadline" ] || die "no reply to '$*' from $TCP_HOST:$TCP_PORT within ${CONNECT_TIMEOUT}s"
-    sleep 5
+  until { exec 3<>"/dev/tcp/$TCP_HOST/$TCP_PORT"; } 2>/dev/null; do
+    [ "$SECONDS" -lt "$deadline" ] || die "could not connect to the receiver at $TCP_HOST:$TCP_PORT within ${CONNECT_TIMEOUT}s"
+    sleep 2
   done
 }
 
@@ -229,10 +301,36 @@ _tcp_close() {
   exec 3>&-
 }
 
+# Prints the tcp receiver's target state.  The request only reads, so any connection that closes,
+# resets or stalls before the closing END line is simply asked again, within --connect-timeout.
+# Only the receiver's explicit refusal (ERR ...) stops the sender.
+_tcp_state() {
+  local deadline=$((SECONDS + CONNECT_TIMEOUT)) line reply
+  while true; do
+    if { exec 3<>"/dev/tcp/$TCP_HOST/$TCP_PORT"; } 2>/dev/null; then
+      reply=""
+      # the subshell takes the SIGPIPE of a connection already reset
+      if ( printf 'HAFZFS2 %s STATE\n' "$TOKEN" >&3 ) 2>/dev/null; then
+        while IFS= read -r -t 60 line <&3 2>/dev/null; do
+          case $line in
+            ERR*) _tcp_close; die "receiver refused the state request: $line" ;;
+            END) _tcp_close; printf '%s' "$reply"; return 0 ;;
+          esac
+          reply+="$line"$'\n'
+        done
+      fi
+      _tcp_close
+    fi
+    [ "$SECONDS" -lt "$deadline" ] \
+      || die "no complete reply to STATE from $TCP_HOST:$TCP_PORT within ${CONNECT_TIMEOUT}s (is it a receiver of this version of transfer_zfs_datasets.sh?)"
+    sleep 1
+  done
+}
+
 # Reports to the receiver that every dataset arrived.  The receiver exits on END, so once END is
 # sent nothing is retried: a lost BYE would only be retried against a listener that is gone.  Only
-# a refused connect (the listener re-arming after the last dataset) is retried, for a short bound.
-# Every dataset is already on the target, so a failure here is a warning, never an error.
+# a refused connect (the listener re-arming after the last state request) is retried, for a short
+# bound.  Every dataset is already verified on the target, so a failure here is a warning.
 _tcp_end() {
   local deadline=$((SECONDS + 30)) reply=""
   until { exec 3<>"/dev/tcp/$TCP_HOST/$TCP_PORT"; } 2>/dev/null; do
@@ -242,7 +340,7 @@ _tcp_end() {
     fi
     sleep 1
   done
-  if ( printf 'HAFZFS1 %s END\n' "$TOKEN" >&3 ) 2>/dev/null && IFS= read -r -t 30 reply <&3 2>/dev/null \
+  if ( printf 'HAFZFS2 %s END\n' "$TOKEN" >&3 ) 2>/dev/null && IFS= read -r -t 30 reply <&3 2>/dev/null \
     && [ "$reply" = BYE ]; then
     _tcp_close
     return 0
@@ -268,21 +366,21 @@ _ssh() {
 }
 
 fetch_target_state() {
-  local line
   if [ -n "$SSH_HOST" ]; then
     _ssh "$SSH_HOST" "$(_remote _target_state "$TARGET")"
   else
-    _tcp_request STATE
-    case $TCP_REPLY in
-      ERR*) _tcp_close; die "receiver refused the state request: $TCP_REPLY" ;;
-    esac
-    line=$TCP_REPLY
-    while [ "$line" != END ]; do
-      echo "$line"
-      IFS= read -r line <&3 || break
-    done
-    _tcp_close
+    _tcp_state
   fi
+}
+
+# The resume token that state $1 lists for dataset $2, if any.
+_resume_token() {
+  awk -v rel="$2" '$1 == "resume" && $2 == rel { print $3 }' <<< "$1"
+}
+
+# The snapshot, named as on this host, whose interrupted stream resume token $1 continues.
+_token_snapshot() {
+  zfs send -n -v -t "$1" 2>/dev/null | awk '$1 == "toname" { print $3; exit }' || true
 }
 
 _buffer() {
@@ -294,42 +392,76 @@ _buffer() {
   esac
 }
 
+# Pipes one stream to the target and returns the pipe's status.  Over tcp:// the connection carries
+# a header line and then only the stream, with no reply: how it went is read from the target's state.
 send_one() {
-  local rel="$1" kind="$2" from="$3" snapshot="$4" size="$5" reply
+  local rel="$1" kind="$2" from="$3" snapshot="$4" size="$5" resume_token="$6" id="$7" status=0
   local -a send_cmd=(zfs send -L -e -c -p)
-  [ "$kind" = incremental ] && send_cmd+=(-i "@$from")
-  send_cmd+=("$snapshot")
+  if [ "$kind" = resume ]; then
+    send_cmd=(zfs send -t "$resume_token")
+  else
+    [ "$kind" = incremental ] && send_cmd+=(-i "@$from")
+    send_cmd+=("$snapshot")
+  fi
 
   if [ -n "$SSH_HOST" ]; then
-    "${send_cmd[@]}" | _buffer "$size" | _ssh "$SSH_HOST" "$(_remote _recv_into "$TARGET" "$rel" "$kind")"
+    "${send_cmd[@]}" | _buffer "$size" | _ssh "$SSH_HOST" "$(_remote _recv_into "$TARGET" "$rel" "$kind")" || status=$?
   else
-    _tcp_request STREAM "$rel" "$kind"
-    [ "$TCP_REPLY" = GO ] || { _tcp_close; die "receiver refused $rel: $TCP_REPLY"; }
-    "${send_cmd[@]}" | _buffer "$size" >&3
-    if ! IFS= read -r reply <&3; then
-      _tcp_close
-      _tcp_received "$rel" "${snapshot##*@}" || die "receiving $rel failed: the connection closed before the receiver confirmed, and the target does not hold @${snapshot##*@}"
-      echo "WARNING: the receiver's reply for $rel was lost, but the target holds $rel@${snapshot##*@}; continuing" >&2
-      return 0
+    _tcp_connect
+    # the subshell takes the SIGPIPE of a connection already reset
+    if ( printf 'HAFZFS2 %s STREAM %s %s %s\n' "$TOKEN" "$rel" "$kind" "$id" >&3 ) 2>/dev/null; then
+      "${send_cmd[@]}" | _buffer "$size" >&3 || status=$?
+    else
+      status=1
     fi
     _tcp_close
-    [ "$reply" = OK ] || die "receiving $rel failed: $reply"
   fi
+  return "$status"
 }
 
-# Whether the tcp receiver's target holds <rel>@<snapshot-name>: the arbiter when a stream was sent
-# in full but its reply was lost.
-_tcp_received() {
-  local state
-  state=$(fetch_target_state) || return 1
-  grep -qxF "have $1@$2" <<< "$state"
+# Sends <rel> and returns once the target holds it at <snapshot>, or stops naming it.  A tcp stream
+# that the receiver never started receiving (its connection closed or reset before the receiver
+# read the header, so the receiver reports no result for it) is sent again within --connect-timeout.
+deliver() {
+  local rel="$1" kind="$2" from="$3" snap="$4" size="$5" resume_token="$6"
+  local deadline=$((SECONDS + CONNECT_TIMEOUT)) id state status reason msg
+  while true; do
+    id="$(date +%s)-$$-$RANDOM"
+    status=0
+    send_one "$rel" "$kind" "$from" "$snap" "$size" "$resume_token" "$id" || status=$?
+    state=$(fetch_target_state)
+    if grep -qxF "have $rel@${snap##*@}" <<< "$state"; then
+      return 0
+    fi
+    if [ -z "$TCP_HOST" ] || grep -q "^result $id " <<< "$state" || [ "$SECONDS" -ge "$deadline" ]; then
+      break
+    fi
+    echo "$(date -u +%FT%TZ) the stream for $rel did not reach the receiver (the connection closed first); sending it again" >&2
+    resume_token=$(_resume_token "$state" "$rel")
+    [ -z "$resume_token" ] || kind=resume
+    sleep 2
+  done
+
+  reason=$(sed -n "s/^result $id failed //p" <<< "$state")
+  msg="receiving $rel failed"
+  if [ -n "$reason" ]; then
+    msg+=" on the target: $reason"
+  elif [ -n "$TCP_HOST" ] && ! grep -q "^result $id " <<< "$state"; then
+    msg+=": the receiver never started receiving it"
+  elif [ "$status" -ne 0 ]; then
+    msg+=": the stream exited with status $status"
+  fi
+  if [ -n "$(_resume_token "$state" "$rel")" ]; then
+    msg+="; the target keeps the part that arrived, and re-running the same command (once the cause is fixed) resumes it"
+  fi
+  die "$msg"
 }
 
 send_main() {
   local snapshot_name="$1" destination="$2"
   local source_top state pool_name pool_size pool_alloc pool_avail rel ds snap from kind size note origin
-  local total=0 count=0 errors=0 after_cap verdict entry
-  local -a sources=() plan=()
+  local resume_token resumed_snap total=0 count=0 errors=0 after_cap verdict entry
+  local -a sources=() plan=() missing=()
 
   [ -n "$snapshot_name" ] || die "no snapshot name given"
   [ -n "$destination" ] || die "no destination given"
@@ -430,8 +562,19 @@ send_main() {
   for entry in "${sources[@]}"; do
     IFS=$'\t' read -r rel snap note <<< "$entry"
     from=""
+    resume_token=$(_resume_token "$state" "$rel")
     if _target_has "$rel@$snapshot_name"; then
       kind=skip
+    elif [ -n "$resume_token" ]; then
+      resumed_snap=$(_token_snapshot "$resume_token")
+      if [ "$resumed_snap" != "$snap" ]; then
+        printf '%-36s %-12s %10s  %s\n' "$rel" "-" "-" \
+          "ERROR: the target holds an interrupted receive of ${resumed_snap:-a snapshot this host lacks}; finish it, or discard it there with zfs recv -A"
+        errors=$((errors + 1))
+        continue
+      fi
+      kind=resume
+      note="$note resumes an interrupted receive;"
     elif [ -n "$INCREMENTAL_FROM" ] && _target_has "$rel@$INCREMENTAL_FROM"; then
       kind=incremental
       from=$INCREMENTAL_FROM
@@ -450,15 +593,19 @@ send_main() {
     fi
 
     size=0
-    if [ "$kind" != skip ]; then
+    if [ "$kind" = resume ]; then
+      size=$(zfs send -n -P -t "$resume_token" | awk '$1 == "size" { print $2 }')
+    elif [ "$kind" != skip ]; then
       size=$(zfs send -n -P -L -e -c -p ${from:+-i "@$from"} "$snap" | awk '$1 == "size" { print $2 }')
+    fi
+    if [ "$kind" != skip ]; then
       total=$((total + size))
       count=$((count + 1))
     else
       note="$note already received;"
     fi
     printf '%-36s %-12s %10s  %s\n' "$rel" "$kind" "$(human "$size")" "$note"
-    plan+=("$rel $kind ${from:--} $snap $size")
+    plan+=("$rel $kind ${from:--} $snap $size ${resume_token:--}")
   done
 
   after_cap=$(( (pool_alloc + total) * 100 / pool_size ))
@@ -491,12 +638,24 @@ send_main() {
   [ "$verdict" != warn ] || [ "$FORCE" -eq 1 ] || die "space warning; re-run with --force to send anyway"
 
   for entry in "${plan[@]}"; do
-    read -r rel kind from snap size <<< "$entry"
+    read -r rel kind from snap size resume_token <<< "$entry"
     [ "$kind" != skip ] || continue
     echo ""
     echo "$(date -u +%FT%TZ) sending $snap ($kind, $(human "$size"))"
-    send_one "$rel" "$kind" "$from" "$snap" "$size"
+    deliver "$rel" "$kind" "$from" "$snap" "$size" "$resume_token"
   done
+
+  state=$(fetch_target_state)
+  for entry in "${sources[@]}"; do
+    rel=${entry%%$'\t'*}
+    _target_has "$rel@$snapshot_name" || missing+=("$rel")
+  done
+  if [ "${#missing[@]}" -gt 0 ]; then
+    for rel in "${missing[@]}"; do
+      echo "MISSING on the target: $rel@$snapshot_name" >&2
+    done
+    die "${#missing[@]} dataset(s) of @$snapshot_name are not on the target"
+  fi
 
   if [ -n "$TCP_HOST" ]; then
     _tcp_end
@@ -507,7 +666,7 @@ send_main() {
 
 ######### main #########
 
-if ! OPTIONS=$(getopt -o he:f --long help,env-file:,zpool:,top-level-dataset:,incremental-from:,check,max-capacity:,buffer:,swap-logs-with-dataset:,allow-untagged-snapshot,token:,connect-timeout:,force,port:,listen-address: -n "$0" -- "$@"); then
+if ! OPTIONS=$(getopt -o he:f --long help,env-file:,zpool:,top-level-dataset:,incremental-from:,check,max-capacity:,buffer:,swap-logs-with-dataset:,allow-untagged-snapshot,token:,connect-timeout:,force,port:,listen-address:,idle-timeout: -n "$0" -- "$@"); then
   print_help
   exit 1
 fi
@@ -529,7 +688,7 @@ LISTEN_ADDRESS=""
 SSH_HOST=""
 TCP_HOST=""
 TCP_PORT=""
-TCP_REPLY=""
+IDLE_TIMEOUT=3600
 TARGET=""
 
 eval set -- "$OPTIONS"
@@ -550,6 +709,7 @@ while true; do
     --force|-f) FORCE=1; shift ;;
     --port) PORT="$2"; shift 2 ;;
     --listen-address) LISTEN_ADDRESS="$2"; shift 2 ;;
+    --idle-timeout) IDLE_TIMEOUT="$2"; shift 2 ;;
     --help|-h) print_help; exit 0 ;;
     --) shift; break ;;
   esac
@@ -558,6 +718,7 @@ done
 [[ "$MAX_CAPACITY" =~ ^[0-9]+$ ]] || die "--max-capacity must be a number"
 [[ "$PORT" =~ ^[0-9]+$ ]] || die "--port must be a number"
 [[ "$CONNECT_TIMEOUT" =~ ^[0-9]+$ ]] || die "--connect-timeout must be a number"
+[[ "$IDLE_TIMEOUT" =~ ^[0-9]+$ ]] || die "--idle-timeout must be a number"
 
 MODE="$1"
 shift || true
