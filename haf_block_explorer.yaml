@@ -128,6 +128,9 @@ services:
       block-explorer-install-schema:
         condition: service_completed_successfully
         restart: true
+      block-explorer-install-balance-tracker:
+        condition: service_completed_successfully
+        restart: true
     restart: on-failure
     networks:
       - haf-network
@@ -146,6 +149,9 @@ services:
       PGRST_SERVER_HOST: "::"
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_DB_URI: postgresql://hafbe_user@pgbouncer:6432/haf_block_log?application_name=block_explorer_postgrest
+      # Held while this API serves, so a rerun of its install skips (postgrest/entrypoint.sh).
+      HAF_APP_LOCK: haf_block_explorer
+      HAF_APP_LOCK_DB_URI: postgresql://hafbe_user@haf/haf_block_log
       # Off behind transaction-mode pgbouncer: a failed prepared query leaves its
       # name on the pooled backend, so the error turns into 503 08P01 and a dropped
       # connection. See PGRST_DB_PREPARED_STATEMENTS in .env.example.
@@ -172,6 +178,11 @@ services:
         condition: service_completed_successfully
         # PostgREST reads its schema cache at start and can't LISTEN through pgbouncer:
         # restart it after compose reruns an upgraded install, for the new endpoint signatures.
+        restart: true
+      # The hafbe_bal install takes this API's lock (haf_block_explorer) too: without the
+      # restart, an upgrade of it alone would find the lock held and skip.
+      block-explorer-install-balance-tracker:
+        condition: service_completed_successfully
         restart: true
       pgbouncer:
         condition: service_healthy
