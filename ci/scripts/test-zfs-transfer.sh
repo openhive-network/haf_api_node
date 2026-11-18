@@ -36,6 +36,10 @@ if ! command -v zpool >/dev/null || [ ! -e /dev/zfs ]; then
 fi
 command -v nc >/dev/null || skip "nc (netcat) is not installed"
 
+# snapshot_zfs_datasets.sh and rollback_zfs_datasets.sh (through switch_zfs_datasets.sh) would
+# otherwise drop the whole host's page cache on every call, for 1 GiB of synthetic data (#114)
+export HAF_SKIP_DROP_CACHES=1
+
 WORK=$(mktemp -d)
 SRC=xfersrc$$
 DST=xferdst$$
