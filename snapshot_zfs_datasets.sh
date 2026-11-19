@@ -252,9 +252,15 @@ fi
 stdbuf -o0 echo -n "syncing filesystems..."
 sync; sync; sync
 echo " done"
-stdbuf -o0 echo -n "dropping caches..."
-echo 3 > /proc/sys/vm/drop_caches
-echo " done"
+# HAF_SKIP_DROP_CACHES (any non-empty value) leaves the host's page cache alone, e.g. for tests on
+# small synthetic datasets that share their host; sync above is what the snapshot needs either way
+if [ -n "${HAF_SKIP_DROP_CACHES:-}" ]; then
+  stdbuf -o0 echo "not dropping caches (HAF_SKIP_DROP_CACHES is set)"
+else
+  stdbuf -o0 echo -n "dropping caches..."
+  echo 3 > /proc/sys/vm/drop_caches
+  echo " done"
+fi
 
 unmount() {
   stdbuf -o0 echo -n "Unmounting $1..."

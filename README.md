@@ -1088,6 +1088,11 @@ Example:
 sudo ./snapshot_zfs_datasets.sh 20231023T1831Z-haf-only
 ```
 
+After syncing, the script drops the host's page cache (`echo 3 > /proc/sys/vm/drop_caches`), as
+`rollback_zfs_datasets.sh` does too. Set `HAF_SKIP_DROP_CACHES` to any non-empty value, in the
+environment or in `.env`, to skip the drop: it is meant for tests on small synthetic datasets and for
+operators who know they do not want the host's whole cache emptied. The `sync` still runs.
+
 Snapshots carry the property `haf_api_node:taken_by=snapshot_zfs_datasets.sh`, which
 `transfer_zfs_datasets.sh` requires before it sends one to another host.
 
