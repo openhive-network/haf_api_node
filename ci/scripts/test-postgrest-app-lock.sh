@@ -57,7 +57,8 @@ LOCK_INSTALLS='{
 }'
 
 # Installs of LOCK_INSTALLS that cannot tell an upgrade from a rerun through install_lock/:
-# hivemind's installer is its own (no install_with_app_lock.py); proxy-whitelist records no version.
+# hivemind's installer is its own (no install_with_app_lock.py; ci/scripts/test-hivemind-install-check.sh
+# covers its check); proxy-whitelist records no version.
 UNVERSIONED_INSTALLS="hivemind-install proxy-whitelist-install"
 
 # install_lock/install_with_app_lock.py: common-ci-configuration 7658f4893592b132352e5fdbc103dbb9adc7cfa8

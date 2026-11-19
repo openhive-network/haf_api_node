@@ -6,6 +6,16 @@ services:
       - hivemind
     networks:
       haf-network:
+    # Runs the image's entrypoint, then fails an install that exited 0 but left the database
+    # behind this image's revision: hivemind images without hivemind#456 skip an upgrade the
+    # PostgREST's lock keeps out with exit 0 (install_lock/README.md).
+    entrypoint:
+      - /usr/local/lib/haf_api_node/hivemind_install.sh
+    volumes:
+      - type: bind
+        source: ./install_lock/hivemind_install.sh
+        target: /usr/local/lib/haf_api_node/hivemind_install.sh
+        read_only: true
     # --upgrade-schema runs `hive upgrade_schema`: it creates the schema on a fresh
     # database and applies table migrations on an existing one. Plain `setup` runs
     # `build_schema`, which on an existing database only reloads functions.

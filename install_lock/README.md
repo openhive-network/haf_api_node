@@ -18,3 +18,16 @@ this copy with it. See the README's
 
 To move to another revision, copy the file unmodified from that commit and update the commit
 here and the blob in the test.
+
+## hivemind
+
+hivemind's installer is its own (`hive build_schema` / `upgrade_schema`), not this wrapper. In
+images without hivemind#456 it skips with exit 0 whenever the lock is held, an upgrade included,
+and `hivemind-block-processing` then starts the new code on the old schema and crash-loops. So
+`hivemind-install` runs `hivemind_install.sh` as its entrypoint: it runs the image's
+`docker_entrypoint.sh`, and when that exits 0 compares the image's revision
+(`hive.version.GIT_REVISION`) with `hivemind_app.hive_state.hivemind_git_rev`, which every
+hivemind install that runs sets to it. If they differ, the install did not run: it exits 1 with
+both revisions, the skip line naming the holder, and the recovery. Images with hivemind#456 fail
+such an install themselves; the check then finds nothing to add. `ci/scripts/test-hivemind-install-check.sh`
+tests it.

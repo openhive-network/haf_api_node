@@ -898,17 +898,38 @@ What hivemind's install step does on an upgrade:
   crash-loops in `hivemind-block-processing` (e.g. `UndefinedTable` from `app_restore_indexes`).
 - The install needs the exclusive `hivemind` lock (see
   [Advisory-lock coordination](#advisory-lock-coordination-between-installers-and-block-processors)).
-  While any dependent app's block processing holds its shared lock on `hivemind` --
-  `haf-fyp-block-processing` and `hivesense-sync` -- the install does nothing and exits 0.  You
-  can tell it skipped from its log:
-  `docker compose logs hivemind-install | grep 'Skipping install: lock on hivemind held by'`
-  (followed by `Skipping hivemind schema install`).  If you see it, stop the services it names
-  (`postgrest_app_lock_hivemind` is `hivemind-postgrest-server`),
-  rerun `docker compose --profile core --profile hivemind up hivemind-install`, then start them
-  again.  If a hivemind version makes a skipped, still-pending upgrade exit non-zero instead,
-  the `service_completed_successfully` dependency keeps `hivemind-block-processing`,
-  `hivemind-server` and the other hivemind-dependent services from starting until the upgrade
-  has run; that is intended.
+  While anything else holds the shared lock on `hivemind` -- `hivemind-postgrest-server` while
+  it serves (`postgrest_app_lock_hivemind`; a full `docker compose up -d` stops it before a
+  changed install, `up -d <service>` does not), `haf-fyp-block-processing` and `hivesense-sync`
+  -- the install does not run.  Its log says
+  `Skipping install: lock on hivemind held by <holders>`.
+- Locked out with nothing to install (a rerun at the installed version), the install exits 0.
+  Locked out of an **upgrade**, it fails, so `hivemind-block-processing`, `hivemind-server` and
+  the other services waiting for `service_completed_successfully` do not start the new code on
+  the old schema (which crash-loops `hivemind-block-processing`, dropping and restoring its
+  foreign keys on each start).  Images with hivemind#456 (built from hivemind's develop after
+  it, e.g. `92f25270`) fail it themselves; images without it, the `1.28.8` release included,
+  exit 0, and `hivemind-install`'s entrypoint
+  ([`install_lock/hivemind_install.sh`](install_lock/README.md#hivemind)) fails it instead: it
+  compares the image's revision with the one the database records
+  (`hivemind_app.hive_state.hivemind_git_rev`), and exits 1 when they differ:
+
+  ```
+  Cannot install hivemind revision <new>: the install exited 0, but the database is at revision <old>. NOTICE:  Skipping install: lock on hivemind held by postgrest_app_lock_hivemind (pid=...) To upgrade: ...
+  ```
+
+  `docker compose up -d` then exits non-zero (`service "hivemind-install" didn't complete
+  successfully: exit 1`).  To upgrade, stop the holders the message names, then bring the stack
+  up again; the install runs, then the stopped services start on the new schema:
+
+  ```
+  docker compose stop hivemind-postgrest-server hivemind-postgrest-rewriter haf-fyp-block-processing hivesense-sync
+  docker compose up -d
+  ```
+
+  Run on its own, without this entrypoint, the minimum image for a safe upgrade under the lock
+  is one with hivemind#456; with it, any hivemind image fails visibly.  A run that replaces the
+  entrypoint (`docker compose run --entrypoint ...`) is not checked.
 - If one of the version's migrations requested it, the upgrade ends with a `VACUUM FULL` of the
   database (log line `Attempting to run VACUUM FULL on upgraded database`; otherwise
   `Skipping VACUUM FULL on upgraded database (no vacuum request)`).  That can take a long time on
@@ -998,7 +1019,7 @@ docker compose up -d
 
 The install runs, then the PostgREST and its rewriter start on the new schema. Running an install by hand while its API is up (`docker compose run`, `compose restart <install>`) behaves the same way: it skips the installed version and fails an upgrade; stop the PostgREST first.
 
-The app images carry an older `install_with_app_lock.py`, which skips an upgrade as it skips a rerun, and their installers pass it no version. So the installs of balance_tracker (both schemas), reputation_tracker, nft_tracker, haf_block_explorer and hivesense mount [`install_lock/`](install_lock/README.md) over it: common-ci-configuration's wrapper from #85, pinned by commit, run with the version the image installs and a query of the version installed (`HAF_APP_INSTALLED_VERSION_QUERY` on the service). Not covered: proxy-whitelist records no version, so its install still skips an upgrade (with a warning that upgrade detection is off); hivemind's installer is its own (see [hivemind's upgrade](#deleting-hivemind-data-from-your-database-or-a-similar-apps-data) above). If the installed version cannot be read (e.g. a permission error), the install warns and skips.
+The app images carry an older `install_with_app_lock.py`, which skips an upgrade as it skips a rerun, and their installers pass it no version. So the installs of balance_tracker (both schemas), reputation_tracker, nft_tracker, haf_block_explorer and hivesense mount [`install_lock/`](install_lock/README.md) over it: common-ci-configuration's wrapper from #85, pinned by commit, run with the version the image installs and a query of the version installed (`HAF_APP_INSTALLED_VERSION_QUERY` on the service). Not covered: proxy-whitelist records no version, so its install still skips an upgrade (with a warning that upgrade detection is off); hivemind's installer is its own, and `hivemind-install` runs [`install_lock/hivemind_install.sh`](install_lock/README.md#hivemind) instead, which fails an upgrade the lock skipped (see [hivemind's upgrade](#deleting-hivemind-data-from-your-database-or-a-similar-apps-data) above). If the installed version cannot be read (e.g. a permission error), the install warns and skips.
 
 Not covered: hafah and haf_stats (their installers take no lock), and haf_fyp (its API role `haf_fyp_user` has no USAGE on schema `hive`, by design). proxy-whitelist is covered only on HAF versions whose install lock does not check the HAF app registry (1.28.x): it registers as `proxy_whitelist_app` but locks `proxy-whitelist`, and newer HAF installs an app without its lock when no app is registered under the lock's name.
 
