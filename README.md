@@ -875,7 +875,10 @@ list the services to stop first.
 
 Install services run on their own when you `docker compose up -d` with the app's profile.
 To rerun one by hand, likewise use `up`, e.g.
-`docker compose --profile core --profile hivemind up hivemind-install`.
+`docker compose --profile core --profile hivemind up hivemind-install`.  While the app's API is
+up, its PostgREST holds the app's lock: an install run this way skips if its version is already
+installed, and fails if it would upgrade the app; stop the PostgREST first (see
+[PostgREST servers hold their app's lock](#postgrest-servers-hold-their-apps-lock)).
 
 If you're uninstalling Hivemind permanently, then remember to remove the `hivemind` profile from your `.env` file's `COMPOSE_PROFILES` line so it doesn't start automatically next time you do a `docker compose up -d`.
 
@@ -899,7 +902,8 @@ What hivemind's install step does on an upgrade:
   `haf-fyp-block-processing` and `hivesense-sync` -- the install does nothing and exits 0.  You
   can tell it skipped from its log:
   `docker compose logs hivemind-install | grep 'Skipping install: lock on hivemind held by'`
-  (followed by `Skipping hivemind schema install`).  If you see it, stop the services it names,
+  (followed by `Skipping hivemind schema install`).  If you see it, stop the services it names
+  (`postgrest_app_lock_hivemind` is `hivemind-postgrest-server`),
   rerun `docker compose --profile core --profile hivemind up hivemind-install`, then start them
   again.  If a hivemind version makes a skipped, still-pending upgrade exit non-zero instead,
   the `service_completed_successfully` dependency keeps `hivemind-block-processing`,
@@ -961,7 +965,44 @@ WHERE l.locktype = 'advisory';
 | haf_fyp (block-processing, SQL) | `haf_fyp`, `hivemind` | `haf_fyp` (via `install_app.sh`) |
 | haf_fyp-ranker (Python) | `haf_fyp` | (same installer as above) |
 
-Apps not in this table (balance_tracker, reputation_tracker, nft_tracker, hafah, haf_block_explorer) have idempotent installers and don't need lock coordination today.
+The installers of balance_tracker, reputation_tracker, nft_tracker and haf_block_explorer take their app's exclusive lock too (`install_app.sh` through `install_with_app_lock.py`; under the block explorer, the `hafbe_bal` install of balance_tracker takes `haf_block_explorer`). haf_stats' installer takes none, nor does hafah's in the 1.28.8 image this stack runs (HAfAH#113 adds it on HAfAH's develop).
+
+### PostgREST servers hold their app's lock
+
+A block-processor's lock protects the schema only while the block-processor runs, and hafah has none. So each app's PostgREST holds the same shared lock while it serves (`postgrest/entrypoint.sh`, set by `HAF_APP_LOCK` and `HAF_APP_LOCK_DB_URI` on the service): a rerun of the install under the live API — a plain `docker compose up -d`, or `up -d <service>` pulling the installers back in — skips instead of dropping the functions the API is calling. PostgREST cannot hold the lock itself, since session locks do not survive transaction-mode pgbouncer, so the entrypoint holds it on a direct connection of its own to `haf` (hence a `PG_ACCESS` row per PostgREST), with `application_name` `postgrest_app_lock_<app>`.
+
+| PostgREST | Holds | Restarts with (`depends_on: restart: true`) |
+|---|---|---|
+| hivemind-postgrest-server | `hivemind` | hivemind-install |
+| hivesense-postgrest | `hivesense` | hivesense-install-schema |
+| proxy-whitelist-postgrest | `proxy-whitelist` | proxy-whitelist-install |
+| block-explorer-postgrest | `haf_block_explorer` | block-explorer-install-schema, block-explorer-install-balance-tracker |
+| balance-tracker-postgrest | `balance_tracker` (standalone; inert under the block explorer, whose PostgREST covers `hafbe_bal`) | balance-tracker-install, block-explorer-install-balance-tracker |
+| reputation-tracker-postgrest | `reputation_tracker` | reputation-tracker-install |
+| nft-tracker-postgrest | `nft_tracker` | nft-tracker-install |
+
+An upgrade installs when you run a full `docker compose up -d`: a changed install is recreated, and compose stops every PostgREST that restarts with it before running it, so the lock is free; the PostgREST and its rewriter then restart on the new schema (see [Launch procedure](#launch-procedure)). That is why a PostgREST must restart with **every** install that takes its lock, and why block-explorer-postgrest restarts with the `hafbe_bal` install too. A plain `docker compose up -d` that reruns an install already at its version skips it with exit 0 and restarts neither the PostgREST nor its rewriter.
+
+An install that finds the lock held and would **upgrade** the app fails instead of skipping, so the old schema does not go on serving under the new image unnoticed. That happens with `up -d <install>` or `up -d <block-processing>` after a version bump: the PostgREST is outside what compose manages in that run, so it is not stopped. The install exits 1, and its log names both versions, the holder and the recovery:
+
+```
+Cannot install nft_tracker version <new>: the installed version is <old>, and the install lock is held by NOTICE:  Skipping install: lock on nft_tracker held by postgrest_app_lock_nft_tracker (pid=...). ... To upgrade: stop nft_tracker-postgrest and any other holder of the lock, rerun the install, then start them again.
+```
+
+`up -d <block-processing>`, `up -d --wait <install>` and the next full `up -d` exit non-zero (`service "<install>" didn't complete successfully: exit 1`); a plain `up -d <install>` returns before the install ends, so check `docker compose ps -a <install>` or its log. The PostgREST keeps serving the old version meanwhile. A later full `up -d` does not repair it: the install is then up to date, so compose reruns it without stopping the PostgREST, and it fails again. To upgrade, stop the PostgREST that holds the lock (the table above; the message names it by lock, e.g. `haf_block_explorer-postgrest` is `block-explorer-postgrest`) and its rewriter, and any block-processor it names, then run `docker compose up -d`:
+
+```
+docker compose stop nft-tracker-postgrest nft-tracker-postgrest-rewriter
+docker compose up -d
+```
+
+The install runs, then the PostgREST and its rewriter start on the new schema. Running an install by hand while its API is up (`docker compose run`, `compose restart <install>`) behaves the same way: it skips the installed version and fails an upgrade; stop the PostgREST first.
+
+The app images carry an older `install_with_app_lock.py`, which skips an upgrade as it skips a rerun, and their installers pass it no version. So the installs of balance_tracker (both schemas), reputation_tracker, nft_tracker, haf_block_explorer and hivesense mount [`install_lock/`](install_lock/README.md) over it: common-ci-configuration's wrapper from #85, pinned by commit, run with the version the image installs and a query of the version installed (`HAF_APP_INSTALLED_VERSION_QUERY` on the service). Not covered: proxy-whitelist records no version, so its install still skips an upgrade (with a warning that upgrade detection is off); hivemind's installer is its own (see [hivemind's upgrade](#deleting-hivemind-data-from-your-database-or-a-similar-apps-data) above). If the installed version cannot be read (e.g. a permission error), the install warns and skips.
+
+Not covered: hafah and haf_stats (their installers take no lock), and haf_fyp (its API role `haf_fyp_user` has no USAGE on schema `hive`, by design). proxy-whitelist is covered only on HAF versions whose install lock does not check the HAF app registry (1.28.x): it registers as `proxy_whitelist_app` but locks `proxy-whitelist`, and newer HAF installs an app without its lock when no app is registered under the lock's name.
+
+The holder fails open: when it cannot take or keep the lock, the API serves anyway, the PostgREST's log says `app lock: WARNING: not holding the shared HAF lock on <app>` (at most every 5 minutes while it keeps failing), and it retries every 5 seconds, so the lock is back soon after `haf` restarts. On HAF versions with `hive._app_broken_reason`, it releases the lock of an app HAF reports broken, as block-processors do, so the install that repairs the app is not kept out; that check runs as the app's API role, so an app health function the API role cannot run counts as broken and the lock is never held. `ci/scripts/test-postgrest-app-lock.sh` tests this against a stub stack.
 
 Block-processors connect directly to postgres (not via pgbouncer), which is what lets the simple session-lifetime model work — advisory locks are session-scoped and would be silently released by transaction-pool connection recycling.
 

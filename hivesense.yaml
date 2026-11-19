@@ -94,6 +94,8 @@ services:
       - hivesense-install
     environment:
       POSTGRES_HOST: haf
+      HAF_APP_INSTALLED_VERSION_QUERY: SELECT runtime_hash FROM hivesense_app.version
+      HAF_APP_INSTALL_VERSION_ENV: HIVESENSE_GIT_HASH
     command:
       - install_app
       - "--llm=${HIVESENSE_MODEL:-hf.co/jinaai/jina-embeddings-v5-text-small-retrieval:F16}"
@@ -126,6 +128,16 @@ services:
       - type: bind
         source: ${HAF_DATA_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}}/hivesense/config
         target: /hivesense/config
+      # The install lock wrapper of common-ci-configuration#85, given this image's version: an
+      # upgrade that the PostgREST's lock would skip fails instead (install_lock/README.md).
+      - type: bind
+        source: ./install_lock/with_install_version.py
+        target: /usr/local/bin/install_with_app_lock.py
+        read_only: true
+      - type: bind
+        source: ./install_lock/install_with_app_lock.py
+        target: /usr/local/lib/haf_api_node/install_with_app_lock.py
+        read_only: true
     networks:
       haf-network:
     depends_on:
@@ -194,6 +206,9 @@ services:
       PGRST_SERVER_HOST: "::"
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_DB_URI: postgresql://hivesense_user@pgbouncer:6432/haf_block_log?application_name=hivesense_postgrest
+      # Held while this API serves, so a rerun of its install skips (postgrest/entrypoint.sh).
+      HAF_APP_LOCK: hivesense
+      HAF_APP_LOCK_DB_URI: postgresql://hivesense_user@haf/haf_block_log
       # Off behind transaction-mode pgbouncer: a failed prepared query leaves its
       # name on the pooled backend, so the error turns into 503 08P01 and a dropped
       # connection. See PGRST_DB_PREPARED_STATEMENTS in .env.example.
