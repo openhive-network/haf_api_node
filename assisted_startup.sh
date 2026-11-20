@@ -570,6 +570,10 @@ else
                 echo "WARNING: Failed to apply reduce_writebacks optimization"
                 OPTIMIZATION_METHOD="none"
             fi
+            # reduce_writebacks.sh sets only vm.dirty_*; the ZFS ARC limit beside them is the memory plan's
+            if ! ./memory_plan.sh --apply --arc-only; then
+                echo "WARNING: Failed to apply the ZFS ARC limit (memory_plan.sh)"
+            fi
             remove_shared_mem=0
         else
             remove_shared_mem=0
@@ -952,6 +956,8 @@ else
     elif [[ $OPTIMIZATION_METHOD == "reduce_writebacks" ]]; then
         echo "reduce_writebacks optimization was used for this sync"
         echo "Kernel parameters have been restored to original values"
+        echo "The ZFS ARC limit set for the sync stays until reboot; once the apps run, review and keep it with:"
+        echo "  sudo ./memory_plan.sh && sudo ./memory_plan.sh --apply --persist"
     else
         echo "No performance optimizations were used for this sync"
     fi

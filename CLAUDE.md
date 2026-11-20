@@ -97,7 +97,8 @@ sudo ./clone_zfs_datasets.sh <src> <dst> # Clone datasets
 ```bash
 sudo ./assisted_startup.sh       # Guided startup with optimizations
 sudo ./make_ramdisk.sh           # Create ramdisk for faster sync
-sudo ./reduce_writebacks.sh      # Reduce disk writebacks
+sudo ./reduce_writebacks.sh      # Reduce disk writebacks (vm.dirty_*)
+sudo ./memory_plan.sh            # Host memory plan; --apply --persist sets the ZFS ARC limit and huge pages
 ```
 
 ## Key Files

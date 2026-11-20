@@ -6,8 +6,8 @@
 # tables, buffer descriptors, wal_buffers) on huge pages when the host has reserved enough of them,
 # and falls back to 4kB pages otherwise.  This script sets vm.nr_hugepages to the shared segment
 # postgresql_memory.sh sizes for the haf container's shared_buffers.  Reserved huge pages are taken
-# out of general RAM until released; reduce_writebacks.sh's ZFS ARC limit already leaves room for
-# that segment, so they are not counted twice.
+# out of general RAM until released; memory_plan.sh's ZFS ARC limit already leaves room for that
+# segment, so they are not counted twice.  memory_plan.sh --apply runs this script.
 #
 # Usage:
 #   sudo ./reserve_huge_pages.sh            # Reserve them now (stop haf first, see --help)
@@ -61,7 +61,7 @@ SIZING:
   shared_buffers is the haf container's (postgresql_memory.sh): POSTGRESQL_SHARED_BUFFERS_GB from
   the environment or $SCRIPT_DIR/.env when set, otherwise ${PG_SHARED_BUFFERS_PERCENT}% of RAM capped at
   ${PG_SHARED_BUFFERS_MAX_GB}GB.  The reservation is shared_buffers + ${PG_SHARED_SEGMENT_OVERHEAD_PERCENT}% (rounded up to whole GB), the shared
-  segment reduce_writebacks.sh's ZFS ARC limit leaves room for.  PostgreSQL uses huge pages only
+  segment memory_plan.sh's ZFS ARC limit leaves room for.  PostgreSQL uses huge pages only
   when its whole segment fits in them; the haf container's log reports huge_pages_status and the
   exact count PostgreSQL needed (shared_memory_size_in_huge_pages) after each start.
 
