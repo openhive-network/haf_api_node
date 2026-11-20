@@ -5,6 +5,10 @@
 #
 # Traffic flow: caddy -> drone (nginx proxy :9000) -> drone-real (actual drone :9000)
 #
+# Because the nginx service overrides drone.yaml's "drone" service, compose
+# merges drone.yaml's command and working_dir into it, so it must keep setting
+# nginx's own command and working directory.
+#
 # To disable: remove or rename this file and restart.
 
 services:
@@ -17,6 +21,8 @@ services:
   # nginx proxy takes the "drone" name so caddy routes to it
   drone:
     image: nginx:1.24
+    command: ["nginx", "-g", "daemon off;"]
+    working_dir: /
     profiles:
       - servers
     volumes:
