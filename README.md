@@ -380,6 +380,23 @@ haproxy after its worker process crashes — Docker starts it again, and it also
 comes back when the Docker daemon or host restarts. A service you stop yourself
 with `docker compose stop` stays stopped.
 
+To change drone's settings on one node without editing the tracked
+`drone/config.yaml`, put the entries you want to change in
+`drone/config.local.yaml` (ignored by git). drone merges it over
+`drone/config.yaml` when it starts: mappings such as `ttls:` are merged key by
+key, and any other value replaces the default. For example, to cache
+`bridge.get_ranked_posts` for 6 seconds instead of the default:
+
+```yaml
+ttls:
+  bridge.get_ranked_posts: 6
+```
+
+Apply it with `docker compose up -d --force-recreate drone`; the drone log then
+shows `Merged local config from config.local.yaml`. Without the file drone uses
+`drone/config.yaml` alone. A YAML error in `drone/config.local.yaml` stops drone
+from starting, so check `docker compose logs drone` after editing it.
+
 haproxy reaches the haproxy-healthchecks agents through a loopback relay
 (`listen haproxy-healthchecks-agents` in `haproxy/30-proxies.cfg`) that re-resolves
 the container's address, so `docker compose up -d haproxy-healthchecks` can recreate
