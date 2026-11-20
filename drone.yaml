@@ -6,10 +6,15 @@ services:
       - drone
     environment:
       RUST_LOG: ${DRONE_LOG_LEVEL:-warn,access_log=info}
+    # drone reads config.yaml from its working directory and merges an optional
+    # config.local.yaml beside it, so the whole ./drone directory is bound here;
+    # the binary itself lives at /drone.
+    working_dir: /etc/drone
+    command: ["/drone"]
     volumes:
       - type: bind
-        source: ./drone/config.yaml
-        target: /config.yaml
+        source: ./drone
+        target: /etc/drone
         read_only: true
       - type: bind
         source: ${HAF_LOG_DIRECTORY:-${TOP_LEVEL_DATASET_MOUNTPOINT}/logs}/drone
