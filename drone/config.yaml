@@ -144,6 +144,10 @@ ttls:
   appbase.condenser_api.get_accounts: 6
   appbase.condenser_api.get_account_history: 6
   appbase.condenser_api.get_content: 6
+  # busy threads are re-fetched many times a minute; matches get_content
+  appbase.condenser_api.get_content_replies: 6
+  # slow-changing, requested on every page view
+  appbase.condenser_api.get_trending_tags: 60
   appbase.condenser_api.get_profile: 6
   appbase.condenser_api.get_follow_count: 6
   appbase.database_api.find_accounts: 3
@@ -155,8 +159,14 @@ ttls:
   bridge.get_profile: 6
   bridge.get_post: 6
   bridge.unread_notifications: 3
-  bridge.get_ranked_posts: 6
-  bridge.get_community: 12
+  # front-end ranked lists repeat by the hundreds per minute; new posts appear up to 60 s late
+  bridge.get_ranked_posts: 60
+  # observer-dependent (subscription/role), so shorter than the community lists
+  bridge.get_community: 30
+  # observer-dependent (subscription/role), as get_community
+  bridge.list_community_roles: 30
+  # community directory: slow-changing, requested on every page view
+  bridge.list_communities: 60
   bridge.get_trending_topics: 30
   bridge.does_user_follow_any_lists: 3
   # lite.* mirrors the bridge methods it wraps; get_info is a per-node capability probe
@@ -165,7 +175,8 @@ ttls:
   lite.get_discussion: 6
   lite.get_account_posts: 12
   lite.get_post: 6
-  lite.get_ranked_posts: 6
+  # same ranked lists as bridge.get_ranked_posts
+  lite.get_ranked_posts: 60
   search-api: NO_CACHE
   search-api.find_text: 30
 
