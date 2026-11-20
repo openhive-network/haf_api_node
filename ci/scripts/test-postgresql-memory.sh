@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
-# Test the PostgreSQL memory sizing the haf container and reduce_writebacks.sh share
+# Test the PostgreSQL memory sizing the haf container and memory_plan.sh share
 # (postgresql_memory.sh) on fixture /proc/meminfo and cgroup files: hosts of 2GB, 64GB, 121GB and
 # 256GB, the POSTGRESQL_SHARED_BUFFERS_GB override (and how it is read from .env), a memory-limited
-# container, the huge page reservation for the shared segment, the ZFS ARC limit check the haf
-# entrypoint warns with, and reading and replacing zfs_arc_max in modprobe.d.  No root needed.
+# container, the huge page reservation for the shared segment, the ARC limit with measured other
+# services and the HAF_OTHER_SERVICES_GB and ZFS_ARC_MAX_GB overrides, the ZFS ARC limit check the
+# haf entrypoint warns with, and reading and replacing zfs_arc_max in modprobe.d.  No root needed.
 
 set -euo pipefail
 
@@ -73,6 +74,46 @@ for bad in 16GB 0 -4 4.5; do
   echo "ok: override '$bad' refused"
 done
 
+# expect_plan NAME TOTAL_KB SHARED_BUFFERS OTHER_SERVICES ARC_OVERRIDE ARC_MAX EFFECTIVE_CACHE_SIZE LOG_PATTERN
+expect_plan() {
+  local arc ecs log
+  arc=$(pg_zfs_arc_limit_gb "$2" "$3" "$4" "$5" 2> "$WORK/log")
+  log=$(cat "$WORK/log")
+  ecs=$(pg_effective_cache_size_gb "$2" "$3" "$arc")
+  [ "$arc" = "$6" ] || fail "$1: ARC limit ${arc}GB, expected ${6}GB"
+  [ "$ecs" = "$7" ] || fail "$1: effective_cache_size ${ecs}GB, expected ${7}GB"
+  [[ "$log" =~ $8 ]] || fail "$1: logged '$log', expected a match for '$8'"
+  echo "ok: $1: ARC limit ${arc}GB, effective_cache_size ${ecs}GB ($log)"
+}
+# other services: the measured peak + 25%, rounded up, at least 4GB
+[ "$(pg_other_services_gb $((8 * 1048576)))" = 10 ] || fail "8GB measured: $(pg_other_services_gb $((8 * 1048576)))GB"
+[ "$(pg_other_services_gb $((8 * 1048576 + 1)))" = 11 ] || fail "just over 8GB measured: not rounded up"
+[ "$(pg_other_services_gb $((13 * 1048576 / 2)))" = 9 ] || fail "6.5GB measured: $(pg_other_services_gb $((13 * 1048576 / 2)))GB"
+[ "$(pg_other_services_gb 0)" = 4 ] || fail "nothing measured: not the 4GB floor"
+[ "$(pg_other_services_gb $((3 * 1048576)))" = 4 ] || fail "3GB measured: not the 4GB floor"
+echo "ok: other services' reserve"
+# hbt5 (125.7GB): shared_buffers 62GB, a 66GB segment; about 8GB of other services measured leave
+# 35GB of ARC, not the 50GB that made it swap
+expect_plan "hbt5, 8GB measured" 131822380 62 "$(pg_other_services_gb $((8 * 1048576)))" "" 35 97 \
+  "^ZFS ARC limit = 35GB: 125GB RAM - 66GB shared segment - 2GB kernel - 12GB dirty pages - 10GB other services$"
+expect_plan "hbt5, nothing measured" 131822380 62 "" "" 35 97 "10GB safety margin$"
+expect_plan "hbt5, HAF_OTHER_SERVICES_GB=20" 131822380 62 20 "" 25 87 "- 20GB other services$"
+expect_plan "hbt5, HAF_OTHER_SERVICES_GB=0" 131822380 62 0 "" 45 107 "- 0GB other services$"
+expect_plan "hbt5, ZFS_ARC_MAX_GB=42" 131822380 62 10 42 42 104 "^ZFS ARC limit = 42GB, from ZFS_ARC_MAX_GB$"
+expect_plan "121GB host, 30GB measured" 127065876 60 "$(pg_other_services_gb $((30 * 1048576)))" "" 20 80 \
+  "^ZFS ARC limit = 20GB: the minimum, as 121GB RAM .* - 38GB other services is less$"
+expect_plan "ZFS_ARC_MAX_GB above RAM" 127065876 60 "" 200 200 121 "from ZFS_ARC_MAX_GB"
+for bad in "HAF_OTHER_SERVICES_GB 4.5 x" "HAF_OTHER_SERVICES_GB -1 x" "HAF_OTHER_SERVICES_GB 08 x" "ZFS_ARC_MAX_GB 0 ''" "ZFS_ARC_MAX_GB 42GB ''"; do
+  read -r name value _ <<< "$bad"
+  if [ "$name" = ZFS_ARC_MAX_GB ]; then
+    pg_zfs_arc_limit_gb 131822380 62 "" "$value" > /dev/null 2> "$WORK/log" && fail "$name='$value' accepted"
+  else
+    pg_zfs_arc_limit_gb 131822380 62 "$value" "" > /dev/null 2> "$WORK/log" && fail "$name='$value' accepted"
+  fi
+  grep -q "^Error: $name must be a whole number of GB" "$WORK/log" || fail "$name='$value': logged '$(cat "$WORK/log")'"
+  echo "ok: $name '$value' refused"
+done
+
 # huge pages hold the shared segment the ARC formula reserves: 48GB + 5% rounded up = 51GB.
 # steem-20's PostgreSQL reported shared_memory_size_in_huge_pages = 25217 for 48GB of buffers, so
 # 26112 covers it.
@@ -104,6 +145,11 @@ expect_override ".env commented out" "" "# POSTGRESQL_SHARED_BUFFERS_GB=48" ""
 expect_override "environment wins" 24 "POSTGRESQL_SHARED_BUFFERS_GB=32" 24
 [ -z "$(POSTGRESQL_SHARED_BUFFERS_GB='' pg_shared_buffers_override "$WORK/missing.env")" ] || fail "missing .env: override not empty"
 echo "ok: missing .env: no override"
+printf 'ZFS_ARC_MAX_GB=40\nHAF_OTHER_SERVICES_GB="12" # measured by hand\nZFS_ARC_MAX_GB=42\n' > "$WORK/.env"
+[ "$(ZFS_ARC_MAX_GB='' pg_setting ZFS_ARC_MAX_GB "$WORK/.env")" = 42 ] || fail ".env ZFS_ARC_MAX_GB: not the last line's"
+[ "$(HAF_OTHER_SERVICES_GB='' pg_setting HAF_OTHER_SERVICES_GB "$WORK/.env")" = 12 ] || fail ".env HAF_OTHER_SERVICES_GB"
+[ "$(ZFS_ARC_MAX_GB=30 pg_setting ZFS_ARC_MAX_GB "$WORK/.env")" = 30 ] || fail "environment ZFS_ARC_MAX_GB: not winning"
+echo "ok: pg_setting reads ZFS_ARC_MAX_GB and HAF_OTHER_SERVICES_GB"
 
 # zfs ROOT VERSION: give a fixture root a loaded zfs module of that version
 zfs() {
@@ -143,6 +189,24 @@ expect_arc "121GB host, formula's limit" "$WORK/h121" 60 36507222016 0 "is withi
 expect_arc "121GB host, one byte over" "$WORK/h121" 60 36507222017 1 "^ZFS ARC limit 35GB .* 122GB, more than"
 expect_arc "121GB host, override 32GB" "$WORK/h121" 32 $((60 * GiB)) 0 "within the 63GB"
 expect_arc "121GB host, ZFS default" "$WORK/h121" 60 0 1 "^ZFS ARC limit 121GB \\(zfs_arc_max = 0, ZFS's default of 129041715200 bytes\\)"
+# hbt5: the plan with 10GB of other services is 35GB, so the 50GB that swapped fails and the
+# hand-set 42GB passes only when ZFS_ARC_MAX_GB says so
+zfs "$WORK/h125" 2.4.4-1
+expect_arc_plan() {
+  local log rc=0
+  log=$(pg_zfs_arc_check "$WORK/h125" 131822380 62 "$2" "$3" "$4") || rc=$?
+  [ "$rc" = "$5" ] || fail "$1: returned $rc, expected $5 ($log)"
+  [[ "$log" =~ $6 ]] || fail "$1: logged '$log', expected a match for '$6'"
+  echo "ok: $1: $log"
+}
+expect_arc_plan "hbt5, 50GB, 10GB other services" $((50 * GiB)) 10 "" 1 \
+  "^ZFS ARC limit 50GB \\(zfs_arc_max = 53687091200\\) \\+ PostgreSQL's 66GB shared segment \\(shared_buffers 62GB\\) \\+ 24GB kernel, dirty-page and other-services reserves = 140GB, more than the 125GB of RAM; the limit for this shared_buffers is 35GB"
+expect_arc_plan "hbt5, 42GB, 10GB other services" $((42 * GiB)) 10 "" 1 "more than the 125GB of RAM"
+expect_arc_plan "hbt5, 42GB, ZFS_ARC_MAX_GB=42" $((42 * GiB)) 10 42 0 "^ZFS ARC limit 42GB \\(zfs_arc_max = 45097156608\\) is within ZFS_ARC_MAX_GB=42"
+expect_arc_plan "hbt5, 50GB, ZFS_ARC_MAX_GB=42" $((50 * GiB)) "" 42 1 "^ZFS ARC limit 50GB .* is more than ZFS_ARC_MAX_GB=42 \\(zfs_arc_max = 45097156608\\)$"
+expect_arc_plan "hbt5, 35GB, measured" $((35 * GiB)) 10 "" 0 "is within the 35GB"
+expect_arc_plan "hbt5, bad override" $((35 * GiB)) "" 4.5 2 "^$" 2> /dev/null
+
 # below about 93GB of RAM the formula's 20GB minimum passes, though it does not fit
 zfs "$WORK/h64" 2.4.4-1
 expect_arc "64GB host, 20GB minimum" "$WORK/h64" 31 $((20 * GiB)) 0 "within the 20GB"

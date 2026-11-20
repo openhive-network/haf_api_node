@@ -171,6 +171,10 @@ services:
       PGCTLTIMEOUT: ${PGCTLTIMEOUT:-7200}
       # shared_buffers in GB; empty sizes it from RAM (postgresql_memory.sh)
       POSTGRESQL_SHARED_BUFFERS_GB: ${POSTGRESQL_SHARED_BUFFERS_GB:-}
+      # the ZFS ARC limit (and the memory left for other services) memory_plan.sh plans with, for
+      # effective_cache_size and the start-up check of zfs_arc_max; empty uses the formula
+      ZFS_ARC_MAX_GB: ${ZFS_ARC_MAX_GB:-}
+      HAF_OTHER_SERVICES_GB: ${HAF_OTHER_SERVICES_GB:-}
       # HACK, do not commit
       OVERRIDE_LD_PRELOAD: ""
     # when mounting volumes, declare the directories you want to bind-mount here,

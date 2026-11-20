@@ -246,27 +246,19 @@ suggested values.  Run:
 sudo ./reduce_writebacks.sh
 ```
 
-It also limits the ZFS ARC (`zfs_arc_max`) so that it, PostgreSQL and the dirty pages fit in RAM:
-
-```
-zfs_arc_max = RAM - (shared_buffers + 5% shared segment overhead + 2GB kernel + 12GB dirty pages + 10GB safety margin)
-```
-
-with a minimum of 20GB. `shared_buffers` is the value the haf container uses (see
-[PostgreSQL memory](#postgresql-memory)): 50% of RAM capped at 64GB, or
-`POSTGRESQL_SHARED_BUFFERS_GB`, which the script reads from the environment or from the `.env`
-next to it. On a 121GB host that is 60GB of shared buffers and a 34GB ARC. The huge pages
-`reserve_huge_pages.sh` reserves (see [Huge pages for PostgreSQL](#huge-pages-for-postgresql)) are
-part of the PostgreSQL share, not on top of it.
-`sudo ./reduce_writebacks.sh --dry-run` prints the values without applying them.
+It sets only the `vm.dirty_*` writeback parameters (and `vm.swappiness`, `vm.min_free_kbytes`); its
+12GB `vm.dirty_bytes` is the dirty-page reserve of the memory plan. The ZFS ARC limit beside them is
+`memory_plan.sh`'s (see [ZFS ARC limit](#zfs-arc-limit)); `assisted_startup.sh` applies both for
+the sync. `sudo ./reduce_writebacks.sh --dry-run` prints the values without applying them.
 
 After sync, you can restore the original values with:
 ```
 sudo ./reduce_writebacks.sh --restore
 ```
 
-`--restore` puts `zfs_arc_max` back to its value from before the sync too. On a node that keeps
-serving, set the ARC limit again with `--zfs-only` (see [ZFS ARC limit](#zfs-arc-limit)).
+`--restore` leaves `zfs_arc_max` alone. `--zfs-only [--persist]`, which used to set the ARC limit,
+is a deprecated alias of `memory_plan.sh --apply --arc-only [--persist]` (`--zfs-only --dry-run`
+shows the plan), and `--no-zfs` no longer has an effect.
 
 ###### Shared Memory on Ramdisk
 
@@ -457,8 +449,9 @@ The haf container sizes PostgreSQL's `shared_buffers` from the RAM it can use ea
 2GB of RAM; the container log says when the cap or floor applied). A 64GB host gets 31GB, a
 121GB host 60GB, a 128GB host 62GB, a 256GB host 64GB. "RAM" is the host's total memory, or the haf container's
 cgroup memory limit if you give it a lower one. `effective_cache_size` is `shared_buffers` plus
-the ZFS ARC limit `reduce_writebacks.sh` computes (see Reducing Writebacks), at most RAM: 94GB on a
-121GB host. That limit has to be applied on the host; see [ZFS ARC limit](#zfs-arc-limit).
+the ZFS ARC limit of the memory plan, at most RAM: 94GB on a 121GB host with the fixed 10GB
+margin for other services. That limit has to be applied on the host; see
+[ZFS ARC limit](#zfs-arc-limit).
 
 50% is the share at which the full API mix (hivemind, HAfAH, hived, hivesense, block explorer,
 balance and reputation trackers) runs its working set from `shared_buffers` on a 121GB host; at
@@ -466,7 +459,7 @@ balance and reputation trackers) runs its working set from `shared_buffers` on a
 
 The sizing does not shrink `shared_buffers` to fit small hosts. Below about 93GB of RAM the ARC
 formula comes out under its 20GB minimum, so the shared segment, the 20GB ARC and the 24GB of
-kernel, dirty-page and safety reserves add up to more than RAM: by 15GB on a 64GB host (33GB
+kernel, dirty-page and other-services reserves add up to more than RAM: by 15GB on a 64GB host (33GB
 segment). What is given up is the safety margin and dirty-page headroom, not memory PostgreSQL
 or the ARC already hold. On such a host, set `POSTGRESQL_SHARED_BUFFERS_GB` lower if the stack
 runs short of memory. Neither budget counts hived's `shared_memory.bin` either: when it lives on
@@ -483,45 +476,80 @@ sorts after `pgtune.conf`, `zfs.conf` and `custom_postgres.conf`, so it replaces
 carry; `pgtune.conf` no longer sets either.
 
 To choose `shared_buffers` yourself, set `POSTGRESQL_SHARED_BUFFERS_GB` (whole GB) in `.env`; it
-applies to both the haf container and `reduce_writebacks.sh`, and `effective_cache_size` follows
+applies to both the haf container and `memory_plan.sh`, and `effective_cache_size` follows
 it. Don't edit `zz-memory.conf`, and don't set `shared_buffers` in another
 `haf_postgresql_conf.d` file: a file sorting before `zz-memory.conf` is overridden, and one
-sorting after it is invisible to `reduce_writebacks.sh`'s ARC sizing.
+sorting after it is invisible to `memory_plan.sh`'s ARC sizing.
 
 #### ZFS ARC limit
 
-`shared_buffers` follows RAM by itself at every haf start; the ZFS ARC limit does not. Every node
-needs this step once, and again when its RAM or `POSTGRESQL_SHARED_BUFFERS_GB` changes:
+`shared_buffers` follows RAM by itself at every haf start; the ZFS ARC limit and the huge page
+reservation do not. `memory_plan.sh` shows the host's whole memory plan and applies those two.
+Every node needs this once, and again when its RAM, `POSTGRESQL_SHARED_BUFFERS_GB` or the other
+services on it change:
 
 ```
-sudo ./reduce_writebacks.sh --zfs-only --dry-run   # show the limit, the current one and the boot-time one
-sudo ./reduce_writebacks.sh --zfs-only --persist   # apply it now and at every boot
+sudo ./memory_plan.sh                    # show the plan; changes nothing
+sudo ./memory_plan.sh --apply --persist  # apply the ARC limit and huge pages now and at every boot
 ```
 
-`--zfs-only` sets only `zfs_arc_max`, to the limit the formula in
-[Reducing Writebacks](#reducing-writebacks) gives for the `shared_buffers` the haf container uses
-(34GB on a 121GB host). It leaves the `vm.dirty_*` writeback settings and the huge page
-reservation alone, so it is safe on a live node; the ARC shrinks to the new limit gradually. Without
-`--persist` the limit lasts until reboot. `--persist` makes it the boot-time limit: it replaces the
-value of each `zfs_arc_max` in an `options zfs` line of `/etc/modprobe.d/*.conf`, printing the old
-one and keeping the line's other options, or writes `/etc/modprobe.d/haf-zfs-arc-max.conf` when no
-file sets it. When the initramfs loads the zfs module (it carries its own copy of
-`/etc/modprobe.d`), the script also runs `update-initramfs -u`. Without `--persist`, the script
-compares the boot-time limit with the formula's and warns when it is larger.
+```
+zfs_arc_max = RAM - (shared_buffers + 5% shared segment overhead + 2GB kernel + 12GB dirty pages + other services)
+```
+
+with a minimum of 20GB. Each line of the plan names its source: RAM, `shared_buffers` and its
+shared segment (the haf container's formula, or `POSTGRESQL_SHARED_BUFFERS_GB`), the other
+services, the kernel and dirty-page reserves, the ARC limit, the huge pages and
+`effective_cache_size`, followed by the limits in force now (runtime and in `/etc/modprobe.d`)
+and the check the haf container makes against the plan.
+
+"Other services" is everything on the host but PostgreSQL's shared segment and the ARC itself:
+every container, the haf project's own included (hived, PostgreSQL's backends, the apps, the
+proxies, all marked `*`), and the processes outside containers. The script samples each cgroup's
+`memory.current` minus its page cache and shared memory (`file` in `memory.stat`, so ARC-backed
+file pages and an unreserved shared segment are not counted twice) once a second for 10 seconds
+(`--sample-seconds`), takes each one's peak, prints them per container, and plans with the total
++25%, at least 4GB. On hbt5 (125GB RAM, 62GB of buffers in a 66GB segment), 8GB of other services
+leave a 35GB ARC. A tmpfs or ramdisk `shared_memory.bin` is shared memory as well and is not
+counted: lower the limit by its size. Without a cgroup v2 hierarchy (or inside a container) the
+script cannot measure and plans with a fixed 10GB margin.
+
+Two `.env` settings override the plan, and it says when one is in effect:
+`HAF_OTHER_SERVICES_GB` replaces the measurement (it is used as is, without headroom), and
+`ZFS_ARC_MAX_GB` sets the ARC limit outright. The haf container reads both too.
+
+`--apply` sets `zfs_arc_max` (the ARC shrinks to it gradually) and runs `reserve_huge_pages.sh`
+(see [Huge pages for PostgreSQL](#huge-pages-for-postgresql)); while haf runs, a reservation that
+would change is left alone with a note on how to apply it, and `--arc-only` skips the huge pages
+altogether. Without `--persist` both last until reboot, and the script warns when the boot-time
+limit is larger. `--persist` makes them the boot-time values: it replaces the value of each
+`zfs_arc_max` in an `options zfs` line of `/etc/modprobe.d/*.conf`, printing the old one and
+keeping the line's other options, or writes `/etc/modprobe.d/haf-zfs-arc-max.conf` when no file
+sets it. When the initramfs loads the zfs module (it carries its own copy of `/etc/modprobe.d`),
+the script also runs `update-initramfs -u`.
+
+A `zfs_arc_max` in `/etc/modprobe.d` that differs from the plan is taken as set by hand: `--apply`
+keeps it, and the runtime limit, and says so. `--force` replaces both with the plan; setting
+`ZFS_ARC_MAX_GB` makes a value the plan, so the hand-set 42GB on a host is kept, and no longer
+warned about, with `ZFS_ARC_MAX_GB=42`.
 
 At every start, the haf container compares the runtime limit
-(`/sys/module/zfs/parameters/zfs_arc_max`) with the formula's and logs a warning, without failing
+(`/sys/module/zfs/parameters/zfs_arc_max`) with the plan's and logs a warning, without failing
 the start, when it is larger:
 
 ```
-WARNING: ZFS ARC limit 83GB (zfs_arc_max = 89120571392) + PostgreSQL's 63GB shared segment (shared_buffers 60GB) + 24GB kernel, dirty-page and safety reserves = 170GB, more than the 121GB of RAM; the limit for this shared_buffers is 34GB (zfs_arc_max = 36507222016). To apply that limit now and at every boot, run on the host in the haf_api_node directory: sudo ./reduce_writebacks.sh --zfs-only --persist
+WARNING: ZFS ARC limit 83GB (zfs_arc_max = 89120571392) + PostgreSQL's 63GB shared segment (shared_buffers 60GB) + 18GB kernel, dirty-page and other-services reserves = 164GB, more than the 121GB of RAM; the limit for this shared_buffers is 40GB (zfs_arc_max = 42949672960). To see the host's plan, run on the host in the haf_api_node directory: sudo ./memory_plan.sh; to apply it now and at every boot: sudo ./memory_plan.sh --apply --persist; to keep a limit set by hand, set ZFS_ARC_MAX_GB in .env
 ```
 
-The container cannot see the host's `/etc/modprobe.d`, so it checks only the limit in force now;
-`reduce_writebacks.sh` checks the boot-time one. `zfs_arc_max = 0` means ZFS's own default, not
-"unlimited is fine": all of RAM but 1GB (OpenZFS 2.3 and later) or half of it (earlier), which
-both checks count as such. Where the formula's 20GB minimum applies (below about 93GB of RAM),
-a 20GB limit passes the check although it does not fit, as described above.
+The container cannot measure the host's other services, so it plans with `ZFS_ARC_MAX_GB` or
+`HAF_OTHER_SERVICES_GB` when set. Otherwise its `effective_cache_size` uses the fixed 10GB margin,
+and its check the 4GB minimum for other services: it warns only about a limit larger than any
+measured plan allows (40GB on a 121GB host), never about one `memory_plan.sh` applied. It cannot see the host's
+`/etc/modprobe.d` either, so it checks only the limit in force now; `memory_plan.sh` checks the
+boot-time one. `zfs_arc_max = 0` means ZFS's own default, not "unlimited is fine": all of RAM but
+1GB (OpenZFS 2.3 and later) or half of it (earlier), which both checks count as such. Where the
+formula's 20GB minimum applies (below about 93GB of RAM), a 20GB limit passes the check although
+it does not fit, as described above.
 
 #### Huge pages for PostgreSQL
 
@@ -538,8 +566,8 @@ sudo ./reserve_huge_pages.sh --persist   # --dry-run shows the count first
 docker compose start haf
 ```
 
-It sets `vm.nr_hugepages` to the shared segment `reduce_writebacks.sh` already leaves out of the ZFS
-ARC: `shared_buffers` + 5%, rounded up to whole GB (63GB = 32256 pages on a 121GB host). Reserved
+`sudo ./memory_plan.sh --apply --persist` runs it too. It sets `vm.nr_hugepages` to the shared
+segment `memory_plan.sh` already leaves out of the ZFS ARC: `shared_buffers` + 5%, rounded up to whole GB (63GB = 32256 pages on a 121GB host). Reserved
 huge pages are taken out of general RAM until released, and only PostgreSQL uses them; because
 they are that same segment, the ARC limit counts them once. PostgreSQL uses huge pages only when
 its whole segment fits, so the reservation keeps a margin over what it needs (26112 against the

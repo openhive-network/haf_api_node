@@ -1,33 +1,25 @@
 #!/bin/bash
 
-# reduce_writebacks.sh - Optimize Linux VM and ZFS parameters for initial HAF sync
+# reduce_writebacks.sh - Optimize Linux VM writeback parameters for initial HAF sync
 #
-# This script modifies kernel VM parameters and ZFS ARC settings to reduce
-# write-back frequency and manage memory allocation, which significantly
-# improves performance during initial blockchain sync.
+# This script modifies kernel VM parameters (vm.dirty_* and friends) to reduce
+# write-back frequency, which significantly improves performance during initial
+# blockchain sync.  The ZFS ARC limit is memory_plan.sh's.
 #
 # Usage:
 #   sudo ./reduce_writebacks.sh          # Apply optimized settings
 #   sudo ./reduce_writebacks.sh --restore # Restore original settings
-#   sudo ./reduce_writebacks.sh --zfs-only [--persist] # Only the ZFS ARC limit, for a live node
 #   ./reduce_writebacks.sh --help        # Show this help
 #
-# The script now also manages ZFS ARC max to prevent memory exhaustion
+# --zfs-only [--persist] is a deprecated alias of memory_plan.sh --apply --arc-only [--persist], and
+# --zfs-only --dry-run of memory_plan.sh.
 
 set -euo pipefail
 
 # Configuration
 SAVED_VALUES_FILE=".reduce_writebacks.original"
-MODPROBE_DIR=/etc/modprobe.d
-# written by --persist only when no file in MODPROBE_DIR sets zfs_arc_max yet
-MODPROBE_FILE=haf-zfs-arc-max.conf
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-# The memory sizing the haf container uses for PostgreSQL (shared_buffers, and the ZFS ARC
-# limit and reserved memory constants used below)
-# shellcheck source=postgresql_memory.sh
-. "$SCRIPT_DIR/postgresql_memory.sh"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -36,7 +28,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# VM parameters to configure
+# VM parameters to configure; vm.dirty_bytes is the dirty-page reserve memory_plan.sh plans with
+# (postgresql_memory.sh's PG_MAX_DIRTY_GB)
 # Format: "parameter_name|new_value|description"
 declare -a VM_PARAMS=(
     "vm.dirty_bytes|12000000000|Maximum dirty memory before forced writeback (12GB)"
@@ -64,214 +57,19 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
-# Calculate ZFS ARC max based on system memory
-# Returns the value in bytes
-calculate_arc_max() {
-    local total_ram_kb
-    total_ram_kb=$(pg_memory_total_kb /)
-    local total_ram_gb=$((total_ram_kb / 1024 / 1024))
-
-    # pg_shared_buffers_gb reports on stderr how it chose the value
-    local shared_buffers_gb
-    shared_buffers_gb=$(pg_shared_buffers_gb "$total_ram_kb" "$(pg_shared_buffers_override "$SCRIPT_DIR/.env")") || return 1
-    local shared_segment_gb
-    shared_segment_gb=$(pg_shared_segment_gb "$shared_buffers_gb")
-
-    # ARC_MAX = Total_RAM - (PG_shared_segment + Kernel_overhead + Max_dirty_pages + Safety_margin)
-    local arc_max_gb
-    arc_max_gb=$(pg_zfs_arc_max_gb "$total_ram_kb" "$shared_buffers_gb")
-    if [[ $arc_max_gb -eq $PG_ZFS_ARC_MIN_GB ]]; then
-        print_warning "System has insufficient memory for recommended settings" >&2
-        print_warning "Using the minimum ZFS ARC max of ${PG_ZFS_ARC_MIN_GB}GB" >&2
-    fi
-
-    # Convert to bytes
-    local arc_max_bytes=$((arc_max_gb * 1024 * 1024 * 1024))
-
-    # Print info messages to stderr so they don't interfere with the return value
-    print_info "System RAM: ${total_ram_gb}GB" >&2
-    print_info "Reserved: PostgreSQL=${shared_segment_gb}GB (shared_buffers ${shared_buffers_gb}GB + segment overhead), Kernel=${PG_KERNEL_OVERHEAD_GB}GB, Dirty=${PG_MAX_DIRTY_GB}GB, Safety=${PG_SAFETY_MARGIN_GB}GB" >&2
-    print_info "Calculated ZFS ARC max: ${arc_max_gb}GB" >&2
-    report_huge_pages "$shared_segment_gb"
-
-    echo "$arc_max_bytes"
-}
-
-# report_huge_pages SHARED_SEGMENT_GB: the huge pages reserve_huge_pages.sh reserves hold
-# PostgreSQL's shared segment, so the PostgreSQL reservation above already counts them; warn when
-# the host reserves more than that, which the ARC formula does not account for
-report_huge_pages() {
-    local huge_page_kb huge_pages reserved_gb
-    huge_page_kb=$(pg_huge_page_size_kb /)
-    huge_pages=$(get_sysctl_value vm.nr_hugepages)
-    reserved_gb=$((huge_pages * huge_page_kb / 1024 / 1024))
-    if [[ $huge_pages -eq 0 ]]; then
-        print_info "Huge pages: none reserved; PostgreSQL uses 4kB pages (see reserve_huge_pages.sh)" >&2
-    elif [[ $reserved_gb -le $1 ]]; then
-        print_info "Huge pages: ${huge_pages} x ${huge_page_kb}kB (${reserved_gb}GB) reserved, within the PostgreSQL reservation" >&2
-    else
-        print_warning "Huge pages: ${huge_pages} x ${huge_page_kb}kB (${reserved_gb}GB) reserved, more than the ${1}GB PostgreSQL reservation; the ARC formula does not count the excess" >&2
-    fi
-}
-
-# report_boot_arc_max ARC_MAX_BYTES: warn when the zfs_arc_max the zfs module gets at the next boot
-# ($MODPROBE_DIR, or ZFS's default when nothing there sets it) is larger than ARC_MAX_BYTES
-report_boot_arc_max() {
-    local boot_arc_max boot_source
-    boot_arc_max=$(pg_modprobe_zfs_arc_max "$MODPROBE_DIR")
-    if [[ -n $boot_arc_max && $boot_arc_max != 0 ]]; then
-        boot_source="zfs_arc_max=$boot_arc_max in $MODPROBE_DIR"
-    else
-        boot_arc_max=$(pg_zfs_arc_default_bytes /)
-        boot_source="ZFS's default of $boot_arc_max (no nonzero zfs_arc_max in $MODPROBE_DIR)"
-    fi
-    if [[ $boot_arc_max -le $1 ]]; then
-        print_success "At boot: $boot_source, within $1"
-    else
-        print_warning "At boot: $boot_source, more than $1; the ARC may grow past it after a reboot"
-        print_warning "To make $1 the boot-time limit: sudo $0 --zfs-only --persist"
-    fi
-}
-
-# update_initramfs_for_zfs: an initramfs that loads the zfs module carries its own copy of
-# $MODPROBE_DIR, which is the one the module gets at boot
-update_initramfs_for_zfs() {
-    local initrd
-    initrd="/boot/initrd.img-$(uname -r)"
-    if command -v lsinitramfs > /dev/null && [[ -f $initrd ]] && lsinitramfs "$initrd" 2> /dev/null | grep -q '/zfs\.ko'; then
-        print_info "$initrd loads the zfs module: updating its copy of $MODPROBE_DIR"
-        if update-initramfs -u > /dev/null; then
-            print_success "Updated $initrd"
-        else
-            print_error "update-initramfs -u failed: the zfs module may get the old zfs_arc_max at boot"
-            return 1
-        fi
-    else
-        print_info "The zfs module is not in $initrd: it reads $MODPROBE_DIR when it loads at boot"
-    fi
-}
-
-# persist_arc_max ARC_MAX_BYTES DRY_RUN: make ARC_MAX_BYTES the zfs_arc_max the zfs module gets at
-# boot.  Each existing zfs_arc_max in an "options zfs" line of $MODPROBE_DIR/*.conf is replaced
-# (its old value is shown, the line's other options kept); without one, $MODPROBE_FILE is written.
-persist_arc_max() {
-    local arc_max_bytes=$1 dry_run=$2 boot_arc_max changed line
-    boot_arc_max=$(pg_modprobe_zfs_arc_max "$MODPROBE_DIR")
-    if [[ $boot_arc_max == "$arc_max_bytes" ]]; then
-        print_success "At boot: zfs_arc_max=$arc_max_bytes in $MODPROBE_DIR already (no change needed)"
-        return 0
-    fi
-    if [[ $dry_run == true ]]; then
-        if [[ -n $boot_arc_max ]]; then
-            print_info "At boot: zfs_arc_max=$boot_arc_max in $MODPROBE_DIR would be replaced by $arc_max_bytes"
-        else
-            print_info "At boot: $MODPROBE_DIR sets no zfs_arc_max; $MODPROBE_DIR/$MODPROBE_FILE would set $arc_max_bytes"
-        fi
-        return 0
-    fi
-    changed=$(pg_modprobe_set_zfs_arc_max "$MODPROBE_DIR" "$arc_max_bytes" "$MODPROBE_FILE")
-    if [[ -z $changed ]]; then
-        print_success "Wrote $MODPROBE_DIR/$MODPROBE_FILE: options zfs zfs_arc_max=$arc_max_bytes"
-    else
-        while read -r line; do
-            print_success "${line%: *}: zfs_arc_max changed from ${line##*: } to $arc_max_bytes"
-        done <<< "$changed"
-    fi
-    update_initramfs_for_zfs
-}
-
-# apply_zfs_only DRY_RUN PERSIST: set only zfs_arc_max (now, and at boot with PERSIST), leaving
-# the vm.dirty_* settings and the huge page reservation as they are
-apply_zfs_only() {
-    local dry_run=$1 persist=$2 arc_max_bytes current_arc_max
-    if ! is_zfs_available; then
-        print_error "ZFS module not loaded: there is no ARC limit to set"
-        exit 1
-    fi
-    arc_max_bytes=$(calculate_arc_max)
-    echo
-
-    current_arc_max=$(get_zfs_param "zfs_arc_max")
-    if [[ "$current_arc_max" == "$arc_max_bytes" ]]; then
-        print_success "zfs_arc_max is already set to $arc_max_bytes (no change needed)"
-    elif [[ "$dry_run" == "true" ]]; then
-        print_warning "zfs_arc_max: needs change from $current_arc_max to $arc_max_bytes"
-    elif set_zfs_param "zfs_arc_max" "$arc_max_bytes"; then
-        print_success "zfs_arc_max: changed from $current_arc_max to $arc_max_bytes (the ARC shrinks to it gradually)"
-    else
-        print_error "Failed to update zfs_arc_max"
-        exit 1
-    fi
-
-    if [[ "$persist" == "true" ]]; then
-        persist_arc_max "$arc_max_bytes" "$dry_run"
-    else
-        report_boot_arc_max "$arc_max_bytes"
-    fi
-    echo
-    if [[ "$dry_run" == "true" ]]; then
-        print_info "Dry run complete - no changes were applied"
-    fi
-    print_info "vm.dirty_* settings and the huge page reservation are left unchanged"
-}
-
-# Check if ZFS module is loaded
-is_zfs_available() {
-    if [[ -d /sys/module/zfs ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Get current value of a ZFS parameter
-get_zfs_param() {
-    local param=$1
-    if is_zfs_available && [[ -f "/sys/module/zfs/parameters/$param" ]]; then
-        cat "/sys/module/zfs/parameters/$param" 2>/dev/null || echo "unknown"
-    else
-        echo "unavailable"
-    fi
-}
-
-# Set a ZFS parameter
-set_zfs_param() {
-    local param=$1
-    local value=$2
-
-    if ! is_zfs_available; then
-        print_warning "ZFS module not loaded, skipping $param"
-        return 1
-    fi
-
-    if [[ -f "/sys/module/zfs/parameters/$param" ]]; then
-        # Use tee to write with sudo privileges (script is run with sudo)
-        if echo "$value" | tee "/sys/module/zfs/parameters/$param" > /dev/null 2>&1; then
-            return 0
-        else
-            return 1
-        fi
-    else
-        print_warning "ZFS parameter $param not found"
-        return 1
-    fi
-}
-
 # Show help message
 show_help() {
-    local shared_buffers_gb
-    shared_buffers_gb=$(pg_shared_buffers_gb "$(pg_memory_total_kb /)" "$(pg_shared_buffers_override "$SCRIPT_DIR/.env")" 2>&1 >/dev/null || true)
     cat << EOF
 Usage: sudo $0 [OPTIONS]
 
-Optimize Linux VM and ZFS ARC parameters for HAF initial sync performance.
+Optimize Linux VM writeback parameters for HAF initial sync performance.
 
 OPTIONS:
-    --restore       Restore original VM and ZFS parameter values
+    --restore       Restore original VM parameter values
     --dry-run       Show what would be changed without applying
-    --no-zfs        Skip ZFS ARC max configuration
-    --zfs-only      Set only zfs_arc_max, not the VM parameters (for a node past its initial sync)
-    --persist       With --zfs-only: also make it the boot-time limit ($MODPROBE_DIR)
+    --zfs-only      Deprecated: runs memory_plan.sh --apply --arc-only (memory_plan.sh with --dry-run)
+    --persist       With --zfs-only: memory_plan.sh --apply --arc-only --persist
+    --no-zfs        Deprecated, no effect: this script no longer sets the ZFS ARC limit
     --help          Show this help message
 
 VM PARAMETERS:
@@ -282,44 +80,22 @@ EOF
     done
     cat << EOF
 
-ZFS PARAMETERS:
-  zfs_arc_max                    Calculated based on system RAM minus allocations
-
-MEMORY ALLOCATION:
-  The ZFS ARC max is calculated as (at least ${PG_ZFS_ARC_MIN_GB}GB):
-    Total RAM - (PostgreSQL shared segment + Kernel overhead + Max dirty pages + Safety margin)
-
-  PostgreSQL's shared_buffers is sized the way the haf container sizes it (postgresql_memory.sh):
-  POSTGRESQL_SHARED_BUFFERS_GB from the environment or $SCRIPT_DIR/.env when set, otherwise
-  ${PG_SHARED_BUFFERS_PERCENT}% of RAM capped at ${PG_SHARED_BUFFERS_MAX_GB}GB (at least ${PG_SHARED_BUFFERS_MIN_GB}GB). Its shared segment adds
-  ${PG_SHARED_SEGMENT_OVERHEAD_PERCENT}% overhead.  The huge pages reserve_huge_pages.sh reserves hold that segment, so
-  they are part of this reservation, not on top of it.
-
-  Current configuration:
-    PostgreSQL ${shared_buffers_gb}
-    Kernel overhead: ${PG_KERNEL_OVERHEAD_GB}GB
-    Max dirty pages: ${PG_MAX_DIRTY_GB}GB (from vm.dirty_bytes)
-    Safety margin: ${PG_SAFETY_MARGIN_GB}GB
-
-  shared_buffers follows RAM at every haf start; the ARC limit does not.  On every node, apply it
-  with --zfs-only --persist, and rerun that when RAM or POSTGRESQL_SHARED_BUFFERS_GB changes.
+ZFS ARC LIMIT:
+  The ZFS ARC limit (zfs_arc_max) is part of the host's memory plan, next to PostgreSQL's
+  shared_buffers and the memory the other services use: see sudo $SCRIPT_DIR/memory_plan.sh,
+  and apply it with sudo $SCRIPT_DIR/memory_plan.sh --apply --persist.  Its 12GB dirty-page
+  reserve is vm.dirty_bytes here.
 
 NOTES:
     - Must be run as root
-    - Settings automatically reset on reboot, except what --persist writes
-    - Original values are saved to: $SAVED_VALUES_FILE (not by --zfs-only)
-    - Use --restore to manually revert changes; it restores zfs_arc_max too, so run
-      --zfs-only afterwards on a node that keeps serving
-    - --persist replaces the value of each zfs_arc_max in an "options zfs" line of
-      $MODPROBE_DIR/*.conf (printing the old one), or writes $MODPROBE_DIR/$MODPROBE_FILE
-      when there is none; when the initramfs loads zfs, it is updated (update-initramfs -u)
+    - Settings automatically reset on reboot
+    - Original values are saved to: $SAVED_VALUES_FILE
+    - Use --restore to manually revert changes
 
 EXAMPLES:
     sudo $0              # Apply all optimized settings
-    sudo $0 --no-zfs    # Apply VM settings only, skip ZFS ARC
     sudo $0 --restore    # Restore original settings
     sudo $0 --dry-run    # Preview changes
-    sudo $0 --zfs-only --persist  # Only the ARC limit, now and at every boot
 
 EOF
 }
@@ -342,10 +118,8 @@ get_sysctl_value() {
 # Save original values to file
 # Parameters:
 #   $1 - skip_prompt (optional): if "true", don't prompt before overwriting
-#   $2 - skip_zfs (optional): if "true", don't save ZFS values
 save_original_values() {
     local skip_prompt=${1:-false}
-    local skip_zfs=${2:-false}
     local temp_file="${SAVED_VALUES_FILE}.tmp"
 
     if [[ -f "$SAVED_VALUES_FILE" ]] && [[ "$skip_prompt" == "false" ]]; then
@@ -361,7 +135,7 @@ save_original_values() {
     print_info "Saving original values to: $SAVED_VALUES_FILE"
 
     # Save with timestamp
-    echo "# Original sysctl and ZFS values saved on $(date)" > "$temp_file"
+    echo "# Original sysctl values saved on $(date)" > "$temp_file"
 
     # Save VM parameters
     for param_info in "${VM_PARAMS[@]}"; do
@@ -371,13 +145,6 @@ save_original_values() {
         echo "${param}=${current_value}" >> "$temp_file"
     done
 
-    # Save ZFS parameters if available and not skipped
-    if [[ "$skip_zfs" == "false" ]] && is_zfs_available; then
-        local zfs_arc_max
-        zfs_arc_max=$(get_zfs_param "zfs_arc_max")
-        echo "zfs.zfs_arc_max=${zfs_arc_max}" >> "$temp_file"
-    fi
-
     mv "$temp_file" "$SAVED_VALUES_FILE"
     print_success "Original values saved"
     return 0
@@ -386,18 +153,10 @@ save_original_values() {
 # Apply optimized settings
 apply_settings() {
     local dry_run=${1:-false}
-    local skip_zfs=${2:-false}
     local changes_needed=false
 
     print_info "Checking current VM parameter values..."
     echo
-
-    # Calculate ZFS ARC max first (unless skipped)
-    local arc_max_bytes
-    if [[ "$skip_zfs" == "false" ]] && is_zfs_available; then
-        arc_max_bytes=$(calculate_arc_max)
-        echo
-    fi
 
     # First pass: check what needs to be changed (VM parameters)
     for param_info in "${VM_PARAMS[@]}"; do
@@ -412,21 +171,6 @@ apply_settings() {
             changes_needed=true
         fi
     done
-
-    # Check ZFS ARC max if ZFS is available and not skipped
-    if [[ "$skip_zfs" == "false" ]] && is_zfs_available; then
-        local current_arc_max
-        current_arc_max=$(get_zfs_param "zfs_arc_max")
-        if [[ "$current_arc_max" == "$arc_max_bytes" ]]; then
-            print_success "zfs_arc_max is already set to $arc_max_bytes (no change needed)"
-        else
-            print_warning "zfs_arc_max: needs change from $current_arc_max to $arc_max_bytes"
-            changes_needed=true
-        fi
-        report_boot_arc_max "$arc_max_bytes"
-    elif [[ "$skip_zfs" == "true" ]] && is_zfs_available; then
-        print_info "Skipping ZFS ARC max configuration (--no-zfs specified)"
-    fi
 
     echo
 
@@ -447,14 +191,14 @@ apply_settings() {
         read -p "Overwrite the existing backup with current values? (y/N): " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            save_original_values "true" "$skip_zfs" || true  # Skip prompt, we already asked
+            save_original_values "true" || true  # Skip prompt, we already asked
             echo
         else
             print_warning "Keeping existing backup - you won't be able to restore to the current values!"
             echo
         fi
     else
-        save_original_values "true" "$skip_zfs" || true  # No prompt needed, file doesn't exist
+        save_original_values "true" || true  # No prompt needed, file doesn't exist
         echo
     fi
 
@@ -477,35 +221,15 @@ apply_settings() {
         fi
     done
 
-    # Apply ZFS ARC max if available and not skipped
-    if [[ "$skip_zfs" == "false" ]] && is_zfs_available; then
-        local current_arc_max
-        current_arc_max=$(get_zfs_param "zfs_arc_max")
-        if [[ "$current_arc_max" != "$arc_max_bytes" ]]; then
-            if set_zfs_param "zfs_arc_max" "$arc_max_bytes"; then
-                print_success "zfs_arc_max: changed from $current_arc_max to $arc_max_bytes"
-            else
-                print_error "Failed to update zfs_arc_max"
-            fi
-        fi
-    fi
-
     # Print reminder
     echo
-    if [[ "$skip_zfs" == "true" ]]; then
-        print_success "VM parameters have been optimized for HAF initial sync"
-    else
-        print_success "VM and ZFS parameters have been optimized for HAF initial sync"
-    fi
+    print_success "VM parameters have been optimized for HAF initial sync"
     echo
     print_warning "IMPORTANT NOTES:"
     echo "  • These settings will automatically reset on the next reboot"
     echo "  • To manually restore original values before rebooting, run:"
     echo "      sudo $0 --restore"
-    if [[ "$skip_zfs" == "false" ]] && is_zfs_available; then
-        local arc_max_gb=$((arc_max_bytes / 1024 / 1024 / 1024))
-        echo "  • ZFS ARC is limited to ${arc_max_gb}GB to prevent memory exhaustion"
-    fi
+    echo "  • The ZFS ARC limit is memory_plan.sh's: sudo $SCRIPT_DIR/memory_plan.sh"
     echo
 }
 
@@ -517,7 +241,7 @@ restore_settings() {
         exit 1
     fi
 
-    print_info "Restoring original VM and ZFS parameter values from: $SAVED_VALUES_FILE"
+    print_info "Restoring original VM parameter values from: $SAVED_VALUES_FILE"
     echo
 
     local changes_made=false
@@ -527,27 +251,9 @@ restore_settings() {
         [[ "$param" =~ ^#.*$ ]] && continue
         [[ -z "$param" ]] && continue
 
-        # Check if it's a ZFS parameter
+        # Files saved by older versions carry zfs_arc_max, which memory_plan.sh owns now
         if [[ "$param" == "zfs.zfs_arc_max" ]]; then
-            if is_zfs_available; then
-                local current_value
-                current_value=$(get_zfs_param "zfs_arc_max")
-
-                if [[ "$current_value" == "$value" ]]; then
-                    print_success "zfs_arc_max is already set to $value (no change needed)"
-                else
-                    print_warning "zfs_arc_max: restoring from $current_value to $value"
-
-                    if set_zfs_param "zfs_arc_max" "$value"; then
-                        print_success "zfs_arc_max restored successfully"
-                        changes_made=true
-                    else
-                        print_error "Failed to restore zfs_arc_max"
-                    fi
-                fi
-            else
-                print_warning "ZFS module not loaded, skipping zfs_arc_max restore"
-            fi
+            print_info "zfs_arc_max (saved as $value) is left as it is: it is memory_plan.sh's"
             continue
         fi
 
@@ -593,20 +299,27 @@ restore_settings() {
     echo
 
     if [[ "$changes_made" == "true" ]]; then
-        print_success "Original VM and ZFS parameters have been restored"
+        print_success "Original VM parameters have been restored"
     else
         print_success "All parameters were already at their original values"
     fi
-    if grep -q '^zfs\.zfs_arc_max=' "$SAVED_VALUES_FILE"; then
-        print_info "zfs_arc_max is back at its value from before the initial sync; on a node that keeps serving, rerun: sudo $0 --zfs-only"
+}
+
+# run_memory_plan DRY_RUN PERSIST: the deprecated --zfs-only, which memory_plan.sh replaces
+run_memory_plan() {
+    local args=()
+    if [[ $1 == false ]]; then
+        args+=(--apply --arc-only)
+        if [[ $2 == true ]]; then args+=(--persist); fi
     fi
+    print_warning "--zfs-only is deprecated: the ZFS ARC limit is memory_plan.sh's; running: $SCRIPT_DIR/memory_plan.sh ${args[*]}"
+    exec "$SCRIPT_DIR/memory_plan.sh" "${args[@]}"
 }
 
 # Main execution
 main() {
     local mode="apply"
     local dry_run=false
-    local skip_zfs=false
     local zfs_only=false
     local persist=false
 
@@ -620,7 +333,7 @@ main() {
                 dry_run=true
                 ;;
             --no-zfs)
-                skip_zfs=true
+                print_warning "--no-zfs is deprecated and has no effect: this script no longer sets the ZFS ARC limit"
                 ;;
             --zfs-only)
                 zfs_only=true
@@ -640,8 +353,8 @@ main() {
         esac
     done
 
-    if [[ "$zfs_only" == "true" ]] && [[ "$mode" == "restore" || "$skip_zfs" == "true" ]]; then
-        print_error "--zfs-only excludes --restore and --no-zfs"
+    if [[ "$zfs_only" == "true" && "$mode" == "restore" ]]; then
+        print_error "--zfs-only excludes --restore"
         exit 1
     fi
     if [[ "$persist" == "true" && "$zfs_only" == "false" ]]; then
@@ -656,9 +369,9 @@ main() {
     case $mode in
         apply)
             if [[ "$zfs_only" == "true" ]]; then
-                apply_zfs_only "$dry_run" "$persist"
+                run_memory_plan "$dry_run" "$persist"
             else
-                apply_settings "$dry_run" "$skip_zfs"
+                apply_settings "$dry_run"
             fi
             ;;
         restore)

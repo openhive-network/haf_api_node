@@ -13,9 +13,12 @@
 # shared memory PostgreSQL needed.
 #
 # effective_cache_size assumes the ZFS ARC limit postgresql_memory.sh computes, which the host has
-# to apply (reduce_writebacks.sh --zfs-only).  The entrypoint logs a warning, without failing the
-# start, when the runtime zfs_arc_max is larger; the boot-time value in the host's /etc/modprobe.d
-# is not visible here, reduce_writebacks.sh compares that one.
+# to apply (memory_plan.sh --apply).  The container cannot measure the host's other services, so it
+# plans with ZFS_ARC_MAX_GB or HAF_OTHER_SERVICES_GB from .env when set, and otherwise with the
+# fixed safety margin.  The entrypoint logs a warning, without failing the start, when the runtime
+# zfs_arc_max is larger than the plan; without an override, larger than any plan memory_plan.sh
+# makes (other services at their minimum), so a limit it applied is not warned about.  The
+# boot-time value in the host's /etc/modprobe.d is not visible here, memory_plan.sh compares that one.
 
 set -euo pipefail
 
@@ -27,8 +30,9 @@ CONF_FILE="$CONF_DIR/zz-memory.conf"
 
 total_kb=$(pg_memory_total_kb /)
 shared_buffers_gb=$(pg_shared_buffers_gb "$total_kb" "${POSTGRESQL_SHARED_BUFFERS_GB:-}")
-effective_cache_size_gb=$(pg_effective_cache_size_gb "$total_kb" "$shared_buffers_gb")
-echo "effective_cache_size = ${effective_cache_size_gb}GB: shared_buffers + the ZFS ARC limit reduce_writebacks.sh sets"
+arc_max_gb=$(pg_zfs_arc_limit_gb "$total_kb" "$shared_buffers_gb" "${HAF_OTHER_SERVICES_GB:-}" "${ZFS_ARC_MAX_GB:-}")
+effective_cache_size_gb=$(pg_effective_cache_size_gb "$total_kb" "$shared_buffers_gb" "$arc_max_gb")
+echo "effective_cache_size = ${effective_cache_size_gb}GB: shared_buffers + the ZFS ARC limit memory_plan.sh sets"
 
 if ! sudo -n test -d "$CONF_DIR"; then
   sudo -n mkdir -p "$CONF_DIR"
@@ -44,10 +48,10 @@ sudo -n chown postgres:postgres "$CONF_FILE"
 echo "Wrote $CONF_FILE"
 
 if [ -r /sys/module/zfs/parameters/zfs_arc_max ]; then
-  if arc_report=$(pg_zfs_arc_check / "$total_kb" "$shared_buffers_gb" "$(cat /sys/module/zfs/parameters/zfs_arc_max)"); then
+  if arc_report=$(pg_zfs_arc_check / "$total_kb" "$shared_buffers_gb" "$(cat /sys/module/zfs/parameters/zfs_arc_max)" "${HAF_OTHER_SERVICES_GB:-$PG_OTHER_SERVICES_MIN_GB}" "${ZFS_ARC_MAX_GB:-}"); then
     echo "$arc_report"
   else
-    echo "WARNING: $arc_report. To apply that limit now and at every boot, run on the host in the haf_api_node directory: sudo ./reduce_writebacks.sh --zfs-only --persist"
+    echo "WARNING: $arc_report. To see the host's plan, run on the host in the haf_api_node directory: sudo ./memory_plan.sh; to apply it now and at every boot: sudo ./memory_plan.sh --apply --persist; to keep a limit set by hand, set ZFS_ARC_MAX_GB in .env"
   fi
 fi
 
