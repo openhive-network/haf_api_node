@@ -1032,6 +1032,7 @@ WHERE l.locktype = 'advisory';
 | proxy-whitelist | `hivemind`, `proxy-whitelist` | `proxy-whitelist` (via `install_app.sh`) |
 | haf_fyp (block-processing, SQL) | `haf_fyp`, `hivemind` | `haf_fyp` (via `install_app.sh`) |
 | haf_fyp-ranker (Python) | `haf_fyp` | (same installer as above) |
+| haf_stats (block-processing; images with hive/haf_stats#157) | `haf_stats` | `haf_stats` (via `install_app.sh`) |
 
 The installers of balance_tracker, reputation_tracker, nft_tracker and haf_block_explorer take their app's exclusive lock too (`install_app.sh` through `install_with_app_lock.py`; under the block explorer, the `hafbe_bal` install of balance_tracker takes `haf_block_explorer`). haf_stats' installer takes none, nor does hafah's in the 1.28.8 image this stack runs (HAfAH#113 adds it on HAfAH's develop).
 

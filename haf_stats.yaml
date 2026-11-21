@@ -92,6 +92,11 @@ services:
         condition: service_healthy
       haf-stats-install:
         condition: service_completed_successfully
+        # Images with hive/haf_stats#157 make this service hold the shared haf_stats lock, so
+        # a recreated install would skip while it runs; restart: true has Compose stop it
+        # around the install. With older images (no lock) it still keeps the install off a
+        # live processor.
+        restart: true
   haf-stats-postgrest:
     image: ${HIVE_API_NODE_REGISTRY:-registry.hive.blog}/haf_api_node/postgrest:${HAF_API_NODE_VERSION:-${HIVE_API_NODE_VERSION}}
     # See note in hivemind.yaml — host containerd may default to nofile=1024
