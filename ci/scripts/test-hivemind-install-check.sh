@@ -7,7 +7,8 @@
 # hivemind#456 do (HAF's lock NOTICE, exit 0), installs (records the image's revision in
 # hivemind_app.hive_state, as every hivemind install that runs does), or fails; against a
 # PostgreSQL holding hivemind_app.hive_state.
-# Checks: a skipped upgrade exits 1 with both revisions, the holder and the recovery; a skipped
+# Checks: a skipped upgrade exits 1 with both revisions, the holders (one line, comma-joined; the
+# NOTICE less its prefix when it names none) and the recovery; a skipped
 # rerun of the installed revision, and an install that ran, exit 0; a failed install keeps its
 # exit code; a skip on a database without hivemind's schema exits 1.  Also checks that
 # hivemind.yaml's hivemind-install runs the wrapper.
@@ -21,6 +22,8 @@ POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:18}
 HIVEMIND_IMAGE=${HIVEMIND_IMAGE:-registry.hive.blog/hivemind:1.28.8}
 OLD_REVISION=0000000000000000000000000000000000000000
 SKIP_NOTICE='NOTICE:  Skipping install: lock on hivemind held by postgrest_app_lock_hivemind (pid=4242)'
+SKIP_NOTICE_2='NOTICE:  Skipping install: lock on hivemind held by hivesense_sync (pid=4343) '
+SKIP_NOTICE_BARE='NOTICE:  Skipping install: lock on hivemind held by'
 
 skip() {
   echo "SKIP hivemind-install-check: $*"
@@ -64,6 +67,13 @@ echo "stub entrypoint: \$*"
 case "\$STUB_MODE" in
   skip)
     echo '$SKIP_NOTICE'
+    echo "Skipping hivemind schema install (see NOTICE above)." ;;
+  skip2)
+    echo '$SKIP_NOTICE'
+    echo '$SKIP_NOTICE_2'
+    echo "Skipping hivemind schema install (see NOTICE above)." ;;
+  skip-bare)
+    echo '$SKIP_NOTICE_BARE'
     echo "Skipping hivemind schema install (see NOTICE above)." ;;
   install)
     rev=\$(/home/hivemind/.hivemind-venv/bin/python3 -c 'from hive.version import GIT_REVISION; print(GIT_REVISION)')
@@ -119,16 +129,32 @@ expect_log() {
   grep -qF -- "$1" "$WORK/out" || fail "$2: the log lacks '$1': $(tail -5 "$WORK/out")"
 }
 
+# expect_refusal HOLDER_TEXT CASE: the log has the refusal of the upgrade from $OLD_REVISION as
+# one whole line, with HOLDER_TEXT where the holders go.
+expect_refusal() {
+  local line="Cannot install hivemind revision $IMAGE_REVISION: the install exited 0, but the database is at revision $OLD_REVISION. $1 To upgrade: stop hivemind-postgrest-server (postgrest_app_lock_hivemind), hivemind-postgrest-rewriter and any other holder named above (haf-fyp-block-processing, hivesense-sync), then run docker compose up -d."
+  grep -qxF -- "$line" "$WORK/out" || fail "$2: the log lacks the line '$line': $(tail -5 "$WORK/out")"
+}
+
 ######### Checks #########
 
 set_installed_revision "$OLD_REVISION"
 install skip
 expect_rc 1 "a skipped upgrade"
-expect_log "Cannot install hivemind revision $IMAGE_REVISION" "a skipped upgrade"
-expect_log "the database is at revision $OLD_REVISION" "a skipped upgrade"
-expect_log "$SKIP_NOTICE" "a skipped upgrade"
-expect_log "stop hivemind-postgrest-server (postgrest_app_lock_hivemind)" "a skipped upgrade"
+expect_refusal "The lock on hivemind is held by postgrest_app_lock_hivemind (pid=4242)." "a skipped upgrade"
 echo "ok    a skipped upgrade exits 1, naming both revisions, the holder and the recovery"
+
+install skip2
+expect_rc 1 "a skipped upgrade with two holder NOTICEs"
+expect_refusal "The lock on hivemind is held by postgrest_app_lock_hivemind (pid=4242), hivesense_sync (pid=4343)." \
+  "a skipped upgrade with two holder NOTICEs"
+echo "ok    a skipped upgrade names the holders of several NOTICEs on one line"
+
+install skip-bare
+expect_rc 1 "a skipped upgrade whose NOTICE names no holder"
+expect_refusal "The lock on hivemind is held by Skipping install: lock on hivemind held by." \
+  "a skipped upgrade whose NOTICE names no holder"
+echo "ok    a skipped upgrade whose NOTICE names no holder keeps the NOTICE, less its prefix"
 
 install install
 expect_rc 0 "the recovery's install"
