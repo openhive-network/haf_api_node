@@ -37,6 +37,8 @@ services:
     command: >
       -c "
         ollama serve &
+        server=$$!
+        trap 'kill -TERM $$server $$pull 2>/dev/null; wait $$server; exit $$?' TERM INT
 
         until ollama list > /dev/null 2>&1; do
           echo 'Waiting for ollama to start...'
@@ -44,10 +46,12 @@ services:
         done
 
         echo 'Pulling model...'
-        ollama pull \${HIVESENSE_MODEL:-hf.co/jinaai/jina-embeddings-v5-text-small-retrieval:F16}
+        ollama pull \${HIVESENSE_MODEL:-hf.co/jinaai/jina-embeddings-v5-text-small-retrieval:F16} &
+        pull=$$!
+        wait $$pull
         echo 'Ready.'
 
-        wait
+        wait $$server
       "
     # uncomment for nvidia:
     ### runtime: nvidia
