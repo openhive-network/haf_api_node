@@ -133,6 +133,7 @@ services:
         host    postgres         pghero           ${COMPOSE_PROJECT_NAME}-pghero-1.${NETWORK_NAME}                              trust\n
 
         host    postgres         postgres         ${COMPOSE_PROJECT_NAME}-postgresexporter-1.${NETWORK_NAME}                    trust\n
+        host    postgres         postgres         ${COMPOSE_PROJECT_NAME}-postgresexporter-dbsize-1.${NETWORK_NAME}             trust\n
 
         host    haf_block_log    haf_admin        ${COMPOSE_PROJECT_NAME}-hivesense-install-schema-1.${NETWORK_NAME}            trust\n
         host    haf_block_log    hivesense_owner  ${COMPOSE_PROJECT_NAME}-hivesense-install-schema-1.${NETWORK_NAME}            trust\n

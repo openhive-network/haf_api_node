@@ -176,9 +176,50 @@ services:
     restart: unless-stopped
     command:
       - --no-collector.stat_bgwriter
+      # pg_database_size walks the whole data directory of each database;
+      # postgresexporter-dbsize collects it on a slow scrape instead.
+      - --no-collector.database
     depends_on:
       # required: false so this scrape target can run on backend-only stacks
       # without local loki/prometheus.
+      loki:
+        condition: service_started
+        required: false
+      prometheus:
+        condition: service_started
+        required: false
+    networks:
+      - haf-network
+    environment:
+      - DATA_SOURCE_NAME=${DATA_SOURCE:-postgresql://postgres@haf:5432/postgres?sslmode=disable}
+    labels:
+      org.label-schema.group: "monitoring"
+
+  postgresexporter-dbsize:
+    # Runs only the database collector (pg_database_size_bytes,
+    # pg_database_connection_limit), which postgresexporter has disabled.
+    # Every scrape sizes every database, so the only scrape job for it is the
+    # slow one in monitoring/prometheus/scrape-postgresexporter.yml. Release
+    # 0.16 has no per-collector interval and no switch to disable the default
+    # collectors, so each default one is turned off by name.
+    image: quay.io/prometheuscommunity/postgres-exporter:${POSTGRESEXPORTER_VERSION:-v0.16.0}
+    profiles:
+      - monitoring
+      - monitoring-targets
+    restart: unless-stopped
+    command:
+      - --disable-default-metrics
+      - --disable-settings-metrics
+      - --no-collector.locks
+      - --no-collector.replication
+      - --no-collector.replication_slot
+      - --no-collector.roles
+      - --no-collector.stat_bgwriter
+      - --no-collector.stat_database
+      - --no-collector.stat_user_tables
+      - --no-collector.statio_user_tables
+      - --no-collector.wal
+    depends_on:
       loki:
         condition: service_started
         required: false

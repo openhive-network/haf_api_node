@@ -1,9 +1,29 @@
-# Postgres exporter (monitoring-targets profile).
+# Postgres exporters (monitoring-targets profile).
 # Override with monitoring/prometheus-disabled/empty-scrape.yml on stacks
-# that don't run postgresexporter.
+# that don't run postgresexporter; that disables both jobs below.
 
 scrape_configs:
   - job_name: "postgresexporter"
     scrape_interval: 1s
     static_configs:
       - targets: ["postgresexporter:9187"]
+
+  # Database sizes. Each scrape runs pg_database_size() once per database,
+  # which walks that database's whole directory, so scrape it rarely. 4m
+  # stays under Prometheus's 5m lookback, so a size query always finds a
+  # sample. instance is set to the main exporter's so dashboard queries
+  # filtered by $instance match it.
+  - job_name: "postgresexporter-dbsize"
+    scrape_interval: 4m
+    scrape_timeout: 1m
+    static_configs:
+      - targets: ["postgresexporter-dbsize:9187"]
+    relabel_configs:
+      - target_label: instance
+        replacement: "postgresexporter:9187"
+    metric_relabel_configs:
+      # Keep only the database collector's metrics: its pg_up and
+      # pg_exporter_* would duplicate the main job's under the same instance.
+      - source_labels: [__name__]
+        regex: "pg_database_.*"
+        action: keep

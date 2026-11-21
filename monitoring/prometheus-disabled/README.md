@@ -18,3 +18,7 @@ services:
 
 The placeholder is a valid (empty) scrape_config_files entry, so Prometheus
 loads it without error and registers no jobs from it.
+
+`scrape-postgresexporter.yml` holds both postgres exporter jobs
+(`postgresexporter` and the slow `postgresexporter-dbsize`), so the one
+override above disables both.
