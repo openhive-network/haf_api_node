@@ -4,7 +4,8 @@
 # prepare, boot-check, swap and rollback, and that boot-check leaves the copy rolled back to the
 # snapshot it takes first, and that haf may bind read-only files of the repository but nothing else
 # outside the copy, and that a pin creating a HAF-image service with the default entrypoint fails
-# every step.  The new configuration and the source layer an override pinning haf to a
+# every step, that a source compose file missing here is refused and a tag-only source image
+# matches a digest-pinned one.  The new configuration and the source layer an override pinning haf to a
 # tag of its own, plus exposed/ (which publishes haf ports the boot check must drop).
 # No ZFS or docker daemon needed: the script runs from a copy of the repository whose
 # rollback_zfs_datasets.sh only logs its arguments, zfs and id are stubbed, and a docker wrapper logs
@@ -104,7 +105,8 @@ write_env() {
 }
 write_env live.env live
 write_env new.env copy "compose.yml:exposed/compose.exposed.yml:$WORK/pins.yml"
-write_env source.env live "compose.yml:$WORK/pins.yml:compose.not-on-this-host.yml"
+write_env source.env live "compose.yml:$WORK/pins.yml"
+write_env missing-pins-source.env live "compose.yml:compose.rebuild-pins.yml"
 write_env unpinned-source.env live
 switch() {
   "$REPO_DIR/switch_zfs_datasets.sh" --env-file="$WORK/live.env" "$@"
@@ -125,9 +127,9 @@ DEFAULT_HAF=$(haf_of "$WORK/default.json" | cut -d' ' -f1)
 
 ######### check #########
 
-switch --new-env="$WORK/new.env" --source-env="$WORK/source.env" check > "$WORK/check.log" || fail "check failed: $(cat "$WORK/check.log")"
+switch --new-env="$WORK/new.env" --source-env="$WORK/source.env" check > "$WORK/check.log" 2>&1 || fail "check failed: $(cat "$WORK/check.log")"
 grep -qF "ok    haf: $PIN (same as the source)" "$WORK/check.log" || fail "check did not resolve the pinned haf: $(cat "$WORK/check.log")"
-grep -qF "compose.not-on-this-host.yml, which is not here" "$WORK/check.log" || fail "check did not list the source's missing file"
+! grep -q "comm:" "$WORK/check.log" || fail "check printed comm warnings: $(cat "$WORK/check.log")"
 grep -qF "New compose files:  compose.yml exposed/compose.exposed.yml $WORK/pins.yml" "$WORK/check.log" || fail "check did not list the new compose files"
 grep -q "images that change on swap.*\bhaf\b" "$WORK/check.log" || fail "check did not see haf change against the live stack"
 
@@ -173,6 +175,36 @@ grep -qF "ok    haf: $PIN (the source runs it)" "$WORK/images.log" || fail "--so
 echo "${PIN%:*}:other-tag" > "$WORK/source.images"
 switch --new-env="$WORK/new.env" --source-images="$WORK/source.images" check > "$WORK/images.log" && fail "check accepted a different source haf tag"
 grep -qF "FAIL  haf: $PIN, but the source database was built by ${PIN%:*}:other-tag" "$WORK/images.log" || fail "no --source-images mismatch: $(cat "$WORK/images.log")"
+
+# A source compose file missing here is refused, --force included, before any image is compared.
+for force in "" --force; do
+  switch --new-env="$WORK/new.env" --source-env="$WORK/missing-pins-source.env" ${force:+"$force"} check > "$WORK/missing-pins.log" 2>&1 \
+    && fail "check $force accepted a source whose pins file is not here: $(cat "$WORK/missing-pins.log")"
+  grep -qF "names file(s) that are not here: $REPO_DIR/compose.rebuild-pins.yml" "$WORK/missing-pins.log" || fail "check $force did not name the missing pins file: $(cat "$WORK/missing-pins.log")"
+  for instruction in "Copy each from the source" "pass --source-images=file"; do
+    grep -qF -- "$instruction" "$WORK/missing-pins.log" || fail "check $force did not say \"$instruction\": $(cat "$WORK/missing-pins.log")"
+  done
+  ! grep -qE "(FAIL|ok|WARN)  +haf" "$WORK/missing-pins.log" || fail "check $force compared images without the source's pins: $(cat "$WORK/missing-pins.log")"
+done
+
+# A tag-only source image matches the same tag with any digest; another tag or digest does not.
+DIGEST=sha256:$(printf '1%.0s' {1..64})
+printf 'services:\n  haf:\n    image: %s\n' "$PIN@$DIGEST" > "$WORK/digest-pins.yml"
+write_env digest.env copy "compose.yml:$WORK/digest-pins.yml"
+switch --new-env="$WORK/digest.env" --source-env="$WORK/source.env" check > "$WORK/digest.log" || fail "check refused a digest of the source's tag: $(cat "$WORK/digest.log")"
+grep -qF "ok    haf: $PIN@$DIGEST, same tag (digest not compared) as the source" "$WORK/digest.log" || fail "tag-only --source-env not matched: $(cat "$WORK/digest.log")"
+echo "$PIN" > "$WORK/source.images"
+switch --new-env="$WORK/digest.env" --source-images="$WORK/source.images" check > "$WORK/digest.log" || fail "--source-images refused a digest of the source's tag: $(cat "$WORK/digest.log")"
+grep -qF "ok    haf: $PIN@$DIGEST, same tag (digest not compared) as the source runs" "$WORK/digest.log" || fail "tag-only --source-images not matched: $(cat "$WORK/digest.log")"
+for source_image in "${PIN%:*}:other-tag" "$PIN@sha256:$(printf '2%.0s' {1..64})"; do
+  echo "$source_image" > "$WORK/source.images"
+  switch --new-env="$WORK/digest.env" --source-images="$WORK/source.images" check > "$WORK/digest.log" && fail "check accepted $PIN@$DIGEST against $source_image"
+  grep -qF "FAIL  haf: $PIN@$DIGEST, but the source database was built by $source_image" "$WORK/digest.log" || fail "no mismatch against $source_image: $(cat "$WORK/digest.log")"
+done
+printf 'services:\n  haf:\n    image: %s\n' "${PIN%:*}:other-tag" > "$WORK/other-tag-pins.yml"
+write_env other-tag-source.env live "compose.yml:$WORK/other-tag-pins.yml"
+switch --new-env="$WORK/digest.env" --source-env="$WORK/other-tag-source.env" check > "$WORK/digest.log" && fail "check accepted a different source tag"
+grep -qF "FAIL  haf: $PIN@$DIGEST, but the source database was built by ${PIN%:*}:other-tag" "$WORK/digest.log" || fail "no --source-env tag mismatch: $(cat "$WORK/digest.log")"
 
 grep -qxF "        services added by the new configuration (0): none" "$WORK/check.log" || fail "check listed added services: $(cat "$WORK/check.log")"
 
