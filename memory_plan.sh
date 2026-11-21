@@ -92,7 +92,10 @@ THE PLAN (whole GB; all from postgresql_memory.sh):
   and the runtime limit, alone and says so, unless --force is given or ZFS_ARC_MAX_GB is set.
   When that ARC limit, the huge pages (the plan's or vm.nr_hugepages, whichever is more) and the
   kernel, dirty-page and other-services reserves add up to more than RAM, --apply refuses to keep
-  it and exits non-zero, changing nothing: the next boot would overcommit RAM.
+  it and exits non-zero, changing nothing: the next boot would overcommit RAM.  The other services
+  this refusal counts are HAF_OTHER_SERVICES_GB, or the fixed ${PG_SAFETY_MARGIN_GB}GB safety margin, never
+  the measurement, which moves with whatever runs while it samples: a value that overcommits RAM
+  only with the measured other services is kept, with a warning.
 
 EXAMPLES:
     sudo $0
@@ -269,8 +272,9 @@ report_boot_arc_max() {
 
 # apply_arc_max ARC_MAX_BYTES PERSIST FORCE OVERCOMMIT: set zfs_arc_max now (and at boot with
 # PERSIST), or keep a hand-set boot-time value and the runtime limit as they are.  OVERCOMMIT is
-# pg_overcommit_check's line when the boot-time value overcommits RAM (empty when it fits): a
-# hand-set value that does is refused (returns 1, nothing changed).
+# pg_overcommit_check's line when the boot-time value overcommits RAM with HAF_OTHER_SERVICES_GB or
+# the fixed safety margin as other services (empty when it fits): a hand-set value that does is
+# refused (returns 1, nothing changed).
 apply_arc_max() {
     local plan=$1 persist=$2 force=$3 overcommit=$4 kept live file
     live=$(cat "$ZFS_ARC_MAX_PARAM")
@@ -456,7 +460,7 @@ main() {
 
     echo
     echo "Now:"
-    local zfs=false live boot kept overcommit=
+    local zfs=false live boot boot_bytes kept overcommit='' measured_overcommit=''
     if [[ -f $ZFS_ARC_MAX_PARAM ]]; then
         zfs=true
         live=$(cat "$ZFS_ARC_MAX_PARAM")
@@ -474,20 +478,28 @@ main() {
         echo "  zfs_arc_max (plan)     $arc_bytes"
         # the check the haf container makes at every start, against this plan
         echo "  $(pg_zfs_arc_check "$ROOT" "$total_kb" "$sb" "$live" "$other" "$ARC_OVERRIDE" || true)"
-        if check=$(pg_overcommit_check "$total_kb" "$(pg_zfs_arc_bytes "$ROOT" "$boot")" "$held_huge_pages" "$huge_page_kb" "$other"); then
+        boot_bytes=$(pg_zfs_arc_bytes "$ROOT" "$boot")
+        if check=$(pg_overcommit_check "$total_kb" "$boot_bytes" "$held_huge_pages" "$huge_page_kb" "$other"); then
             echo "  At boot: $check"
         else
-            overcommit=$check
+            measured_overcommit=$check
             print_warning "At boot: $check"
+        fi
+        # --apply's refusal of a hand-set value counts HAF_OTHER_SERVICES_GB or the fixed safety
+        # margin: the measurement depends on what ran during the sample
+        if ! check=$(pg_overcommit_check "$total_kb" "$boot_bytes" "$held_huge_pages" "$huge_page_kb" "$other_override"); then
+            overcommit=$check
         fi
         kept=$(hand_set_arc_max "$arc_bytes" "$force")
         if [[ $apply == false && -n $kept ]]; then
             if [[ -n $overcommit ]]; then
-                echo "  --apply refuses to keep the boot-time $kept, which overcommits RAM (--force replaces it with the plan's)"
+                echo "  --apply refuses to keep the boot-time $kept, which overcommits RAM: $overcommit (--force replaces it with the plan's)"
+            elif [[ -n $measured_overcommit ]]; then
+                echo "  --apply keeps the boot-time $kept, taken as set by hand, and the runtime limit (--force replaces them): it overcommits RAM only with the measured other services, not with the ${PG_SAFETY_MARGIN_GB}GB safety margin"
             else
                 echo "  --apply keeps the boot-time $kept, taken as set by hand, and the runtime limit (--force replaces them)"
             fi
-        elif [[ $apply == false && -n $overcommit ]]; then
+        elif [[ $apply == false && -n $measured_overcommit ]]; then
             echo "  --apply --persist makes the plan's $arc_bytes the boot-time limit"
         fi
     else
