@@ -14,10 +14,15 @@
 #   sudo ./reserve_huge_pages.sh --persist  # ...and at every boot (/etc/sysctl.d)
 #   sudo ./reserve_huge_pages.sh --release  # Give them back to general RAM
 #   ./reserve_huge_pages.sh --dry-run       # Show the reservation without changing anything
+#
+# With --dry-run, MEMORY_PLAN_ROOT (default /) points the script at a fixture root with proc/, sys/
+# and etc/ in place of the host's, for tests.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="${MEMORY_PLAN_ROOT:-/}"
+MODPROBE_DIR="${ROOT%/}/etc/modprobe.d"
 SYSCTL_FILE=/etc/sysctl.d/60-haf-huge-pages.conf
 
 # shellcheck source=postgresql_memory.sh
@@ -71,6 +76,9 @@ NOTES:
     - Reserving needs that much free, unfragmented memory; the script compacts memory first and
       undoes a partial reservation.  At boot (--persist) memory is not fragmented yet.
     - Without --persist the reservation lasts until reboot.
+    - It warns when the ZFS ARC limit the zfs module gets at boot ($MODPROBE_DIR, or ZFS's
+      default), the reservation and the kernel, dirty-page and other-services reserves add up to
+      more than RAM; memory_plan.sh --apply --persist sizes the ARC limit beside the huge pages.
 
 EXAMPLES:
     sudo docker compose stop haf && sudo $0 --persist && sudo docker compose start haf
@@ -80,7 +88,29 @@ EOF
 }
 
 meminfo_kb() {
-    awk -v key="$1:" '$1 == key { print $2 }' /proc/meminfo
+    awk -v key="$1:" '$1 == key { print $2 }' "${ROOT%/}/proc/meminfo"
+}
+
+# warn_arc_overcommit TOTAL_KB HUGE_PAGES HUGE_PAGE_KB: warn when the ZFS ARC limit the zfs module
+# gets at boot, HUGE_PAGES huge pages and the reserves (postgresql_memory.sh's, with
+# HAF_OTHER_SERVICES_GB when set) add up to more than RAM
+warn_arc_overcommit() {
+    local boot other check
+    [[ -d ${ROOT%/}/sys/module/zfs ]] || return 0
+    boot=$(pg_modprobe_zfs_arc_max "$MODPROBE_DIR")
+    other=$(pg_setting HAF_OTHER_SERVICES_GB "$SCRIPT_DIR/.env")
+    if [[ -n $other ]] && ! pg_check_gb HAF_OTHER_SERVICES_GB "$other" 0; then
+        print_warning "Ignoring HAF_OTHER_SERVICES_GB: the overcommit check below counts the fixed ${PG_SAFETY_MARGIN_GB}GB safety margin"
+        other=
+    fi
+    if ! check=$(pg_overcommit_check "$1" "$(pg_zfs_arc_bytes "$ROOT" "$boot")" "$2" "$3" "$other"); then
+        if [[ -n $boot ]]; then
+            print_warning "At boot: $check (zfs_arc_max=$boot in $(pg_modprobe_zfs_arc_max_file "$MODPROBE_DIR"))"
+        else
+            print_warning "At boot: $check (no zfs_arc_max in $MODPROBE_DIR: ZFS's default)"
+        fi
+        print_warning "To size the ZFS ARC limit beside these huge pages: sudo $SCRIPT_DIR/memory_plan.sh --apply --persist"
+    fi
 }
 
 write_sysctl_file() {
@@ -142,23 +172,29 @@ main() {
         print_error "--persist and --release exclude each other"
         exit 1
     fi
+    if [[ $dry_run == false && $ROOT != / ]]; then
+        print_error "MEMORY_PLAN_ROOT needs --dry-run"
+        exit 1
+    fi
     if [[ $dry_run == false && $EUID -ne 0 ]]; then
         print_error "This script must be run as root"
         echo "Please run with: sudo $0 $*"
         exit 1
     fi
 
-    local huge_page_kb current target
-    huge_page_kb=$(pg_huge_page_size_kb /)
-    current=$(sysctl -n vm.nr_hugepages)
+    local huge_page_kb current target total_kb
+    huge_page_kb=$(pg_huge_page_size_kb "$ROOT")
+    current=$(cat "${ROOT%/}/proc/sys/vm/nr_hugepages")
+    total_kb=$(pg_memory_total_kb "$ROOT")
     if [[ $release == true ]]; then
         target=0
     else
         # pg_shared_buffers_gb reports on stderr how it chose the value
         local shared_buffers_gb
-        shared_buffers_gb=$(pg_shared_buffers_gb "$(pg_memory_total_kb /)" "$(pg_shared_buffers_override "$SCRIPT_DIR/.env")")
+        shared_buffers_gb=$(pg_shared_buffers_gb "$total_kb" "$(pg_shared_buffers_override "$SCRIPT_DIR/.env")")
         target=$(pg_huge_pages_count "$shared_buffers_gb" "$huge_page_kb")
         print_info "PostgreSQL's shared segment: $(pg_shared_segment_gb "$shared_buffers_gb")GB (shared_buffers ${shared_buffers_gb}GB + segment overhead) = $target huge pages of ${huge_page_kb}kB"
+        warn_arc_overcommit "$total_kb" "$target" "$huge_page_kb"
     fi
 
     if [[ $dry_run == true ]]; then
