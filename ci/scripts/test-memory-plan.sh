@@ -9,7 +9,9 @@
 # modprobe.d is kept without --force, replaced with it, and the huge pages are left alone while
 # haf runs.  On steem-20's 121GB, a stale 83GB zfs_arc_max beside 63GB of huge pages overcommits
 # RAM: --apply refuses to keep it (also by way of reduce_writebacks.sh --zfs-only), and
-# reserve_huge_pages.sh warns.  docker and reserve_huge_pages.sh are stand-ins.  No root needed.
+# reserve_huge_pages.sh warns.  A hand-set 32GB there, 0.9GB over only with a transient peak in the
+# measured other services, is kept with a warning; with HAF_OTHER_SERVICES_GB covering that peak it
+# is refused.  docker and reserve_huge_pages.sh are stand-ins.  No root needed.
 
 set -euo pipefail
 
@@ -218,12 +220,13 @@ steem20() {
   echo 89120571392 > "$ROOT/sys/module/zfs/parameters/zfs_arc_max"
   printf 'options zfs zfs_arc_max=89120571392\n' > "$ROOT/etc/modprobe.d/zfs.conf"
 }
-OVERCOMMIT="ZFS ARC limit 83\.0GB \+ 63\.0GB of huge pages \(32256 x 2048kB\) \+ 24GB kernel, dirty-page and other-services reserves = 170\.0GB, more than the 121\.1GB of RAM"
+# --apply's refusal counts the fixed 10GB safety margin as other services, not the measured 10GB
+OVERCOMMIT="ZFS ARC limit 83\.0GB \+ 63\.0GB of huge pages \(32256 x 2048kB\) \+ 24GB kernel, dirty-page and safety reserves = 170\.0GB, more than the 121\.1GB of RAM"
 steem20
 before=$(state)
 plan "steem-20 plan"
 expect "steem-20 plan" "^  ZFS ARC limit +34GB +formula: 121GB RAM - 63GB shared segment"
-expect "steem-20 plan" "\[WARNING\].* At boot: $OVERCOMMIT$"
+expect "steem-20 plan" "\[WARNING\].* At boot: ZFS ARC limit 83\.0GB \+ 63\.0GB of huge pages \(32256 x 2048kB\) \+ 24GB kernel, dirty-page and other-services reserves = 170\.0GB, more than the 121\.1GB of RAM$"
 expect "steem-20 plan" "--apply refuses to keep the boot-time 89120571392, which overcommits RAM"
 [ "$(state)" = "$before" ] || fail "steem-20 plan: changed the host"
 
@@ -255,6 +258,36 @@ plan "steem-20 fixed"
 expect "steem-20 fixed" "^  At boot: ZFS ARC limit 34\.0GB \+ 63\.0GB of huge pages .* = 121\.0GB, within the 121\.1GB of RAM$"
 if grep -q "overcommit" "$WORK/out"; then fail "steem-20 fixed: still reports an overcommit"; fi
 echo "ok: steem-20 with the plan's zfs_arc_max: no overcommit"
+
+# a hand-set 32GB, with a transient 1.9GB sandbox in the sample: the measured 9.9GB peak gives 13GB
+# of other services, 0.9GB over RAM; with the 10GB safety margin it fits, so --apply keeps it
+steem20
+printf 'options zfs zfs_arc_max=%s\n' $((32 * GiB)) > "$ROOT/etc/modprobe.d/zfs.conf"
+echo $((32 * GiB)) > "$ROOT/sys/module/zfs/parameters/zfs_arc_max"
+cgroup system.slice/docker-dddd.scope $((GiB * 19 / 10)) 0
+cgroup system.slice $((7 * GiB + GiB / 2 + GiB * 19 / 10)) $((60 * GiB + GiB / 2))
+echo 'dddd aidev-sandbox-1 sandbox' >> "$WORK/containers"
+NEAR="ZFS ARC limit 32\.0GB \+ 63\.0GB of huge pages \(32256 x 2048kB\) \+ 27GB kernel, dirty-page and other-services reserves = 122\.0GB, more than the 121\.1GB of RAM"
+before=$(state)
+plan "steem-20 32GB plan"
+expect "steem-20 32GB plan" "^  other services +13GB +measurement: 9\.9GB peak"
+expect "steem-20 32GB plan" "\[WARNING\].* At boot: $NEAR$"
+expect "steem-20 32GB plan" "--apply keeps the boot-time 34359738368, taken as set by hand, .*: it overcommits RAM only with the measured other services, not with the 10GB safety margin$"
+plan "steem-20 32GB --apply --arc-only" --apply --arc-only
+expect "steem-20 32GB --apply --arc-only" "\[WARNING\].* At boot: $NEAR$"
+expect "steem-20 32GB --apply --arc-only" "Kept zfs_arc_max=34359738368 \(32\.0GB\) in .*/zfs\.conf, which differs from the plan's .*: taken as set by hand"
+[ "$(state)" = "$before" ] || fail "steem-20 32GB --apply --arc-only: changed the host"
+echo "ok: steem-20's hand-set 32GB, over RAM only with the measured other services: kept with a warning"
+
+# HAF_OTHER_SERVICES_GB=13 is a configured figure: --apply refuses the same 32GB on it
+echo HAF_OTHER_SERVICES_GB=13 >> "$BIN/.env"
+if MEMORY_PLAN_ROOT="$ROOT" POSTGRESQL_SHARED_BUFFERS_GB='' ZFS_ARC_MAX_GB='' PROJECT_NAME='' \
+  "$BIN/memory_plan.sh" --sample-seconds 0 --apply --arc-only > "$WORK/out" 2>&1; then
+  fail "steem-20 32GB, HAF_OTHER_SERVICES_GB=13: kept ($(cat "$WORK/out"))"
+fi
+expect "steem-20 32GB, HAF_OTHER_SERVICES_GB=13" "\[ERROR\].* Refusing to keep zfs_arc_max=34359738368 \(32\.0GB\) .*: $NEAR$"
+[ "$(state)" = "$before" ] || fail "steem-20 32GB, HAF_OTHER_SERVICES_GB=13: changed the host"
+echo "ok: steem-20's hand-set 32GB, over RAM with HAF_OTHER_SERVICES_GB: refused"
 
 # reserve_huge_pages.sh warns about the stale boot-time limit beside its reservation
 RHP="$WORK/reserve"
