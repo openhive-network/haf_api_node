@@ -21,11 +21,13 @@
 # Also checks the whole stack's config: every PostgREST holds a lock or is exempt; every holder
 # has its pg_hba row and restarts with every install that takes its lock (control: without
 # block-explorer-postgrest's restart on the hafbe_bal install, the check names that edge); every
-# install of a lock that records its version mounts install_lock/ and queries its version
-# (control: without the mounts on the hafbe_bal install, the check names it); and
-# install_lock/install_with_app_lock.py is common-ci-configuration's, unmodified.
-# Needs a docker daemon for all but the last check; skips (exit 0) with the reason when there is
-# none.
+# install of a lock that records its version mounts install_lock/, queries its version and names
+# a PostgREST holding its lock (control: without the mounts on the hafbe_bal install, the check
+# names it); install_lock/install_with_app_lock.py is the pinned revision; and its refusal of a
+# blocked upgrade lists the NOTICE's holders on one line and names the app's PostgREST service
+# (reputation_tracker, hivemind; none named; a NOTICE of another form; no NOTICE).
+# Needs a docker daemon for all but the last two checks; skips (exit 0) with the reason when there
+# is none.
 
 set -euo pipefail
 
@@ -62,8 +64,9 @@ LOCK_INSTALLS='{
 UNVERSIONED_INSTALLS="hivemind-install proxy-whitelist-install"
 
 # install_lock/install_with_app_lock.py: common-ci-configuration 7658f4893592b132352e5fdbc103dbb9adc7cfa8
-# (#85), haf-app-tools/scripts/install_with_app_lock.py (install_lock/README.md).
-WRAPPER_BLOB=1e1eebada76bbe5371c617bea02142cd2738e466
+# (#85), haf-app-tools/scripts/install_with_app_lock.py, with this stack's refusal message
+# (install_lock/README.md).
+WRAPPER_BLOB=4d829f45e6da94ca4005f1a90cd2c086de0578f7
 
 skip() {
   echo "SKIP postgrest-app-lock: $*"
@@ -81,8 +84,48 @@ fail() {
 
 blob=$(git hash-object "$REPO_DIR/install_lock/install_with_app_lock.py")
 [ "$blob" = "$WRAPPER_BLOB" ] ||
-  fail "install_lock/install_with_app_lock.py is blob $blob, not common-ci-configuration's $WRAPPER_BLOB"
-echo "ok    install_lock/install_with_app_lock.py is common-ci-configuration's #85 wrapper, unmodified"
+  fail "install_lock/install_with_app_lock.py is blob $blob, not the pinned $WRAPPER_BLOB"
+echo "ok    install_lock/install_with_app_lock.py is the pinned revision"
+
+######### The refusal message #########
+
+# upgrade_blocked_message with fixed NOTICEs, as psycopg2 reports hive.try_acquire_app_install_lock's
+# (trailing newline included); a stub psycopg2, as the host may have none.
+message_check=$(python3 - "$REPO_DIR/install_lock" 2>&1 <<'EOF'
+import sys, types
+sys.modules.setdefault("psycopg2", types.ModuleType("psycopg2"))
+sys.path.insert(0, sys.argv[1])
+from install_with_app_lock import upgrade_blocked_message
+
+old, new = "797ee9c9" * 5, "e5ddb06f" * 5
+cases = [
+    ("reputation_tracker", "reputation-tracker-postgrest",
+     ["NOTICE:  Skipping install: lock on reputation_tracker held by postgrest_app_lock_reputation_tracker "
+      "(pid=13193), reptracker_block_processing (pid=761), hivemind_root (pid=1073)\n"],
+     "postgrest_app_lock_reputation_tracker (pid=13193), reptracker_block_processing (pid=761), "
+     "hivemind_root (pid=1073)", "reputation-tracker-postgrest"),
+    ("hivemind", "hivemind-postgrest-server",
+     ["NOTICE:  Skipping install: lock on hivemind held by postgrest_app_lock_hivemind (pid=4242)\n"],
+     "postgrest_app_lock_hivemind (pid=4242)", "hivemind-postgrest-server"),
+    ("nft_tracker", None,
+     ["NOTICE:  Skipping install: lock on nft_tracker held by nfttracker_block_processing (pid=7)\n"],
+     "nfttracker_block_processing (pid=7)", "nft_tracker's PostgREST service"),
+    ("balance_tracker", "balance-tracker-postgrest", ["NOTICE:  Lock busy\n"],
+     "Lock busy", "balance-tracker-postgrest"),
+    ("balance_tracker", "balance-tracker-postgrest", [],
+     "another session (no holder reported)", "balance-tracker-postgrest"),
+]
+for app, service, notices, holders, stop in cases:
+    got = upgrade_blocked_message(app, new, old, notices, service)
+    expected = (f"Cannot install {app} version {new}: the installed version is {old}, and the install "
+                f"lock is held by {holders}. Skipping would leave the old version serving under the new "
+                f"image. To upgrade: stop {stop} and any other holder of the lock, rerun the install, "
+                f"then start them again.")
+    if got != expected:
+        sys.exit(f"{app} ({service}, {notices}):\n got      {got!r}\n expected {expected!r}")
+EOF
+) || fail "the refusal message: $message_check"
+echo "ok    the refusal lists the NOTICE's holders on one line and names the app's PostgREST service"
 
 command -v docker >/dev/null || skip "docker is not installed"
 docker info >/dev/null 2>&1 || skip "no docker daemon"
@@ -164,6 +207,10 @@ for install in sorted({i for installs in lock_installs.values() for i in install
     service = services[install]
     if not (service.get("environment") or {}).get("HAF_APP_INSTALLED_VERSION_QUERY"):
         sys.exit(f"{install} sets no HAF_APP_INSTALLED_VERSION_QUERY")
+    lock = next(lock for lock, installs in lock_installs.items() if install in installs)
+    postgrest = (service.get("environment") or {}).get("HAF_APP_LOCK_POSTGREST_SERVICE")
+    if (holders.get(postgrest) or {}).get("HAF_APP_LOCK") != lock:
+        sys.exit(f"{install}: HAF_APP_LOCK_POSTGREST_SERVICE {postgrest} is not a PostgREST holding {lock}")
     bound = {v["target"]: v["source"] for v in service.get("volumes", []) if v.get("type") == "bind"}
     for target, source in mounts.items():
         if bound.get(target) != source:
@@ -541,8 +588,8 @@ fi
 expect_install "1 1 2 2" "an upgraded install brought up alone fails with a non-zero exit, installing nothing"
 compose logs nft-tracker-install 2>&1 | grep -F "Cannot install" >"$WORK/install.log" || true
 for expected in "Cannot install nft_tracker version $(printf '%040d' 3): the installed version is $(printf '%040d' 2)" \
-                "held by NOTICE:  Skipping install: lock on nft_tracker held by $HOLDER" \
-                "To upgrade: stop nft_tracker-postgrest"; do
+                "the install lock is held by $HOLDER (pid=" \
+                "To upgrade: stop nft-tracker-postgrest and any other holder"; do
   grep -qF "$expected" "$WORK/install.log" ||
     fail "the failed upgrade did not log '$expected': $(compose logs --tail 5 nft-tracker-install 2>&1)"
 done

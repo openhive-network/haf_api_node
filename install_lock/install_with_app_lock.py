@@ -31,6 +31,8 @@ Tries to acquire the EXCLUSIVE advisory install lock for APP_NAME using DSN
   - Both given, and SQL fails otherwise: the installed version cannot be
     determined; warn and exit 0.
   - Either missing: upgrade detection is off for the app; warn and exit 0.
+
+  The exit 1 names the app's PostgREST compose service from $HAF_APP_LOCK_POSTGREST_SERVICE.
 """
 import logging
 import os
@@ -104,6 +106,35 @@ def _installed_version(conn: "psycopg2.extensions.connection", query: str) -> st
     return str(row[0]).strip()
 
 
+def _holders(notice: str) -> str:
+    """The holder descriptions of a NOTICE 'Skipping install: lock on APP held by HOLDERS'.
+
+    The text is hive_fork_manager's, so a line without "held by" is kept whole rather than lost.
+    """
+    line = " ".join(notice.split())
+    if line.startswith("NOTICE:"):
+        line = line[len("NOTICE:"):].lstrip()
+    _, sep, holders = line.partition(" held by ")
+    return holders.strip() if sep and holders.strip() else line
+
+
+def upgrade_blocked_message(app_name: str, version: str, installed: str, notices: list[str],
+                            postgrest_service: str | None) -> str:
+    """The one-line refusal of an upgrade of app_name that the lock holders in notices keep out.
+
+    postgrest_service is the compose service of the app's PostgREST, named in the recovery; when
+    None the recovery names it generically.
+    """
+    holders = "; ".join(h for h in (_holders(n) for n in notices) if h)
+    service = postgrest_service or f"{app_name}'s PostgREST service"
+    return (
+        f"Cannot install {app_name} version {version}: the installed version is {installed}, and the "
+        f"install lock is held by {holders or 'another session (no holder reported)'}. Skipping would "
+        f"leave the old version serving under the new image. To upgrade: stop {service} and any "
+        f"other holder of the lock, rerun the install, then start them again."
+    )
+
+
 def _skip_or_fail(conn: "psycopg2.extensions.connection", app_name: str, settings: dict[str, str | None],
                   holder: list[str]) -> int:
     """Exit status of an install that could not take the lock: 0 to skip, non-zero to fail."""
@@ -128,13 +159,8 @@ def _skip_or_fail(conn: "psycopg2.extensions.connection", app_name: str, setting
                      "by an active block-processor.", app_name, version)
             return 0
 
-    log.error(
-        "Cannot install %s version %s: the installed version is %s, and the install lock is held by "
-        "%s. Skipping would leave the old version serving under the new image. To upgrade: stop "
-        "%s-postgrest and any other holder of the lock, rerun the install, then start them again.",
-        app_name, version, installed, "; ".join(holder) or "another session (no holder reported)",
-        app_name,
-    )
+    log.error("%s", upgrade_blocked_message(app_name, version, installed, holder,
+                                            os.environ.get("HAF_APP_LOCK_POSTGREST_SERVICE") or None))
     return _EXIT_UPGRADE_BLOCKED
 
 

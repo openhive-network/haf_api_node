@@ -2,10 +2,12 @@
 
 `install_with_app_lock.py` is common-ci-configuration's
 `haf-app-tools/scripts/install_with_app_lock.py` at commit
-`7658f4893592b132352e5fdbc103dbb9adc7cfa8` (common-ci-configuration#85), unmodified
-(git blob `1e1eebada76bbe5371c617bea02142cd2738e466`; `ci/scripts/test-postgrest-app-lock.sh`
-checks it). When the lock is held, it skips a rerun of the installed version with exit 0 and
-fails an upgrade with exit 1, naming the holder and the recovery.
+`7658f4893592b132352e5fdbc103dbb9adc7cfa8` (common-ci-configuration#85) with this stack's
+refusal message (git blob `4d829f45e6da94ca4005f1a90cd2c086de0578f7`;
+`ci/scripts/test-postgrest-app-lock.sh` checks it). When the lock is held, it skips a rerun of
+the installed version with exit 0 and fails an upgrade with exit 1. The failure lists, on one
+line, the holders the lock function's NOTICE names, and as the recovery stops the app's PostgREST
+compose service, which the install service names in `HAF_APP_LOCK_POSTGREST_SERVICE`.
 
 The app images this stack runs carry an older copy, which skips both, and their installers pass
 no version. So the install services that record a version mount `with_install_version.py` over
@@ -16,8 +18,8 @@ the image's `/usr/local/bin/install_with_app_lock.py` and this copy at
 this copy with it. See the README's
 [PostgREST servers hold their app's lock](../README.md#postgrest-servers-hold-their-apps-lock).
 
-To move to another revision, copy the file unmodified from that commit and update the commit
-here and the blob in the test.
+To move to another revision, copy the file from that commit, carry over the refusal message
+(`upgrade_blocked_message`), and update the commit here and the blob in the test.
 
 ## hivemind
 

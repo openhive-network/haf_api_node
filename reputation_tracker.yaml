@@ -12,6 +12,7 @@ services:
     environment:
       POSTGRES_HOST: haf
       HAF_APP_INSTALLED_VERSION_QUERY: SELECT git_hash FROM reptracker_app.version
+      HAF_APP_LOCK_POSTGREST_SERVICE: reputation-tracker-postgrest
     # The install lock wrapper of common-ci-configuration#85, given this image's version: an
     # upgrade that the PostgREST's lock would skip fails instead (install_lock/README.md).
     volumes:
