@@ -215,10 +215,14 @@ echo "--- HAF Applications ---"
 
 # Define apps: display_name, app_name (for SQL), container_suffix
 # The SQL function hive.app_get_current_block_num('app_name') returns the current block
+# container_suffix is the service that processes the context, which is not always the app's
+# own: under hafbe, block-explorer-block-processing processes hafbe_bal (btracker) as well as
+# hafbe_app, while the standalone balance-tracker-block-processing processes btracker_app.
 APPS=(
     "Hivemind|hivemind_app|hivemind-block-processing-1"
     "Block Explorer|hafbe_app|block-explorer-block-processing-1"
-    "Balance Tracker|hafbe_bal|balance-tracker-block-processing-1"
+    "Balance Tracker|hafbe_bal|block-explorer-block-processing-1"
+    "Balance Tracker standalone|btracker_app|balance-tracker-block-processing-1"
     "Reputation Tracker|reptracker_app|reputation-tracker-block-processing-1"
     "NFT Tracker|nfttracker_app|nft-tracker-block-processing-1"
     "HAF Stats|haf_stats|haf-stats-block-processing-1"
@@ -244,6 +248,7 @@ for app_def in "${APPS[@]}"; do
 
     # Show container status if there's a processing container
     if [ -n "$container_suffix" ]; then
+        echo "    Container: $container"
         show_container_status "$container" || true
     fi
 
