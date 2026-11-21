@@ -52,8 +52,14 @@ done
 
 if [ -z "$ZPOOL" -o -z "$TOP_LEVEL_DATASET" ]; then
   if [ ! -z "$ENV_FILE" ]; then
-    echo reading $ENV_FILE
-    . $ENV_FILE
+    # POSIX . looks a name without a slash up in PATH, not in the current directory
+    case $ENV_FILE in */*) ;; *) ENV_FILE="./$ENV_FILE" ;; esac
+    if [ ! -f "$ENV_FILE" ]; then
+      echo "Environment file $ENV_FILE not found" >&2
+      exit 1
+    fi
+    echo "reading $ENV_FILE"
+    . "$ENV_FILE"
   elif [ -f .env ]; then
     echo reading configuration from .env
     . ./.env

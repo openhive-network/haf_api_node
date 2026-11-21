@@ -42,6 +42,12 @@ done
 
 if [ -z "$TOP_LEVEL_DATASET_MOUNTPOINT" ]; then
   if [ -n "$ENV_FILE" ]; then
+    # POSIX . looks a name without a slash up in PATH, not in the current directory
+    case $ENV_FILE in */*) ;; *) ENV_FILE="./$ENV_FILE" ;; esac
+    if [ ! -f "$ENV_FILE" ]; then
+      echo "Environment file $ENV_FILE not found" >&2
+      exit 1
+    fi
     echo "Reading $ENV_FILE"
     # shellcheck disable=SC1090
     . "$ENV_FILE"
