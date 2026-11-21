@@ -37,7 +37,7 @@ Options:
   --env-file=file        the live env file (default: .env)
   --new-env=file         the new configuration (required except for rollback)
   --source-env=file      the source node's env file: HAF and installer images must match it.
-                         Files its COMPOSE_FILE names that are not here are left out (and listed)
+                         Refuses when its COMPOSE_FILE names a file that is not here
   --source-images=file   the source's images, one per line as "docker compose config --images"
                          prints them there: compared instead of the ones --source-env resolves to here
   --boot-timeout=SECONDS how long boot-check waits for HAF to become healthy (default 3600)
@@ -159,6 +159,12 @@ fi
 if [ -n "$SOURCE_IMAGES" ]; then
   [ -f "$SOURCE_IMAGES" ] || die "$SOURCE_IMAGES does not exist"
   SOURCE_IMAGES=$(realpath "$SOURCE_IMAGES")
+elif [ -n "$SOURCE_ENV" ] && [ "$COMMAND" != rollback ]; then
+  # Without them the source would render with this checkout's defaults (stale *_VERSION, no digest).
+  resolve_compose_files "$SOURCE_ENV"
+  [ "${#MISSING_COMPOSE_FILES[@]}" -eq 0 ] || die "the source's COMPOSE_FILE ($SOURCE_ENV) names file(s) that are not here: ${MISSING_COMPOSE_FILES[*]}.
+Copy each from the source to that path (next to this checkout, under the name the source's COMPOSE_FILE uses),
+or pass --source-images=file with the output of \"docker compose config --images\" run on the source."
 fi
 cd "$REPO_DIR"
 
@@ -209,6 +215,11 @@ _image_repository() {
   printf '%s' "$image"
 }
 
+# Whether SOURCE has no digest and is TARGET's repository:tag (TARGET's digest, if any, aside).
+_same_tag_without_digest() {
+  [[ "$1" != *@* ]] && [ "$1" = "${2%%@*}" ]
+}
+
 # Services whose images write the database: HAF and the app installers.
 _writes_database() {
   case $1 in
@@ -254,7 +265,7 @@ COPY_MOUNTED=0
 # check STRICT: STRICT=1 for steps that are about to use the copy (it must be mounted and complete).
 check() {
   local strict="$1" name canmount mounted property unmounted=0 latest binds source rel service image mode
-  local live_images new_images source_images source_image var live_value new_value file same_repo note
+  local live_images new_images source_images source_image var live_value new_value same_repo note
   local live_services new_services haf_repository
   local -a changed=() layout_notes=() added=() removed=()
   FAILURES=0
@@ -362,6 +373,8 @@ check() {
       done < "$SOURCE_IMAGES"
       if grep -qxF "$image" "$SOURCE_IMAGES"; then
         ok "$service: $image (the source runs it)"
+      elif grep -qxF "${image%%@*}" "$SOURCE_IMAGES"; then
+        ok "$service: $image, same tag (digest not compared) as the source runs"
       elif [ "${#same_repo[@]}" -eq 0 ]; then
         warn "$service: the source runs no $(_image_repository "$image") image"
       elif [ "$FORCE" -eq 1 ]; then
@@ -373,10 +386,7 @@ check() {
   elif [ -n "$SOURCE_ENV" ]; then
     resolve_compose_files "$SOURCE_ENV"
     echo "        source compose files: ${COMPOSE_FILES[*]#"$REPO_DIR/"}"
-    for file in "${MISSING_COMPOSE_FILES[@]}"; do
-      warn "the source's COMPOSE_FILE names ${file#"$REPO_DIR/"}, which is not here: left out (pass --source-images for an exact comparison)"
-    done
-    source_images=$(compose_resolved "$SOURCE_ENV" config --format json | compose_query images)
+    source_images=$(compose "$SOURCE_ENV" config --format json | compose_query images)
     while read -r service image; do
       _writes_database "$service" || continue
       source_image=$(awk -v s="$service" '$1 == s { print $2 }' <<< "$source_images")
@@ -384,6 +394,8 @@ check() {
         warn "$service: not enabled on the source node"
       elif [ "$source_image" = "$image" ]; then
         ok "$service: $image (same as the source)"
+      elif _same_tag_without_digest "$source_image" "$image"; then
+        ok "$service: $image, same tag (digest not compared) as the source"
       elif [ "$FORCE" -eq 1 ]; then
         warn "$service: $image, but the source database was built by $source_image"
       else
@@ -402,10 +414,10 @@ check() {
 
   echo ""
   echo "Services:"
-  live_services=$(compose "$LIVE_ENV" config --services | sort)
-  new_services=$(compose "$NEW_ENV" config --services | sort)
-  mapfile -t added < <(comm -13 <(echo "$live_services") <(echo "$new_services"))
-  mapfile -t removed < <(comm -23 <(echo "$live_services") <(echo "$new_services"))
+  live_services=$(compose "$LIVE_ENV" config --services | LC_ALL=C sort)
+  new_services=$(compose "$NEW_ENV" config --services | LC_ALL=C sort)
+  mapfile -t added < <(LC_ALL=C comm -13 <(echo "$live_services") <(echo "$new_services"))
+  mapfile -t removed < <(LC_ALL=C comm -23 <(echo "$live_services") <(echo "$new_services"))
   echo "        services added by the new configuration (${#added[@]}): ${added[*]:-none}"
   echo "        services the new configuration drops (${#removed[@]}): ${removed[*]:-none}"
   # A pin for a service no other compose file defines creates it from the image alone; with the HAF

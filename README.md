@@ -801,10 +801,12 @@ Below, the source is `haf-pool/haf-datadir` on `src-host` and the target receive
    configuration bind-mounts that the copy lacks (target-only directories), image mismatches, and the
    names of the settings that differ from the live `.env`.  Every step renders the stack the way
    `docker compose` does here with that env file, `COMPOSE_FILE` included (`check` lists the files);
-   a file the live or new configuration names that does not exist is an error.  The source's
-   `COMPOSE_FILE` may name files this host lacks: `check` leaves them out and lists them.  For an exact
-   comparison, save the source's images instead (`docker compose config --images > source.images` on
-   the source) and pass `--source-images=source.images`.  `prepare` mounts the copy, copies the
+   a file the live or new configuration names that does not exist is an error.  So is a file the
+   source's `COMPOSE_FILE` names that this host lacks (such as its pins file): copy it from the source
+   next to this checkout under the name the source's `COMPOSE_FILE` uses, or save the source's images
+   instead (`docker compose config --images > source.images` on the source) and pass
+   `--source-images=source.images`.  A source image without a digest matches a target image with the
+   same tag and any digest (`check` says the digest was not compared); a different tag is a mismatch.  `prepare` mounts the copy, copies the
    target-only directories from the live datadir (creating them empty when the live datadir lacks them
    too) and checks again.  The transfer sends dataset properties as the source has them, so a source
    whose `haf_db_store` drifted to `canmount=on` passes that on.  Before mounting, `prepare` sets
