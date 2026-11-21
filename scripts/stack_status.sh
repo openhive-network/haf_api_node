@@ -228,6 +228,10 @@ APPS=(
     "HAF Stats|haf_stats|haf-stats-block-processing-1"
     "HAF FYP|haf_fyp|haf-fyp-block-processing-1"
     "Hivesense|hivesense_app|hivesense-sync-1"
+    "L2 Framework|l2|l2-framework-block-processing-1"
+    "Lite Account|lite_account|lite-account-block-processing-1"
+    "Lite Posts|lite_posts|lite-posts-block-processing-1"
+    "Lite Social|lite_social|lite-social-block-processing-1"
     "HAfAH|hafah_app|"
 )
 
