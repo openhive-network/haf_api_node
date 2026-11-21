@@ -30,6 +30,6 @@ and `hivemind-block-processing` then starts the new code on the old schema and c
 `docker_entrypoint.sh`, and when that exits 0 compares the image's revision
 (`hive.version.GIT_REVISION`) with `hivemind_app.hive_state.hivemind_git_rev`, which every
 hivemind install that runs sets to it. If they differ, the install did not run: it exits 1 with
-both revisions, the skip line naming the holder, and the recovery. Images with hivemind#456 fail
-such an install themselves; the check then finds nothing to add. `ci/scripts/test-hivemind-install-check.sh`
-tests it.
+both revisions, the lock holders the skip NOTICEs name (on one line), and the recovery. Images
+with hivemind#456 fail such an install themselves; the check then finds nothing to add.
+`ci/scripts/test-hivemind-install-check.sh` tests it.

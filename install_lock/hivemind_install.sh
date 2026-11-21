@@ -42,9 +42,18 @@ else
   INSTALLED_REVISION="unreadable ($(grep -m1 '^psql' "$ERRORS" || tail -1 "$ERRORS"))"
 fi
 
-HOLDERS=$(grep -F "$SKIP_LINE" "$OUTPUT" || true)
+# The holders each skip NOTICE names after "held by", on one line.  The NOTICE text is
+# hive_fork_manager's, so a line naming none is kept, less its "NOTICE:" prefix.
+HOLDERS=""
+while IFS= read -r line; do
+  holder=$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"${line#*"$SKIP_LINE"}")
+  [ -n "$holder" ] || holder=$(sed -E 's/^[[:space:]]*NOTICE:[[:space:]]*//; s/[[:space:]]+$//' <<<"$line")
+  HOLDERS="${HOLDERS:+$HOLDERS, }$holder"
+done < <(grep -F "$SKIP_LINE" "$OUTPUT" || true)
+HELD_BY="The install did not report a lock holder."
+[ -z "$HOLDERS" ] || HELD_BY="The lock on hivemind is held by $HOLDERS."
 echo "Cannot install hivemind revision $IMAGE_REVISION: the install exited 0, but the database is at revision $INSTALLED_REVISION." \
-  "${HOLDERS:-The install did not report a lock holder.}" \
+  "$HELD_BY" \
   "To upgrade: stop hivemind-postgrest-server (postgrest_app_lock_hivemind), hivemind-postgrest-rewriter" \
   "and any other holder named above (haf-fyp-block-processing, hivesense-sync), then run docker compose up -d." >&2
 exit 1
