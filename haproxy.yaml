@@ -176,6 +176,9 @@ services:
       - haproxy-healthchecks
     networks:
       - haf-network
+    # docker-init as PID 1: an image whose entrypoint predates its TERM trap
+    # runs /bin/sh as PID 1, which ignores SIGTERM
+    init: true
   smtp-relay:
     profiles:
       - email
