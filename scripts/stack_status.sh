@@ -111,7 +111,7 @@ echo ""
 
 # --- Load previous state ---
 
-declare -A PREV_BLOCKS
+declare -A PREV_BLOCKS=()
 PREV_TIME=0
 if [ -f "$STATE_FILE" ]; then
     PREV_TIME=$(head -1 "$STATE_FILE")
@@ -300,8 +300,8 @@ echo "--- Docker Images ---"
 IMAGE_DATA=$(run "docker ps --filter 'label=com.docker.compose.project=$PROJECT' --format '{{.Image}}' | sort -u | xargs -r docker inspect --format '{{index .RepoTags 0}}|{{.Created}}' 2>/dev/null" 2>/dev/null) || true
 
 # Collect image info for version comparison later
-declare -A IMAGE_TAGS    # project_key -> running tag
-declare -A IMAGE_BUILT   # project_key -> build epoch
+declare -A IMAGE_TAGS=()    # project_key -> running tag
+declare -A IMAGE_BUILT=()   # project_key -> build epoch
 
 while IFS='|' read -r image created; do
     [ -z "$image" ] && continue
