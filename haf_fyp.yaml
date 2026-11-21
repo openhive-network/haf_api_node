@@ -313,8 +313,17 @@ services:
       POSTGREST_HOST: haf-fyp-postgrest
       POSTGREST_PORT: 3000
     healthcheck:
-      test: ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
-      interval: 10s
+      # nginx resolves its upstream once, at startup, and depends_on restarts it only when compose
+      # handles this service too, not after "up -d --no-deps <the PostgREST>": reload nginx, which
+      # resolves it again, whenever the PostgREST's addresses change.  Then probe nginx itself.
+      test:
+        - CMD-SHELL
+        - |
+          a=$$(getent ahosts haf-fyp-postgrest | awk '{print $$1}' | sort -u | xargs)
+          [ -z "$$a" ] || [ "$$a" = "$$(cat /tmp/upstream-addresses 2>/dev/null)" ] ||
+            { nginx -s reload && echo "$$a" > /tmp/upstream-addresses; }
+          wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1
+      interval: 5s
       timeout: 3s
       retries: 10
       start_period: 1m
