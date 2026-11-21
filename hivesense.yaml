@@ -99,6 +99,7 @@ services:
     environment:
       POSTGRES_HOST: haf
       HAF_APP_INSTALLED_VERSION_QUERY: SELECT runtime_hash FROM hivesense_app.version
+      HAF_APP_LOCK_POSTGREST_SERVICE: hivesense-postgrest
       HAF_APP_INSTALL_VERSION_ENV: HIVESENSE_GIT_HASH
     command:
       - install_app

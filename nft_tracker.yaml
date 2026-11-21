@@ -7,6 +7,7 @@ services:
     environment:
       POSTGRES_HOST: haf
       HAF_APP_INSTALLED_VERSION_QUERY: SELECT git_hash FROM nfttracker_app.version
+      HAF_APP_LOCK_POSTGREST_SERVICE: nft-tracker-postgrest
       HAF_APP_INSTALL_VERSION_ENV: NFTTRACKER_GIT_HASH
     # The install lock wrapper of common-ci-configuration#85, given this image's version: an
     # upgrade that the PostgREST's lock would skip fails instead (install_lock/README.md).
