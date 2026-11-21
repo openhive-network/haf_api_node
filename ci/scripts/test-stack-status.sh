@@ -5,6 +5,7 @@
 # Checks: on a hafbe stack without the standalone balance tracker, the hafbe_bal row shows
 # block-explorer-block-processing's status; on a standalone balance tracker stack, the
 # btracker_app row shows balance-tracker-block-processing's; with both, each shows its own.
+# The l2 and lite_* rows each show their own <service>-block-processing.
 # Also checks that the compose files still process the contexts in those services, and that
 # a stack running only third-party images still reaches the end of the report.
 # No docker needed.
@@ -39,6 +40,21 @@ service_commands haf_block_explorer.yaml block-explorer-block-processing | grep 
 service_commands balance_tracker.yaml balance-tracker-block-processing | grep -qx -- '--schema=btracker_app' ||
   fail "balance_tracker.yaml's balance-tracker-block-processing no longer processes btracker_app"
 echo "ok    compose files: hafbe_bal in block-explorer-block-processing, btracker_app in balance-tracker-block-processing"
+
+# The lite apps' contexts are named by their installs' --app-id defaults; l2_framework's
+# install takes no app id (its image names the context l2).
+for app in lite_account lite_posts lite_social; do
+  svc=${app//_/-}
+  service_commands "$app.yaml" "$svc-install" | grep -qx -- "--app-id=\${${app^^}_APP_ID:-$app}" ||
+    fail "$app.yaml's $svc-install no longer installs the $app context"
+  service_commands "$app.yaml" "$svc-block-processing" | grep -qx 'process_blocks' ||
+    fail "$app.yaml's $svc-block-processing no longer runs process_blocks"
+done
+service_commands l2_framework.yaml l2-framework-install | grep -q -- '--app-id' &&
+  fail "l2_framework.yaml's l2-framework-install now names its context; update stack_status.sh's l2 row"
+service_commands l2_framework.yaml l2-framework-block-processing | grep -qx 'process_blocks' ||
+  fail "l2_framework.yaml's l2-framework-block-processing no longer runs process_blocks"
+echo "ok    compose files: lite_account, lite_posts, lite_social and l2 each in their own block-processing"
 
 ######### Stand-in docker #########
 
@@ -136,6 +152,23 @@ report "block-explorer-block-processing balance-tracker-block-processing"
 expect_row hafbe_bal haf-block-explorer-block-processing-1
 expect_row btracker_app haf-balance-tracker-block-processing-1
 echo "ok    both: each balance tracker context shows its own container"
+
+######### lite apps #########
+
+printf 'l2\nlite_account\nlite_posts\nlite_social\nreptracker_app\n' > "$WORK/contexts"
+report "l2-framework-block-processing lite-account-block-processing lite-posts-block-processing lite-social-block-processing reputation-tracker-block-processing"
+expect_row l2 haf-l2-framework-block-processing-1
+expect_row lite_account haf-lite-account-block-processing-1
+expect_row lite_posts haf-lite-posts-block-processing-1
+expect_row lite_social haf-lite-social-block-processing-1
+grep -q "NOT RUNNING" "$WORK/report" && { cat "$WORK/report"; fail "lite stack reports a container NOT RUNNING"; }
+echo "ok    lite: l2 and each lite_* context show their own block-processing"
+
+printf 'l2\nhafbe_app\nhafbe_bal\n' > "$WORK/contexts"
+report "l2-framework-block-processing block-explorer-block-processing"
+expect_row l2 haf-l2-framework-block-processing-1
+for app in lite_account lite_posts lite_social; do expect_not_installed "$app"; done
+echo "ok    hafbe without lite: l2 shown, lite_* not installed"
 
 ######### a stopped processing container #########
 
