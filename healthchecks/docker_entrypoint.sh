@@ -3,18 +3,30 @@
 # Single-writer load-shed poller: computes the shared shed level the agent
 # check scripts read via shed_functions.sh (see checks/shed_poller.sh)
 /checks/shed_poller.sh &
+POLLER=$!
+PIDS=$POLLER
 
-nc -lk -p 7001 -e /checks/hived.sh &
-nc -lk -p 7002 -e /checks/hivemind.sh &
-nc -lk -p 7003 -e /checks/hafah.sh &
-nc -lk -p 7004 -e /checks/hafbe_btracker.sh &
-nc -lk -p 7005 -e /checks/hafbe.sh &
-nc -lk -p 7009 -e /checks/hafbe_reptracker.sh &
-nc -lk -p 7011 -e /checks/hivesense.sh &
-nc -lk -p 7013 -e /checks/nft_tracker.sh &
-nc -lk -p 7014 -e /checks/status.sh &
-nc -lk -p 7015 -e /checks/proxy_whitelist.sh &
-nc -lk -p 7016 -e /checks/haf_stats.sh &
-nc -lk -p 7017 -e /checks/haf_fyp.sh &
+listen() {
+  nc -lk -p "$1" -e "$2" &
+  PIDS="$PIDS $!"
+}
+
+listen 7001 /checks/hived.sh
+listen 7002 /checks/hivemind.sh
+listen 7003 /checks/hafah.sh
+listen 7004 /checks/hafbe_btracker.sh
+listen 7005 /checks/hafbe.sh
+listen 7009 /checks/hafbe_reptracker.sh
+listen 7011 /checks/hivesense.sh
+listen 7013 /checks/nft_tracker.sh
+listen 7014 /checks/status.sh
+listen 7015 /checks/proxy_whitelist.sh
+listen 7016 /checks/haf_stats.sh
+listen 7017 /checks/haf_fyp.sh
+
+# As PID 1 without docker-init, the shell would otherwise ignore SIGTERM.
+# The poller only acts on TERM once its foreground sleep/psql returns, so
+# signal that child too.
+trap 'kill -TERM $PIDS 2>/dev/null; pkill -TERM -P "$POLLER"; wait; exit 0' TERM INT
 
 wait
