@@ -79,8 +79,9 @@ THE PLAN (whole GB; all from postgresql_memory.sh):
 
   Other services are everything on the host but PostgreSQL's shared segment and the ARC: every
   container (the haf project's own included: hived, PostgreSQL's backends, the apps, the proxies)
-  and the processes outside containers.  Each cgroup counts memory.current minus its page cache
-  and shared memory (memory.stat's file), sampled once a second; the plan takes each one's peak.
+  and the processes outside containers.  Each cgroup counts memory.current minus its page cache,
+  shared memory and huge pages (memory.stat's file and hugetlb), sampled once a second; the plan
+  takes each one's peak.
   HAF_OTHER_SERVICES_GB and ZFS_ARC_MAX_GB are read from the environment or $SCRIPT_DIR/.env.
 
   --persist replaces the zfs_arc_max of each "options zfs" line in $MODPROBE_DIR/*.conf, or
@@ -102,14 +103,17 @@ gb() {
     awk -v bytes="$1" 'BEGIN { printf "%.1fGB", bytes / 1073741824 }'
 }
 
-# cgroup_used_bytes DIR prints the memory the cgroup DIR uses outside page cache and shared memory
-# (memory.current - memory.stat's file): ARC-backed file pages and PostgreSQL's shared segment have
-# their own places in the plan.  Returns 1 when the cgroup is gone.
+# cgroup_used_bytes DIR prints the memory the cgroup DIR uses outside page cache, shared memory and
+# huge pages (memory.current - memory.stat's file and hugetlb): ARC-backed file pages and
+# PostgreSQL's shared segment have their own places in the plan.  memory.stat has hugetlb only when
+# cgroup2 is mounted with memory_hugetlb_accounting, which charges huge pages to memory.current.
+# Returns 1 when the cgroup is gone.
 cgroup_used_bytes() {
-    local current file
+    local current file hugetlb
     current=$(cat "$1/memory.current" 2> /dev/null) || return 1
     file=$(awk '$1 == "file" { print $2 }' "$1/memory.stat" 2> /dev/null || true)
-    echo $((current - ${file:-0}))
+    hugetlb=$(awk '$1 == "hugetlb" { print $2 }' "$1/memory.stat" 2> /dev/null || true)
+    echo $((current - ${file:-0} - ${hugetlb:-0}))
 }
 
 # list_containers prints "ID NAME COMPOSE_PROJECT" for each running container
@@ -419,7 +423,7 @@ main() {
     if [[ -n $measured ]]; then
         local bytes mark name
         echo
-        echo "Other services, peak over ${seconds}s of memory.current minus page cache and shared memory (* = compose project $haf_project):"
+        echo "Other services, peak over ${seconds}s of memory.current minus page cache, shared memory and huge pages (* = compose project $haf_project):"
         while read -r bytes mark name; do
             if [[ $mark == - ]]; then mark=" "; fi
             printf '  %s %-50s %8s\n' "$mark" "$name" "$(gb "$bytes")"

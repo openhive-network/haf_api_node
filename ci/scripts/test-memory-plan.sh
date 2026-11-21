@@ -2,7 +2,8 @@
 #
 # Test memory_plan.sh on a fixture host (MEMORY_PLAN_ROOT): hbt5's 125GB with shared_buffers 62GB
 # and about 8GB of other services in cgroup v2 (haf project containers, a foreign container and
-# processes outside containers, beside 60GB of page cache and shared memory that do not count).
+# processes outside containers, beside 60GB of page cache and shared memory that do not count, and
+# with hugetlb accounting the huge pages of the shared segment).
 # Checks the plan and its per-container breakdown, that the plan alone changes nothing, the
 # HAF_OTHER_SERVICES_GB and ZFS_ARC_MAX_GB overrides, and --apply: a hand-set zfs_arc_max in
 # modprobe.d is kept without --force, replaced with it, and the huge pages are left alone while
@@ -43,11 +44,15 @@ export PATH="$WORK/stub:$PATH"
 ROOT="$WORK/root"
 CG="$ROOT/sys/fs/cgroup"
 
-# cgroup DIR USED FILE: a cgroup using USED bytes outside page cache and shared memory, and FILE in them
+# cgroup DIR USED FILE [HUGETLB]: a cgroup using USED bytes outside page cache and shared memory,
+# FILE in them and, with hugetlb accounting (memory.stat's hugetlb), HUGETLB in huge pages
 cgroup() {
   mkdir -p "$CG/$1"
-  echo $(($2 + $3)) > "$CG/$1/memory.current"
+  echo $(($2 + $3 + ${4:-0})) > "$CG/$1/memory.current"
   printf 'anon %s\nfile %s\nkernel 0\n' "$2" "$3" > "$CG/$1/memory.stat"
+  if [ -n "${4:-}" ]; then
+    echo "hugetlb $4" >> "$CG/$1/memory.stat"
+  fi
 }
 
 # reset: hbt5 with no override, nothing in modprobe.d, zfs_arc_max 0, no huge pages, haf stopped
@@ -113,6 +118,20 @@ expect "plan" "--apply keeps the boot-time 45097156608, taken as set by hand"
 expect "plan" "^Nothing was changed"
 [ "$(state)" = "$before" ] || fail "plan: changed the host"
 echo "ok: plan with the per-service breakdown, nothing changed"
+
+# hugetlb accounting (cgroup2's memory_hugetlb_accounting): the haf container's 63GB shared segment
+# in huge pages is charged to its memory.current and system.slice's, and counts as neither the
+# container's nor the processes outside containers'
+reset
+cgroup system.slice/docker-aaaa.scope $((5 * GiB)) $((6 * GiB)) $((63 * GiB))
+cgroup system.slice $((7 * GiB + GiB / 2)) $((6 * GiB + GiB / 2)) $((63 * GiB))
+plan "hugetlb accounting"
+expect "hugetlb accounting" "^  other services +10GB +measurement: 8\.0GB peak over 0s \+ 25%, at least 4GB$"
+expect "hugetlb accounting" "^  ZFS ARC limit +35GB +formula: 125GB RAM - 66GB shared segment"
+expect "hugetlb accounting" "^  \* haf-world-haf-1 +5\.0GB$"
+expect "hugetlb accounting" "^    \(processes outside containers\) +1\.0GB$"
+expect "hugetlb accounting" "^    total +8\.0GB$"
+echo "ok: huge pages charged with hugetlb accounting are not other services"
 
 # HAF_OTHER_SERVICES_GB replaces the measurement; ZFS_ARC_MAX_GB the result
 reset
