@@ -5,7 +5,8 @@
 # Checks: on a hafbe stack without the standalone balance tracker, the hafbe_bal row shows
 # block-explorer-block-processing's status; on a standalone balance tracker stack, the
 # btracker_app row shows balance-tracker-block-processing's; with both, each shows its own.
-# Also checks that the compose files still process the contexts in those services.
+# Also checks that the compose files still process the contexts in those services, and that
+# a stack running only third-party images still reaches the end of the report.
 # No docker needed.
 
 set -euo pipefail
@@ -45,7 +46,8 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/bin"
 
-# $STUB_DIR/containers: the running containers (name|status); $STUB_DIR/contexts: the HAF contexts.
+# $STUB_DIR/containers: the running containers (name|status); $STUB_DIR/contexts: the HAF contexts;
+# $STUB_DIR/images: the running containers' images (repo tag|created).
 cat > "$WORK/bin/docker" << 'EOF'
 #!/usr/bin/env bash
 case "$1" in
@@ -56,13 +58,13 @@ case "$1" in
         args=$*; name=${args#*name=^}; name=${name%%\$*}
         grep "^$name|" "$STUB_DIR/containers" | cut -d'|' -f2 ;;
       *'{{.Names}}|{{.Status}}'*) cat "$STUB_DIR/containers" ;;
-      *'{{.Image}}'*) echo registry.hive.blog/haf:0102968a ;;
+      *'{{.Image}}'*) cut -d'|' -f1 "$STUB_DIR/images" ;;
       *'{{.Names}}'*) cut -d'|' -f1 "$STUB_DIR/containers" ;;
     esac ;;
   inspect)
     case "$*" in
       *com.docker.compose.project*) echo haf ;;
-      *RepoTags*) echo 'registry.hive.blog/haf:0102968a|2026-11-20T00:00:00Z' ;;
+      *RepoTags*) cat "$STUB_DIR/images" ;;
       *StartedAt*) echo 2026-11-21T05:00:00Z ;;
     esac ;;
   exec)
@@ -78,6 +80,7 @@ case "$1" in
 esac
 EOF
 chmod +x "$WORK/bin/docker"
+echo 'registry.hive.blog/haf:0102968a|2026-11-20T00:00:00Z' > "$WORK/images"
 
 # Runs stack_status.sh on the stand-in stack; $1: the running block-processing services.
 report() {
@@ -140,5 +143,14 @@ printf 'hafbe_app\nhafbe_bal\n' > "$WORK/contexts"
 report ""
 app_row hafbe_bal | grep -qx "    Status:    NOT RUNNING" || { cat "$WORK/report"; fail "a stopped block-explorer-block-processing is not NOT RUNNING"; }
 echo "ok    stopped: hafbe_bal shows NOT RUNNING"
+
+######### only third-party images #########
+
+printf 'ankane/pghero:v3.6.1|2026-10-01T00:00:00Z\nvarnish:7.6|2026-10-02T00:00:00Z\n' > "$WORK/images"
+printf 'hafbe_app\nhafbe_bal\n' > "$WORK/contexts"
+report "block-explorer-block-processing"
+grep -qx -- "--- End of report ---" "$WORK/report" || { cat "$WORK/report"; fail "third-party-only stack does not reach the end of the report"; }
+grep -q "Version vs develop" "$WORK/report" && { cat "$WORK/report"; fail "third-party-only stack reports a version comparison"; }
+echo "ok    third-party images only: the report completes"
 
 echo "PASS stack_status"
