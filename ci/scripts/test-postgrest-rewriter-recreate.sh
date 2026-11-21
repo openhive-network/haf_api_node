@@ -3,14 +3,18 @@
 # Test that each PostgREST rewriter follows its PostgREST container when compose recreates or
 # restarts it.  Brings up the hafah and reputation tracker PostgREST + rewriter pairs from the stack's
 # own hafah.yaml and reputation_tracker.yaml, with an override that keeps the rewriters' depends_on
-# but swaps the images for nginx stubs: each "PostgREST" answers GET / with an OpenAPI document
-# titled after its app, and each "rewriter" proxies to its PostgREST by name with no resolver, so,
-# like the real rewriter images, it resolves the address once when nginx starts.
+# and healthcheck but swaps the images for nginx stubs: each "PostgREST" answers GET / with an
+# OpenAPI document titled after its app, and each "rewriter" proxies to its PostgREST by name with no
+# resolver, so, like the real rewriter images, it resolves the address once when nginx starts.
 # The PostgREST stubs get fixed addresses, and "docker compose up -d" with a changed environment
 # variable both share recreates them twice so that they end up on each other's first address, as on
 # steem-20; every rewriter must answer with its own app's title after each step.  Then
-# "docker compose restart hafah-postgrest" must restart hafah's rewriter too.  A control run first
-# drops the rewriters' "restart: true" and must see every rewriter answer with the other app.
+# "docker compose restart hafah-postgrest" must restart hafah's rewriter too.  Last, the PostgREST
+# services are swapped the same way by "up -d --no-deps --force-recreate", which leaves the rewriters
+# alone: within NO_DEPS_TIMEOUT every rewriter must answer with its own app again, by its healthcheck
+# reloading nginx, without having been restarted.  Two control runs first drop the rewriters'
+# "restart: true" and the healthcheck's reload, then the reload alone for the --no-deps swap, and
+# must see every rewriter answer with the other app.
 # Needs a docker daemon; skips (exit 0) with the reason when there is none.
 
 set -euo pipefail
@@ -19,10 +23,14 @@ REPO_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 STUB_IMAGE=${STUB_IMAGE:-nginx:alpine}
 # The rewriter's start after its PostgREST is recreated, plus slack.
 ANSWER_TIMEOUT=${ANSWER_TIMEOUT:-30}
+# The rewriter's healthcheck interval, which reloads nginx, plus slack.
+NO_DEPS_TIMEOUT=${NO_DEPS_TIMEOUT:-15}
 
 # "<rewriter> <postgrest> <OpenAPI title>" for each pair under test.
 PAIRS="hafah-postgrest-rewriter hafah-postgrest HAfAH
 reputation-tracker-postgrest-rewriter reputation-tracker-postgrest Reputation_tracker"
+# The installs the rewriters also depend on.
+INSTALLS="hafah-install reputation-tracker-install"
 
 skip() {
   echo "SKIP postgrest-rewriter-recreate: $*"
@@ -86,11 +94,21 @@ ip_var() {
 
 ######### Stub override #########
 
-# The PostgREST stubs drop their install and pgbouncer dependencies; the rewriters keep the
-# depends_on the stack files give them.  STUB_GENERATION stands for an environment variable the
-# PostgREST services share (#91's PGRST_DB_PREPARED_STATEMENTS).
+# The PostgREST stubs drop their install and pgbouncer dependencies, and the installs, which the
+# rewriters depend on too, just succeed; the rewriters keep the depends_on the stack files give them.
+# STUB_GENERATION stands for an environment variable the PostgREST services share (#91's
+# PGRST_DB_PREPARED_STATEMENTS).
 {
   echo "services:"
+  for install in $INSTALLS; do
+    cat <<EOF
+  $install:
+    image: $STUB_IMAGE
+    command: !override ["true"]
+    volumes: !reset []
+    depends_on: !reset {}
+EOF
+  done
   while read -r rewriter postgrest title; do
     cat <<EOF
   $postgrest:
@@ -138,7 +156,6 @@ ip_var() {
         CONF
         exec nginx -g 'daemon off;'
     healthcheck:
-      interval: 1s
       start_period: 0s
 EOF
   done <<< "$PAIRS"
@@ -150,7 +167,18 @@ networks:
 EOF
 } > "$WORK/stubs.yaml"
 
-# The control: the same depends_on without restart: true, as before the fix.
+# The controls: the healthcheck without its reload, and the same depends_on without restart: true,
+# as before the fixes.
+{
+  echo "services:"
+  while read -r rewriter _ _; do
+    cat <<EOF
+  $rewriter:
+    healthcheck:
+      test: !override ["CMD-SHELL", "wget --timeout=2 -nv -t1 --spider 127.0.0.1:81/health || exit 1"]
+EOF
+  done <<< "$PAIRS"
+} > "$WORK/no-reload.yaml"
 {
   echo "services:"
   while read -r rewriter postgrest _; do
@@ -164,6 +192,7 @@ EOF
 } > "$WORK/no-restart.yaml"
 
 REWRITERS=$(cut -d' ' -f1 <<< "$PAIRS" | tr '\n' ' ')
+POSTGRESTS=$(cut -d' ' -f2 <<< "$PAIRS" | tr '\n' ' ')
 
 ######### Helpers #########
 
@@ -184,6 +213,17 @@ up() {
   # shellcheck disable=SC2086 # one argument per service
   STUB_GENERATION=$generation compose up -d --wait $REWRITERS >"$WORK/up.log" 2>&1 ||
     fail "up -d (generation $generation) failed: $(tail -5 "$WORK/up.log")"
+}
+
+# up_no_deps GENERATION HOST...: "up -d --no-deps --force-recreate" of the PostgREST services alone,
+# placed on HOST....
+up_no_deps() {
+  local generation=$1
+  shift
+  place "$@"
+  # shellcheck disable=SC2086 # one argument per service
+  STUB_GENERATION=$generation compose up -d --no-deps --force-recreate --wait $POSTGRESTS >"$WORK/up.log" 2>&1 ||
+    fail "up -d --no-deps (generation $generation) failed: $(tail -5 "$WORK/up.log")"
 }
 
 # answer REWRITER: the OpenAPI title (or the error) the rewriter answers GET / with.
@@ -227,14 +267,36 @@ $wrong"
   done
 }
 
-# swap: recreate the PostgREST services via free addresses onto each other's first one.
+# swap UP [WHAT]: recreate the PostgREST services with UP via free addresses onto each other's
+# current one; with WHAT, every rewriter must follow the first move.
 swap() {
-  local first
+  local first a b
   first=$(postgrest_ips)
-  up 2 12 13
-  [ -z "${1:-}" ] || all_answer_own "$1 (PostgREST moved to $(postgrest_ips))"
-  up 3 11 10
+  read -r a b <<< "$(sed -E 's/[^ ]*\.([0-9]+) ?/\1 /g' <<< "$first")"
+  "$1" 2 12 13
+  [ -z "${2:-}" ] || all_answer_own "$2 (PostgREST moved to $(postgrest_ips))"
+  "$1" 3 "$b" "$a"
   echo "      PostgREST swapped: $first-> $(postgrest_ips)"
+}
+
+# all_answer_other WHAT: every rewriter answers with something other than its own app.
+all_answer_other() {
+  local right="" rewriter title got
+  while read -r rewriter _ title; do
+    got=$(answer "$rewriter")
+    echo "      $rewriter answers \"$got\" (its app: $title)"
+    [ "$got" != "$title" ] || right+=" $rewriter"
+  done <<< "$PAIRS"
+  [ -z "$right" ] || fail "$1:$right still answer with their own app, so the test cannot see the bug"
+  echo "ok    $1, every rewriter answers wrongly"
+}
+
+# started_at: each rewriter's last start.
+started_at() {
+  local rewriter
+  while read -r rewriter _ _; do
+    printf '%s=%s ' "$rewriter" "$(inspect "$rewriter" "c['State']['StartedAt']")"
+  done <<< "$PAIRS"
 }
 
 ######### The stack's depends_on #########
@@ -251,23 +313,28 @@ for line in sys.argv[2].splitlines():
     dep = services[rewriter].get("depends_on", {}).get(postgrest, {})
     if dep.get("condition") != "service_healthy" or dep.get("restart") is not True:
         sys.exit(f"{rewriter} depends_on {postgrest}: {dep}")
+    test = " ".join(services[rewriter]["healthcheck"]["test"])
+    if f"getent ahosts {postgrest} " not in test or "nginx -s reload" not in test:
+        sys.exit(f"{rewriter}'s healthcheck does not reload nginx on {postgrest}'s addresses: {test}")
 EOF
-echo "ok    every rewriter depends on its PostgREST with restart: true"
+echo "ok    every rewriter depends on its PostgREST with restart: true and reloads on its addresses"
 
-######### Control: without restart: true #########
+######### Controls: without restart: true and the reload, without the reload #########
 
-EXTRA_FILES=("$WORK/no-restart.yaml")
+EXTRA_FILES=("$WORK/no-reload.yaml" "$WORK/no-restart.yaml")
 up 1 10 11
 all_answer_own "control: every rewriter answers with its own app at start"
-swap
-right=""
-while read -r rewriter _ title; do
-  got=$(answer "$rewriter")
-  echo "      $rewriter answers \"$got\" (its app: $title)"
-  [ "$got" != "$title" ] || right+=" $rewriter"
-done <<< "$PAIRS"
-[ -z "$right" ] || fail "control: without restart: true,$right still answer with their own app, so the test cannot see the bug"
-echo "ok    control: without restart: true, every rewriter answers wrongly"
+swap up
+all_answer_other "control: without restart: true or the reload"
+down || fail "down failed"
+
+EXTRA_FILES=("$WORK/no-reload.yaml")
+up 1 10 11
+all_answer_own "control: every rewriter answers with its own app at start"
+swap up_no_deps
+# Give a reload, were there one, the time the real case allows.
+sleep "$NO_DEPS_TIMEOUT"
+all_answer_other "control: PostgREST swapped by up -d --no-deps, without the reload"
 down || fail "down failed"
 
 ######### With the stack's depends_on #########
@@ -275,7 +342,7 @@ down || fail "down failed"
 EXTRA_FILES=()
 up 1 10 11
 all_answer_own "every rewriter answers with its own app at start"
-swap "PostgREST recreated by up -d, every rewriter follows"
+swap up "PostgREST recreated by up -d, every rewriter follows"
 all_answer_own "PostgREST swapped by up -d, every rewriter follows"
 
 started=$(inspect hafah-postgrest-rewriter "c['State']['StartedAt']")
@@ -283,5 +350,11 @@ compose restart hafah-postgrest >/dev/null 2>&1 || fail "restart hafah-postgrest
 [ "$(inspect hafah-postgrest-rewriter "c['State']['StartedAt']")" != "$started" ] ||
   fail "restart hafah-postgrest did not restart hafah-postgrest-rewriter"
 all_answer_own "hafah-postgrest restarted, its rewriter restarted with it"
+
+started=$(started_at)
+ANSWER_TIMEOUT=$NO_DEPS_TIMEOUT swap up_no_deps "PostgREST recreated by up -d --no-deps, every rewriter reloads"
+ANSWER_TIMEOUT=$NO_DEPS_TIMEOUT all_answer_own "PostgREST swapped by up -d --no-deps, every rewriter reloads"
+[ "$(started_at)" = "$started" ] || fail "up -d --no-deps restarted a rewriter: $started-> $(started_at)"
+echo "ok    up -d --no-deps left every rewriter running"
 
 echo "PASS postgrest-rewriter-recreate"
