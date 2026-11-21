@@ -23,7 +23,8 @@ ROOT="${MEMORY_PLAN_ROOT:-/}"
 CGROUP_DIR="${ROOT%/}/sys/fs/cgroup"
 ZFS_ARC_MAX_PARAM="${ROOT%/}/sys/module/zfs/parameters/zfs_arc_max"
 MODPROBE_DIR="${ROOT%/}/etc/modprobe.d"
-# written by --persist only when no file in MODPROBE_DIR sets zfs_arc_max yet
+# written by --persist when no "options zfs" line in MODPROBE_DIR sets zfs_arc_max (it replaces the
+# value of those that do)
 MODPROBE_FILE=haf-zfs-arc-max.conf
 GIB=1073741824
 
@@ -65,7 +66,8 @@ OPTIONS:
                         /etc/sysctl.d)
     --arc-only          With --apply: only zfs_arc_max, leave the huge pages as they are
     --force             With --apply: replace a zfs_arc_max in $MODPROBE_DIR that differs from
-                        the plan (without it, such a value is kept as set by hand)
+                        the plan (without it, such a value is kept as set by hand, or refused
+                        when it overcommits RAM)
     --sample-seconds N  Measure other services over N seconds (default 10; 0 takes one sample)
     --help              Show this help message
 
@@ -88,6 +90,9 @@ THE PLAN (whole GB; all from postgresql_memory.sh):
   writes $MODPROBE_DIR/$MODPROBE_FILE when there is none, and updates the initramfs when it loads
   zfs.  A zfs_arc_max there that differs from the plan is taken as set by hand: --apply leaves it,
   and the runtime limit, alone and says so, unless --force is given or ZFS_ARC_MAX_GB is set.
+  When that ARC limit, the huge pages (the plan's or vm.nr_hugepages, whichever is more) and the
+  kernel, dirty-page and other-services reserves add up to more than RAM, --apply refuses to keep
+  it and exits non-zero, changing nothing: the next boot would overcommit RAM.
 
 EXAMPLES:
     sudo $0
@@ -262,14 +267,22 @@ report_boot_arc_max() {
     fi
 }
 
-# apply_arc_max ARC_MAX_BYTES PERSIST FORCE: set zfs_arc_max now (and at boot with PERSIST), or
-# keep a hand-set boot-time value and the runtime limit as they are
+# apply_arc_max ARC_MAX_BYTES PERSIST FORCE OVERCOMMIT: set zfs_arc_max now (and at boot with
+# PERSIST), or keep a hand-set boot-time value and the runtime limit as they are.  OVERCOMMIT is
+# pg_overcommit_check's line when the boot-time value overcommits RAM (empty when it fits): a
+# hand-set value that does is refused (returns 1, nothing changed).
 apply_arc_max() {
-    local plan=$1 persist=$2 force=$3 kept live
+    local plan=$1 persist=$2 force=$3 overcommit=$4 kept live file
     live=$(cat "$ZFS_ARC_MAX_PARAM")
     kept=$(hand_set_arc_max "$plan" "$force")
     if [[ -n $kept ]]; then
-        print_warning "Kept zfs_arc_max=$kept ($(gb "$kept")) in $MODPROBE_DIR, which differs from the plan's $plan ($(gb "$plan")): taken as set by hand"
+        file=$(pg_modprobe_zfs_arc_max_file "$MODPROBE_DIR")
+        if [[ -n $overcommit ]]; then
+            print_error "Refusing to keep zfs_arc_max=$kept ($(gb "$kept")) in $file, which differs from the plan's $plan ($(gb "$plan")): $overcommit"
+            print_error "To replace it with the plan's $plan, now and at boot: sudo $0 --apply --persist --force; to make another value the plan: ZFS_ARC_MAX_GB in .env"
+            return 1
+        fi
+        print_warning "Kept zfs_arc_max=$kept ($(gb "$kept")) in $file, which differs from the plan's $plan ($(gb "$plan")): taken as set by hand"
         print_warning "The runtime zfs_arc_max stays at $live too.  To replace both with the plan: --force; to make a value the plan: ZFS_ARC_MAX_GB in .env"
         if [[ $live -eq 0 || $live -gt $kept ]]; then
             print_warning "The runtime zfs_arc_max ($live) is larger than the kept boot-time $kept"
@@ -298,7 +311,7 @@ haf_running() {
     [[ -n $(docker ps -q --filter "label=com.docker.compose.project=$1" --filter label=com.docker.compose.service=haf 2> /dev/null) ]]
 }
 
-# apply_huge_pages TARGET CURRENT PERSIST HAF_PROJECT: reserve the plan's huge pages
+# apply_huge_pages TARGET CURRENT PERSIST HAF_PROJECT OTHER_SERVICES_GB: reserve the plan's huge pages
 # (reserve_huge_pages.sh).  While haf runs, its PostgreSQL holds its shared segment in the pages
 # it started with, so a changed reservation is left for when haf is stopped.
 apply_huge_pages() {
@@ -309,7 +322,8 @@ apply_huge_pages() {
         print_warning "To reserve them: docker compose stop haf && sudo $0 --apply ${args[*]} && docker compose start haf"
         return 0
     fi
-    if ! "$SCRIPT_DIR/reserve_huge_pages.sh" "${args[@]}"; then
+    # its overcommit check counts the other services this plan does
+    if ! HAF_OTHER_SERVICES_GB=$5 "$SCRIPT_DIR/reserve_huge_pages.sh" "${args[@]}"; then
         print_error "The huge pages were not reserved (see above); zfs_arc_max is handled as reported before"
         return 1
     fi
@@ -420,6 +434,15 @@ main() {
     row "huge pages" "$huge_pages" "formula: the shared segment in ${huge_page_kb}kB pages"
     row "effective_cache_size" "${ecs}GB" "formula: shared_buffers + the ARC limit, at most RAM (set by the haf container)"
 
+    # the huge pages held at boot: the plan's, or more when more are reserved
+    local current_huge_pages held_huge_pages check
+    current_huge_pages=$(cat "${ROOT%/}/proc/sys/vm/nr_hugepages")
+    held_huge_pages=$huge_pages
+    if [[ $current_huge_pages -gt $huge_pages ]]; then held_huge_pages=$current_huge_pages; fi
+    if ! check=$(pg_overcommit_check "$total_kb" "$arc_bytes" "$held_huge_pages" "$huge_page_kb" "$other"); then
+        print_warning "The plan overcommits RAM: $check"
+    fi
+
     if [[ -n $measured ]]; then
         local bytes mark name
         echo
@@ -433,7 +456,7 @@ main() {
 
     echo
     echo "Now:"
-    local zfs=false live boot kept current_huge_pages
+    local zfs=false live boot kept overcommit=
     if [[ -f $ZFS_ARC_MAX_PARAM ]]; then
         zfs=true
         live=$(cat "$ZFS_ARC_MAX_PARAM")
@@ -451,14 +474,25 @@ main() {
         echo "  zfs_arc_max (plan)     $arc_bytes"
         # the check the haf container makes at every start, against this plan
         echo "  $(pg_zfs_arc_check "$ROOT" "$total_kb" "$sb" "$live" "$other" "$ARC_OVERRIDE" || true)"
+        if check=$(pg_overcommit_check "$total_kb" "$(pg_zfs_arc_bytes "$ROOT" "$boot")" "$held_huge_pages" "$huge_page_kb" "$other"); then
+            echo "  At boot: $check"
+        else
+            overcommit=$check
+            print_warning "At boot: $check"
+        fi
         kept=$(hand_set_arc_max "$arc_bytes" "$force")
         if [[ $apply == false && -n $kept ]]; then
-            echo "  --apply keeps the boot-time $kept, taken as set by hand, and the runtime limit (--force replaces them)"
+            if [[ -n $overcommit ]]; then
+                echo "  --apply refuses to keep the boot-time $kept, which overcommits RAM (--force replaces it with the plan's)"
+            else
+                echo "  --apply keeps the boot-time $kept, taken as set by hand, and the runtime limit (--force replaces them)"
+            fi
+        elif [[ $apply == false && -n $overcommit ]]; then
+            echo "  --apply --persist makes the plan's $arc_bytes the boot-time limit"
         fi
     else
         echo "  ZFS module not loaded: there is no ARC limit to set"
     fi
-    current_huge_pages=$(cat "${ROOT%/}/proc/sys/vm/nr_hugepages")
     echo "  vm.nr_hugepages        $current_huge_pages (plan: $huge_pages)"
     if [[ $current_huge_pages -gt $huge_pages ]]; then
         print_warning "More huge pages are reserved than the shared segment needs; the plan does not count the excess"
@@ -472,12 +506,12 @@ main() {
 
     echo
     if [[ $zfs == true ]]; then
-        apply_arc_max "$arc_bytes" "$persist" "$force"
+        apply_arc_max "$arc_bytes" "$persist" "$force" "$overcommit"
     fi
     if [[ $arc_only == true ]]; then
         print_info "Huge pages left as they are (--arc-only)"
     else
-        apply_huge_pages "$huge_pages" "$current_huge_pages" "$persist" "$haf_project"
+        apply_huge_pages "$huge_pages" "$current_huge_pages" "$persist" "$haf_project" "$other"
     fi
 }
 

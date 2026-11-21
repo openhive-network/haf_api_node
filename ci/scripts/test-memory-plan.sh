@@ -7,7 +7,9 @@
 # Checks the plan and its per-container breakdown, that the plan alone changes nothing, the
 # HAF_OTHER_SERVICES_GB and ZFS_ARC_MAX_GB overrides, and --apply: a hand-set zfs_arc_max in
 # modprobe.d is kept without --force, replaced with it, and the huge pages are left alone while
-# haf runs.  docker and reserve_huge_pages.sh are stand-ins.  No root needed.
+# haf runs.  On steem-20's 121GB, a stale 83GB zfs_arc_max beside 63GB of huge pages overcommits
+# RAM: --apply refuses to keep it (also by way of reduce_writebacks.sh --zfs-only), and
+# reserve_huge_pages.sh warns.  docker and reserve_huge_pages.sh are stand-ins.  No root needed.
 
 set -euo pipefail
 
@@ -96,7 +98,7 @@ state() {
 }
 
 reset
-printf 'options zfs zfs_arc_max=%s\n' $((42 * GiB)) > "$ROOT/etc/modprobe.d/zfs.conf"
+printf 'options zfs zfs_arc_max=%s\n' $((30 * GiB)) > "$ROOT/etc/modprobe.d/zfs.conf"
 before=$(state)
 plan "plan"
 expect "plan" "^  RAM +125GB +measurement"
@@ -111,10 +113,11 @@ expect "plan" "^  \* haf-world-hivemind-1 +1\.0GB$"
 expect "plan" "^    haproxy-front-1 +1\.0GB$"
 expect "plan" "^    \(processes outside containers\) +1\.0GB$"
 expect "plan" "^    total +8\.0GB$"
-expect "plan" "^  zfs_arc_max \(at boot\)  45097156608 \(42\.0GB\)"
+expect "plan" "^  zfs_arc_max \(at boot\)  32212254720 \(30\.0GB\)"
 # the haf container's start-up check, against the plan: ZFS 2.2's default is half of RAM
 expect "plan" "^  ZFS ARC limit 63GB \(zfs_arc_max = 0, ZFS's default .* 24GB kernel, dirty-page and other-services reserves = 153GB, .* is 35GB"
-expect "plan" "--apply keeps the boot-time 45097156608, taken as set by hand"
+expect "plan" "^  At boot: ZFS ARC limit 30\.0GB \+ 66\.0GB of huge pages \(33792 x 2048kB\) \+ 24GB kernel, dirty-page and other-services reserves = 120\.0GB, within the 125\.7GB of RAM$"
+expect "plan" "--apply keeps the boot-time 32212254720, taken as set by hand"
 expect "plan" "^Nothing was changed"
 [ "$(state)" = "$before" ] || fail "plan: changed the host"
 echo "ok: plan with the per-service breakdown, nothing changed"
@@ -143,6 +146,7 @@ echo ZFS_ARC_MAX_GB=42 >> "$BIN/.env"
 plan "ZFS_ARC_MAX_GB"
 expect "ZFS_ARC_MAX_GB" "^  ZFS ARC limit +42GB +override: ZFS_ARC_MAX_GB \(the formula gives 25GB\)$"
 expect "ZFS_ARC_MAX_GB" "^  effective_cache_size +104GB"
+expect "ZFS_ARC_MAX_GB" "The plan overcommits RAM: ZFS ARC limit 42\.0GB \+ 66\.0GB of huge pages .* = 142\.0GB, more than the 125\.7GB of RAM$"
 echo "ok: HAF_OTHER_SERVICES_GB and ZFS_ARC_MAX_GB overrides"
 
 # no cgroup v2 hierarchy: the fixed safety margin
@@ -153,23 +157,24 @@ expect "unmeasured" "^  other services +10GB +not measured \(no cgroup v2 hierar
 expect "unmeasured" "10GB safety margin$"
 echo "ok: no cgroup v2: the fixed safety margin"
 
-# hbt5's hand-set 42GB in modprobe.d is kept, with the runtime limit, without --force
+# a hand-set 30GB in modprobe.d, which fits beside the huge pages, is kept, with the runtime limit,
+# without --force
 reset
-printf '# set by hand after swapping\noptions zfs zfs_arc_max=%s\n' $((42 * GiB)) > "$ROOT/etc/modprobe.d/haf-zfs-arc-max.conf"
-echo $((42 * GiB)) > "$ROOT/sys/module/zfs/parameters/zfs_arc_max"
+printf '# set by hand after swapping\noptions zfs zfs_arc_max=%s\n' $((30 * GiB)) > "$ROOT/etc/modprobe.d/haf-zfs-arc-max.conf"
+echo $((30 * GiB)) > "$ROOT/sys/module/zfs/parameters/zfs_arc_max"
 plan "--apply --persist, hand-set" --apply --persist
-expect "--apply --persist, hand-set" "Kept zfs_arc_max=45097156608 \(42\.0GB\) in .*modprobe.d, which differs from the plan's 37580963840 \(35\.0GB\): taken as set by hand"
-grep -q "^options zfs zfs_arc_max=45097156608$" "$ROOT/etc/modprobe.d/haf-zfs-arc-max.conf" || fail "hand-set: modprobe.d changed"
+expect "--apply --persist, hand-set" "Kept zfs_arc_max=32212254720 \(30\.0GB\) in .*modprobe.d/haf-zfs-arc-max.conf, which differs from the plan's 37580963840 \(35\.0GB\): taken as set by hand"
+grep -q "^options zfs zfs_arc_max=32212254720$" "$ROOT/etc/modprobe.d/haf-zfs-arc-max.conf" || fail "hand-set: modprobe.d changed"
 grep -q "^# set by hand after swapping$" "$ROOT/etc/modprobe.d/haf-zfs-arc-max.conf" || fail "hand-set: modprobe.d comment lost"
-[ "$(cat "$ROOT/sys/module/zfs/parameters/zfs_arc_max")" = 45097156608 ] || fail "hand-set: runtime zfs_arc_max changed"
+[ "$(cat "$ROOT/sys/module/zfs/parameters/zfs_arc_max")" = 32212254720 ] || fail "hand-set: runtime zfs_arc_max changed"
 [ "$(cat "$WORK/reserve.log")" = "reserve_huge_pages.sh --persist" ] || fail "hand-set: huge pages not reserved"
-echo "ok: --apply --persist keeps a hand-set zfs_arc_max"
+echo "ok: --apply --persist keeps a hand-set zfs_arc_max that fits"
 
 # ZFS_ARC_MAX_GB matching it: the plan is the hand-set value, nothing to replace
-echo ZFS_ARC_MAX_GB=42 >> "$BIN/.env"
-plan "--apply --persist, ZFS_ARC_MAX_GB=42" --apply --persist
-expect "--apply --persist, ZFS_ARC_MAX_GB=42" "zfs_arc_max is already 45097156608"
-expect "--apply --persist, ZFS_ARC_MAX_GB=42" "At boot: zfs_arc_max=45097156608 in .* already"
+echo ZFS_ARC_MAX_GB=30 >> "$BIN/.env"
+plan "--apply --persist, ZFS_ARC_MAX_GB=30" --apply --persist
+expect "--apply --persist, ZFS_ARC_MAX_GB=30" "zfs_arc_max is already 32212254720"
+expect "--apply --persist, ZFS_ARC_MAX_GB=30" "At boot: zfs_arc_max=32212254720 in .* already"
 echo "ok: ZFS_ARC_MAX_GB matching the hand-set value"
 
 # --force replaces it, now and at boot
@@ -203,6 +208,67 @@ rm "$WORK/haf-running"
 plan "--apply --arc-only" --apply --arc-only
 [ ! -e "$WORK/reserve.log" ] || fail "--arc-only: reserve_huge_pages.sh called"
 echo "ok: huge pages left alone while haf runs and with --arc-only"
+
+# steem-20: 121GB, shared_buffers 60GB in 63GB of huge pages reserved at boot, and a stale
+# zfs_arc_max of 83GB in modprobe.d (the plan's is 34GB)
+steem20() {
+  reset
+  printf 'MemTotal:       127000000 kB\nMemAvailable:   40000000 kB\nHugepagesize:       2048 kB\n' > "$ROOT/proc/meminfo"
+  echo 32256 > "$ROOT/proc/sys/vm/nr_hugepages"
+  echo 89120571392 > "$ROOT/sys/module/zfs/parameters/zfs_arc_max"
+  printf 'options zfs zfs_arc_max=89120571392\n' > "$ROOT/etc/modprobe.d/zfs.conf"
+}
+OVERCOMMIT="ZFS ARC limit 83\.0GB \+ 63\.0GB of huge pages \(32256 x 2048kB\) \+ 24GB kernel, dirty-page and other-services reserves = 170\.0GB, more than the 121\.1GB of RAM"
+steem20
+before=$(state)
+plan "steem-20 plan"
+expect "steem-20 plan" "^  ZFS ARC limit +34GB +formula: 121GB RAM - 63GB shared segment"
+expect "steem-20 plan" "\[WARNING\].* At boot: $OVERCOMMIT$"
+expect "steem-20 plan" "--apply refuses to keep the boot-time 89120571392, which overcommits RAM"
+[ "$(state)" = "$before" ] || fail "steem-20 plan: changed the host"
+
+# plan_refused NAME COMMAND...: COMMAND exits non-zero naming the file and both values, and changes
+# nothing
+plan_refused() {
+  local name=$1
+  shift
+  if MEMORY_PLAN_ROOT="$ROOT" POSTGRESQL_SHARED_BUFFERS_GB='' HAF_OTHER_SERVICES_GB='' ZFS_ARC_MAX_GB='' PROJECT_NAME='' \
+    "$@" > "$WORK/out" 2>&1; then
+    fail "$name: kept the stale zfs_arc_max ($(cat "$WORK/out"))"
+  fi
+  expect "$name" "\[ERROR\].* Refusing to keep zfs_arc_max=89120571392 \(83\.0GB\) in .*/etc/modprobe\.d/zfs\.conf, which differs from the plan's 36507222016 \(34\.0GB\): $OVERCOMMIT$"
+  expect "$name" "sudo .* --apply --persist --force; to make another value the plan: ZFS_ARC_MAX_GB in .env$"
+  [ "$(state)" = "$before" ] || fail "$name: changed the host"
+}
+plan_refused "steem-20 --apply --arc-only --persist" "$BIN/memory_plan.sh" --sample-seconds 0 --apply --arc-only --persist
+plan_refused "steem-20 --apply" "$BIN/memory_plan.sh" --sample-seconds 0 --apply
+# reduce_writebacks.sh --zfs-only runs memory_plan.sh --apply --arc-only (without root here: its
+# own root check is all it would add)
+cp "$REPO_DIR/reduce_writebacks.sh" "$BIN/"
+sed -i 's/^    check_root "\$@"$/    : check_root/' "$BIN/reduce_writebacks.sh"
+plan_refused "steem-20 reduce_writebacks.sh --zfs-only --persist" "$BIN/reduce_writebacks.sh" --zfs-only --persist
+echo "ok: steem-20's stale zfs_arc_max overcommits RAM: reported, and refused by --apply"
+
+plan "steem-20 --force" --apply --arc-only --persist --force
+expect "steem-20 --force" "zfs.conf: zfs_arc_max changed from 89120571392 to 36507222016"
+plan "steem-20 fixed"
+expect "steem-20 fixed" "^  At boot: ZFS ARC limit 34\.0GB \+ 63\.0GB of huge pages .* = 121\.0GB, within the 121\.1GB of RAM$"
+if grep -q "overcommit" "$WORK/out"; then fail "steem-20 fixed: still reports an overcommit"; fi
+echo "ok: steem-20 with the plan's zfs_arc_max: no overcommit"
+
+# reserve_huge_pages.sh warns about the stale boot-time limit beside its reservation
+RHP="$WORK/reserve"
+mkdir -p "$RHP"
+cp "$REPO_DIR/reserve_huge_pages.sh" "$REPO_DIR/postgresql_memory.sh" "$RHP/"
+steem20
+MEMORY_PLAN_ROOT="$ROOT" POSTGRESQL_SHARED_BUFFERS_GB='' HAF_OTHER_SERVICES_GB='' "$RHP/reserve_huge_pages.sh" --dry-run > "$WORK/out" 2>&1 \
+  || fail "reserve_huge_pages.sh --dry-run: exited $? ($(cat "$WORK/out"))"
+expect "reserve_huge_pages.sh" "\[WARNING\].* At boot: ZFS ARC limit 83\.0GB \+ 63\.0GB of huge pages \(32256 x 2048kB\) \+ 24GB kernel, dirty-page and safety reserves = 170\.0GB, more than the 121\.1GB of RAM \(zfs_arc_max=89120571392 in .*/zfs\.conf\)$"
+printf 'options zfs zfs_arc_max=%s\n' $((34 * GiB)) > "$ROOT/etc/modprobe.d/zfs.conf"
+MEMORY_PLAN_ROOT="$ROOT" POSTGRESQL_SHARED_BUFFERS_GB='' HAF_OTHER_SERVICES_GB='' "$RHP/reserve_huge_pages.sh" --dry-run > "$WORK/out" 2>&1 \
+  || fail "reserve_huge_pages.sh --dry-run, fixed: exited $? ($(cat "$WORK/out"))"
+if grep -q "WARNING" "$WORK/out"; then fail "reserve_huge_pages.sh, fixed: warns ($(cat "$WORK/out"))"; fi
+echo "ok: reserve_huge_pages.sh warns about a boot-time zfs_arc_max that overcommits RAM"
 
 for args in "--persist" "--force" "--arc-only" "--sample-seconds x" "--bogus"; do
   # shellcheck disable=SC2086 # split the arguments

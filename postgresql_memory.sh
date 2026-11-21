@@ -217,6 +217,15 @@ pg_zfs_arc_default_bytes() {
   esac
 }
 
+# pg_zfs_arc_bytes ROOT ZFS_ARC_MAX prints the ARC limit the zfs_arc_max ZFS_ARC_MAX gives, in
+# bytes: ZFS_ARC_MAX itself, or pg_zfs_arc_default_bytes when it is 0 or empty.
+pg_zfs_arc_bytes() {
+  case ${2:-0} in
+    0) pg_zfs_arc_default_bytes "$1" ;;
+    *) echo "$2" ;;
+  esac
+}
+
 # pg_zfs_arc_check ROOT TOTAL_KB SHARED_BUFFERS_GB ZFS_ARC_MAX [OTHER_SERVICES_GB [ARC_OVERRIDE_GB]]
 # prints one line comparing the ARC limit ZFS_ARC_MAX (bytes; 0 is ZFS's default, see
 # pg_zfs_arc_default_bytes) with the plan's limit (pg_zfs_arc_limit_gb) for those shared_buffers.
@@ -261,6 +270,36 @@ pg_zfs_arc_check() {
   return 1
 }
 
+# pg_overcommit_check TOTAL_KB ARC_BYTES HUGE_PAGES HUGE_PAGE_KB [OTHER_SERVICES_GB] prints one line
+# adding up the ZFS ARC limit ARC_BYTES, HUGE_PAGES reserved huge pages of HUGE_PAGE_KB, and the
+# kernel, dirty-page and other-services reserves (OTHER_SERVICES_GB; empty: the fixed safety margin)
+# against the RAM TOTAL_KB.  The huge pages hold PostgreSQL's shared segment, so pass at least the
+# segment's count.  It returns 0 when they fit in RAM and 1 when they add up to more.
+pg_overcommit_check() {
+  if [ -n "${5:-}" ]; then
+    _pgm_reserves_gb=$((PG_KERNEL_OVERHEAD_GB + PG_MAX_DIRTY_GB + $5))
+    _pgm_reserves="kernel, dirty-page and other-services"
+  else
+    _pgm_reserves_gb=$((PG_KERNEL_OVERHEAD_GB + PG_MAX_DIRTY_GB + PG_SAFETY_MARGIN_GB))
+    _pgm_reserves="kernel, dirty-page and safety"
+  fi
+  _pgm_huge=$(($3 * $4 * 1024))
+  _pgm_sum=$(($2 + _pgm_huge + _pgm_reserves_gb * _PGM_KB_PER_GB * 1024))
+  _pgm_ram=$(($1 * 1024))
+  _pgm_terms=$(awk -v arc="$2" -v huge="$_pgm_huge" -v sum="$_pgm_sum" -v n="$3" -v kb="$4" \
+    -v reserves="$_pgm_reserves_gb" -v what="$_pgm_reserves" 'BEGIN {
+      g = 1073741824
+      printf "ZFS ARC limit %.1fGB + %.1fGB of huge pages (%d x %dkB) + %dGB %s reserves = %.1fGB", arc / g, huge / g, n, kb, reserves, what, sum / g
+    }')
+  _pgm_ram_gb=$(awk -v ram="$_pgm_ram" 'BEGIN { printf "%.1f", ram / 1073741824 }')
+  if [ "$_pgm_sum" -le "$_pgm_ram" ]; then
+    echo "$_pgm_terms, within the ${_pgm_ram_gb}GB of RAM"
+    return 0
+  fi
+  echo "$_pgm_terms, more than the ${_pgm_ram_gb}GB of RAM"
+  return 1
+}
+
 _PGM_MODPROBE_ARC_RE='^[[:space:]]*options[[:space:]]+zfs[[:space:]]+(.*[[:space:]])?zfs_arc_max='
 
 # pg_modprobe_zfs_arc_max DIR prints the zfs_arc_max the zfs module gets when it loads, from the
@@ -269,6 +308,12 @@ _PGM_MODPROBE_ARC_RE='^[[:space:]]*options[[:space:]]+zfs[[:space:]]+(.*[[:space
 pg_modprobe_zfs_arc_max() {
   cat "${1%/}"/*.conf 2> /dev/null | grep -E "$_PGM_MODPROBE_ARC_RE" \
     | sed -E 's/.*[[:space:]]zfs_arc_max=([0-9]*).*/\1/' | tail -n 1 || true
+}
+
+# pg_modprobe_zfs_arc_max_file DIR prints the file of DIR/*.conf whose "options zfs" line sets the
+# zfs_arc_max pg_modprobe_zfs_arc_max prints, or nothing when none sets it.
+pg_modprobe_zfs_arc_max_file() {
+  grep -lE "$_PGM_MODPROBE_ARC_RE" "${1%/}"/*.conf 2> /dev/null | tail -n 1 || true
 }
 
 # pg_modprobe_set_zfs_arc_max DIR BYTES NEW_FILE sets zfs_arc_max to BYTES in every "options zfs"
