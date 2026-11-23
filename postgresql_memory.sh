@@ -334,3 +334,20 @@ pg_modprobe_set_zfs_arc_max() {
       "$2" > "${1%/}/$3"
   fi
 }
+
+# pg_initramfs_modprobe_dir INITRD WORK_DIR: an initramfs that loads the zfs module gives it the
+# copy of /etc/modprobe.d made when the initramfs was built.  When INITRD is one, it unpacks INITRD
+# into WORK_DIR (which must not exist) and prints that copy's directory; it prints nothing when
+# INITRD does not exist or does not carry zfs.ko*.  It returns 2 when unmkinitramfs
+# (initramfs-tools) is not installed and 1 when it cannot unpack INITRD.
+pg_initramfs_modprobe_dir() {
+  [ -f "$1" ] || return 0
+  command -v unmkinitramfs > /dev/null || return 2
+  mkdir "$2" && unmkinitramfs "$1" "$2" > /dev/null 2>&1 || return 1
+  _pgm_initramfs=$2
+  # an initramfs with early microcode unpacks into early*/ and main/
+  if [ -d "$_pgm_initramfs/main" ]; then _pgm_initramfs=$_pgm_initramfs/main; fi
+  if [ -n "$(find "$_pgm_initramfs" -name 'zfs.ko*' -print -quit)" ]; then
+    echo "$_pgm_initramfs/etc/modprobe.d"
+  fi
+}

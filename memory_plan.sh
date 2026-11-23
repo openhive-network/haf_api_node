@@ -211,26 +211,18 @@ measure_other_services() {
     BREAKDOWN=$(sort -rn <<< "$BREAKDOWN")
 }
 
-# read_initramfs WORK_DIR: an initramfs that loads the zfs module gives it the copy of
-# $MODPROBE_DIR made when the initramfs was built.  When INITRD is one, unpack it into WORK_DIR and
-# point BOOT_MODPROBE_DIR at that copy.
+# read_initramfs WORK_DIR: when INITRD loads the zfs module, unpack it into WORK_DIR and point
+# BOOT_MODPROBE_DIR at its copy of $MODPROBE_DIR (pg_initramfs_modprobe_dir)
 read_initramfs() {
-    local dir=$1/initramfs
-    [[ -f $INITRD ]] || return 0
-    if ! command -v unmkinitramfs > /dev/null; then
-        print_warning "unmkinitramfs (initramfs-tools) not found: if $INITRD loads the zfs module, its zfs_arc_max is not the one reported below"
-        return 0
-    fi
-    mkdir "$dir"
-    if ! unmkinitramfs "$INITRD" "$dir" > /dev/null 2>&1; then
-        print_warning "Could not unpack $INITRD: if it loads the zfs module, its zfs_arc_max is not the one reported below"
-        return 0
-    fi
-    # an initramfs with early microcode unpacks into early*/ and main/
-    if [[ -d $dir/main ]]; then dir+=/main; fi
-    if [[ -n $(find "$dir" -name 'zfs.ko*' -print -quit) ]]; then
+    local dir status=0
+    dir=$(pg_initramfs_modprobe_dir "$INITRD" "$1/initramfs") || status=$?
+    case $status in
+        2) print_warning "unmkinitramfs (initramfs-tools) not found: if $INITRD loads the zfs module, its zfs_arc_max is not the one reported below" ;;
+        1) print_warning "Could not unpack $INITRD: if it loads the zfs module, its zfs_arc_max is not the one reported below" ;;
+    esac
+    if [[ -n $dir ]]; then
         INITRD_ZFS=true
-        BOOT_MODPROBE_DIR=$dir/etc/modprobe.d
+        BOOT_MODPROBE_DIR=$dir
     fi
 }
 
