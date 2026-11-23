@@ -11,7 +11,11 @@
 # RAM: --apply refuses to keep it (also by way of reduce_writebacks.sh --zfs-only), and
 # reserve_huge_pages.sh warns.  A hand-set 32GB there, 0.9GB over only with a transient peak in the
 # measured other services, is kept with a warning; with HAF_OTHER_SERVICES_GB covering that peak it
-# is refused.  docker and reserve_huge_pages.sh are stand-ins.  No root needed.
+# is refused.  With zfs in the initramfs, its copy of modprobe.d is the boot-time one: steem-20's
+# stale 83GB there, beside a hand-edited 32GB in /etc, is reported, refused and rebuilt with
+# --force, and --persist rebuilds an initramfs that alone is stale.  docker, reserve_huge_pages.sh,
+# unmkinitramfs and update-initramfs are stand-ins (the initramfs is an uncompressed newc cpio
+# written here, so no initramfs-tools or cpio is needed).  No root needed.
 
 set -euo pipefail
 
@@ -42,7 +46,66 @@ case "\$*" in
   *) cat "$WORK/containers" ;;
 esac
 EOF
-chmod +x "$BIN/reserve_huge_pages.sh" "$WORK/stub/docker"
+# mkinitrd SRC OUT: an uncompressed newc cpio of the tree SRC, as an initramfs is
+cat > "$WORK/mkinitrd" << 'EOF'
+#!/bin/bash
+set -e
+out=$2
+: > "$out"
+pad() {
+  while [ $(($(stat -c %s "$out") % 4)) -ne 0 ]; do printf '\0' >> "$out"; done
+}
+# entry NAME MODE SIZE [FILE]
+entry() {
+  printf '070701%08X%08X%08X%08X%08X%08X%08X%08X%08X%08X%08X%08X%08X%s\0' 0 "$2" 0 0 1 0 "$3" 0 0 0 0 $((${#1} + 1)) 0 "$1" >> "$out"
+  pad
+  if [ -n "${4:-}" ]; then cat "$4" >> "$out"; pad; fi
+}
+cd "$1"
+find . -mindepth 1 | sed 's|^\./||' | sort | while read -r path; do
+  if [ -d "$path" ]; then
+    entry "$path" $((8#40755)) 0
+  else
+    entry "$path" $((8#100644)) "$(stat -c %s "$path")" "$path"
+  fi
+done
+entry 'TRAILER!!!' 0 0
+EOF
+# unmkinitramfs INITRD DIR, for the cpio mkinitrd writes
+cat > "$WORK/stub/unmkinitramfs" << 'EOF'
+#!/bin/bash
+set -e
+in=$1 off=0
+mkdir -p "$2"
+field() { echo $((16#${hdr:$1:8})); }
+while :; do
+  hdr=$(tail -c +$((off + 1)) "$in" | head -c 110)
+  [ "${hdr:0:6}" = 070701 ] || { echo "unmkinitramfs: no newc header at $off" >&2; exit 1; }
+  mode=$(field 14) size=$(field 54) namesize=$(field 94)
+  name=$(tail -c +$((off + 111)) "$in" | head -c $((namesize - 1)))
+  off=$(((off + 110 + namesize + 3) / 4 * 4))
+  [ "$name" != 'TRAILER!!!' ] || break
+  if [ $((mode & 8#170000)) -eq $((8#40000)) ]; then
+    mkdir -p "$2/$name"
+  else
+    mkdir -p "$(dirname "$2/$name")"
+    tail -c +$((off + 1)) "$in" | head -c "$size" > "$2/$name"
+    off=$(((off + size + 3) / 4 * 4))
+  fi
+done
+EOF
+# update-initramfs -u: the initramfs again, with the zfs module and the fixture's modprobe.d
+cat > "$WORK/stub/update-initramfs" << EOF
+#!/bin/bash
+set -e
+echo "update-initramfs \$*" >> "$WORK/update-initramfs.log"
+rm -rf "$WORK/initrd-tree"
+mkdir -p "$WORK/initrd-tree/usr/lib/modules/updates/dkms" "$WORK/initrd-tree/etc"
+echo zfs > "$WORK/initrd-tree/usr/lib/modules/updates/dkms/zfs.ko.zst"
+cp -r "$WORK/root/etc/modprobe.d" "$WORK/initrd-tree/etc/"
+"$WORK/mkinitrd" "$WORK/initrd-tree" "$WORK/root/boot/initrd.img-\$(uname -r)"
+EOF
+chmod +x "$BIN/reserve_huge_pages.sh" "$WORK/stub/docker" "$WORK/mkinitrd" "$WORK/stub/unmkinitramfs" "$WORK/stub/update-initramfs"
 export PATH="$WORK/stub:$PATH"
 
 ROOT="$WORK/root"
@@ -61,7 +124,7 @@ cgroup() {
 
 # reset: hbt5 with no override, nothing in modprobe.d, zfs_arc_max 0, no huge pages, haf stopped
 reset() {
-  rm -rf "$ROOT" "$WORK/reserve.log" "$WORK/haf-running" "$BIN/.env"
+  rm -rf "$ROOT" "$WORK/reserve.log" "$WORK/haf-running" "$BIN/.env" "$WORK/update-initramfs.log"
   mkdir -p "$ROOT/proc/sys/vm" "$ROOT/sys/module/zfs/parameters" "$ROOT/etc/modprobe.d" "$CG"
   printf 'MemTotal:       131822380 kB\nMemAvailable:   60000000 kB\nHugepagesize:       2048 kB\n' > "$ROOT/proc/meminfo"
   echo 0 > "$ROOT/proc/sys/vm/nr_hugepages"
@@ -97,6 +160,30 @@ state() {
   cat "$ROOT/sys/module/zfs/parameters/zfs_arc_max"
   cat "$ROOT"/etc/modprobe.d/*.conf 2> /dev/null || true
   cat "$WORK/reserve.log" 2> /dev/null || true
+  cksum "$INITRD" 2> /dev/null || true
+}
+
+INITRD="$ROOT/boot/initrd.img-$(uname -r)"
+# initrd ARC_MAX [zfs]: the fixture's initramfs, with zfs_arc_max=ARC_MAX in its modprobe.d and,
+# with zfs, the zfs module
+initrd() {
+  local tree="$WORK/initrd-tree"
+  rm -rf "$tree"
+  mkdir -p "$tree/etc/modprobe.d" "$tree/usr/lib/modules/kernel/drivers" "$ROOT/boot"
+  printf 'options zfs zfs_arc_max=%s\n' "$1" > "$tree/etc/modprobe.d/zfs.conf"
+  echo ext4 > "$tree/usr/lib/modules/kernel/drivers/ext4.ko.zst"
+  if [ "${2:-}" = zfs ]; then
+    mkdir -p "$tree/usr/lib/modules/updates/dkms"
+    echo zfs > "$tree/usr/lib/modules/updates/dkms/zfs.ko.zst"
+  fi
+  "$WORK/mkinitrd" "$tree" "$INITRD"
+}
+
+# initrd_arc_max: the zfs_arc_max in the fixture initramfs's modprobe.d
+initrd_arc_max() {
+  rm -rf "$WORK/unpacked"
+  unmkinitramfs "$INITRD" "$WORK/unpacked"
+  sed -E 's/.*zfs_arc_max=([0-9]+).*/\1/' "$WORK/unpacked/etc/modprobe.d/zfs.conf"
 }
 
 reset
@@ -302,6 +389,65 @@ MEMORY_PLAN_ROOT="$ROOT" POSTGRESQL_SHARED_BUFFERS_GB='' HAF_OTHER_SERVICES_GB='
   || fail "reserve_huge_pages.sh --dry-run, fixed: exited $? ($(cat "$WORK/out"))"
 if grep -q "WARNING" "$WORK/out"; then fail "reserve_huge_pages.sh, fixed: warns ($(cat "$WORK/out"))"; fi
 echo "ok: reserve_huge_pages.sh warns about a boot-time zfs_arc_max that overcommits RAM"
+
+# steem-20 now: 32GB set by hand in /etc/modprobe.d after the boot, while the initramfs that loads
+# zfs still carries the 83GB it was built with
+steem20
+printf 'options zfs zfs_arc_max=%s\n' $((32 * GiB)) > "$ROOT/etc/modprobe.d/zfs.conf"
+echo $((32 * GiB)) > "$ROOT/sys/module/zfs/parameters/zfs_arc_max"
+initrd 89120571392 zfs
+[ "$(initrd_arc_max)" = 89120571392 ] || fail "initramfs fixture: read back '$(initrd_arc_max)'"
+before=$(state)
+plan "steem-20 stale initramfs"
+expect "steem-20 stale initramfs" "^  zfs_arc_max \(at boot\)  89120571392 \(83\.0GB\), from the initramfs .*/boot/initrd\.img-$(uname -r)$"
+expect "steem-20 stale initramfs" "^  zfs_arc_max \(/etc\)     34359738368 \(32\.0GB\), from .*/etc/modprobe\.d$"
+expect "steem-20 stale initramfs" "\[WARNING\].* At boot: ZFS ARC limit 83\.0GB \+ 63\.0GB of huge pages .* = 170\.0GB, more than the 121\.1GB of RAM$"
+expect "steem-20 stale initramfs" "\[WARNING\].* zfs_arc_max differs between the initramfs .* \(89120571392\) and .*/etc/modprobe\.d \(34359738368\): the zfs module gets the initramfs's at the next boot$"
+expect "steem-20 stale initramfs" "\[WARNING\].* To make the plan's 36507222016 the boot-time limit in both: sudo .* --apply --arc-only --persist --force$"
+expect "steem-20 stale initramfs" "--apply refuses to keep the boot-time 89120571392, which overcommits RAM"
+[ "$(state)" = "$before" ] || fail "steem-20 stale initramfs: changed the host"
+if MEMORY_PLAN_ROOT="$ROOT" POSTGRESQL_SHARED_BUFFERS_GB='' HAF_OTHER_SERVICES_GB='' ZFS_ARC_MAX_GB='' PROJECT_NAME='' \
+  "$BIN/memory_plan.sh" --sample-seconds 0 --apply --arc-only --persist > "$WORK/out" 2>&1; then
+  fail "steem-20 stale initramfs --apply: kept 83GB ($(cat "$WORK/out"))"
+fi
+expect "steem-20 stale initramfs --apply" "\[ERROR\].* Refusing to keep zfs_arc_max=89120571392 \(83\.0GB\) in .*/boot/initrd\.img-.* \(etc/modprobe\.d/zfs\.conf\), which differs from the plan's 36507222016"
+[ "$(state)" = "$before" ] || fail "steem-20 stale initramfs --apply: changed the host"
+plan "steem-20 stale initramfs --force" --apply --arc-only --persist --force
+expect "steem-20 stale initramfs --force" "zfs\.conf: zfs_arc_max changed from 34359738368 to 36507222016"
+expect "steem-20 stale initramfs --force" "Updated .*/boot/initrd\.img-"
+[ "$(cat "$WORK/update-initramfs.log")" = "update-initramfs -u" ] || fail "--force: update-initramfs not run once"
+[ "$(initrd_arc_max)" = 36507222016 ] || fail "--force: the initramfs has $(initrd_arc_max)"
+plan "steem-20 initramfs rebuilt"
+expect "steem-20 initramfs rebuilt" "^  zfs_arc_max \(at boot\)  36507222016 \(34\.0GB\), from the initramfs "
+if grep -qE "overcommit|differs|\(/etc\)" "$WORK/out"; then fail "steem-20 initramfs rebuilt: $(cat "$WORK/out")"; fi
+echo "ok: steem-20's stale initramfs: reported as the boot-time value, refused, rebuilt with --force"
+
+# /etc/modprobe.d already holds the plan, only the initramfs is stale: --persist rebuilds it
+steem20
+printf 'options zfs zfs_arc_max=36507222016\n' > "$ROOT/etc/modprobe.d/zfs.conf"
+initrd 89120571392 zfs
+plan "stale initramfs only" --apply --arc-only --persist
+expect "stale initramfs only" "At boot: zfs_arc_max=36507222016 in .*/etc/modprobe\.d already"
+expect "stale initramfs only" "Updated .*/boot/initrd\.img-"
+[ "$(initrd_arc_max)" = 36507222016 ] || fail "stale initramfs only: the initramfs has $(initrd_arc_max)"
+rm "$WORK/update-initramfs.log"
+plan "initramfs current" --apply --arc-only --persist
+expect "initramfs current" "At boot: zfs_arc_max=36507222016 in the initramfs .* already"
+[ ! -e "$WORK/update-initramfs.log" ] || fail "initramfs current: update-initramfs run"
+echo "ok: --persist rebuilds an initramfs whose zfs_arc_max alone differs from the plan"
+
+# an initramfs without the zfs module: /etc/modprobe.d is what the module reads, whatever the
+# initramfs's copy says
+steem20
+printf 'options zfs zfs_arc_max=36507222016\n' > "$ROOT/etc/modprobe.d/zfs.conf"
+initrd 89120571392
+plan "initramfs without zfs"
+expect "initramfs without zfs" "^  zfs_arc_max \(at boot\)  36507222016 \(34\.0GB\), from .*/etc/modprobe\.d$"
+if grep -qE "differs|\(/etc\)|initramfs" "$WORK/out"; then fail "initramfs without zfs: $(cat "$WORK/out")"; fi
+plan "initramfs without zfs --persist" --apply --arc-only --persist
+expect "initramfs without zfs --persist" "The zfs module is not in .*/boot/initrd\.img-.*: it reads .*/etc/modprobe\.d"
+[ ! -e "$WORK/update-initramfs.log" ] || fail "initramfs without zfs: update-initramfs run"
+echo "ok: an initramfs without zfs: /etc/modprobe.d is the boot-time source"
 
 for args in "--persist" "--force" "--arc-only" "--sample-seconds x" "--bogus"; do
   # shellcheck disable=SC2086 # split the arguments
