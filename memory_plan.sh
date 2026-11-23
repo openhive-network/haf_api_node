@@ -26,6 +26,10 @@ MODPROBE_DIR="${ROOT%/}/etc/modprobe.d"
 # written by --persist when no "options zfs" line in MODPROBE_DIR sets zfs_arc_max (it replaces the
 # value of those that do)
 MODPROBE_FILE=haf-zfs-arc-max.conf
+INITRD="${ROOT%/}/boot/initrd.img-$(uname -r)"
+# the modprobe.d the zfs module reads at boot: the initramfs's copy when it loads zfs (read_initramfs)
+BOOT_MODPROBE_DIR=$MODPROBE_DIR
+INITRD_ZFS=false
 GIB=1073741824
 
 # shellcheck source=postgresql_memory.sh
@@ -86,9 +90,12 @@ THE PLAN (whole GB; all from postgresql_memory.sh):
   takes each one's peak.
   HAF_OTHER_SERVICES_GB and ZFS_ARC_MAX_GB are read from the environment or $SCRIPT_DIR/.env.
 
+  When $INITRD loads the zfs module, the boot-time zfs_arc_max is the one in its copy of
+  $MODPROBE_DIR (unmkinitramfs reads it), which may differ from $MODPROBE_DIR itself.
   --persist replaces the zfs_arc_max of each "options zfs" line in $MODPROBE_DIR/*.conf, or
-  writes $MODPROBE_DIR/$MODPROBE_FILE when there is none, and updates the initramfs when it loads
-  zfs.  A zfs_arc_max there that differs from the plan is taken as set by hand: --apply leaves it,
+  writes $MODPROBE_DIR/$MODPROBE_FILE when there is none, and updates such an initramfs when its
+  copy differs from the plan.  A boot-time zfs_arc_max that differs from the plan is taken as set
+  by hand (unless $MODPROBE_DIR holds the plan and only the initramfs is stale): --apply leaves it,
   and the runtime limit, alone and says so, unless --force is given or ZFS_ARC_MAX_GB is set.
   When that ARC limit, the huge pages (the plan's or vm.nr_hugepages, whichever is more) and the
   kernel, dirty-page and other-services reserves add up to more than RAM, --apply refuses to keep
@@ -204,32 +211,71 @@ measure_other_services() {
     BREAKDOWN=$(sort -rn <<< "$BREAKDOWN")
 }
 
-# hand_set_arc_max PLAN_BYTES FORCE prints the boot-time zfs_arc_max in MODPROBE_DIR that --apply
-# keeps: one that differs from the plan, unless FORCE is true or ZFS_ARC_MAX_GB is set (then the
-# plan is that explicit choice).  Prints nothing when the plan may replace it.
+# read_initramfs WORK_DIR: an initramfs that loads the zfs module gives it the copy of
+# $MODPROBE_DIR made when the initramfs was built.  When INITRD is one, unpack it into WORK_DIR and
+# point BOOT_MODPROBE_DIR at that copy.
+read_initramfs() {
+    local dir=$1/initramfs
+    [[ -f $INITRD ]] || return 0
+    if ! command -v unmkinitramfs > /dev/null; then
+        print_warning "unmkinitramfs (initramfs-tools) not found: if $INITRD loads the zfs module, its zfs_arc_max is not the one reported below"
+        return 0
+    fi
+    mkdir "$dir"
+    if ! unmkinitramfs "$INITRD" "$dir" > /dev/null 2>&1; then
+        print_warning "Could not unpack $INITRD: if it loads the zfs module, its zfs_arc_max is not the one reported below"
+        return 0
+    fi
+    # an initramfs with early microcode unpacks into early*/ and main/
+    if [[ -d $dir/main ]]; then dir+=/main; fi
+    if [[ -n $(find "$dir" -name 'zfs.ko*' -print -quit) ]]; then
+        INITRD_ZFS=true
+        BOOT_MODPROBE_DIR=$dir/etc/modprobe.d
+    fi
+}
+
+# boot_source prints where the zfs module reads its options at boot
+boot_source() {
+    if [[ $INITRD_ZFS == true ]]; then
+        echo "the initramfs $INITRD"
+    else
+        echo "$MODPROBE_DIR"
+    fi
+}
+
+# boot_arc_max_file prints the file that sets the boot-time zfs_arc_max, or nothing when none does
+boot_arc_max_file() {
+    local file
+    file=$(pg_modprobe_zfs_arc_max_file "$BOOT_MODPROBE_DIR")
+    if [[ $INITRD_ZFS == true && -n $file ]]; then
+        echo "$INITRD (etc/modprobe.d/${file##*/})"
+    else
+        echo "$file"
+    fi
+}
+
+# hand_set_arc_max PLAN_BYTES FORCE prints the boot-time zfs_arc_max that --apply keeps: one that
+# differs from the plan, unless FORCE is true or ZFS_ARC_MAX_GB is set (then the plan is that
+# explicit choice).  Prints nothing when the plan may replace it.  An initramfs whose copy differs
+# while MODPROBE_DIR holds the plan is stale rather than set by hand: --persist rebuilds it.
 hand_set_arc_max() {
     local boot
-    boot=$(pg_modprobe_zfs_arc_max "$MODPROBE_DIR")
-    if [[ -n $boot && $boot != "$1" && $2 == false && -z $ARC_OVERRIDE ]]; then
+    boot=$(pg_modprobe_zfs_arc_max "$BOOT_MODPROBE_DIR")
+    if [[ -n $boot && $boot != "$1" && $2 == false && -z $ARC_OVERRIDE ]] \
+        && [[ $(pg_modprobe_zfs_arc_max "$MODPROBE_DIR") != "$1" ]]; then
         echo "$boot"
     fi
 }
 
-# update_initramfs_for_zfs: an initramfs that loads the zfs module carries its own copy of
-# $MODPROBE_DIR, which is the one the module gets at boot
+# update_initramfs_for_zfs: rebuild the initramfs that loads the zfs module, so that its copy of
+# $MODPROBE_DIR is the current one
 update_initramfs_for_zfs() {
-    local initrd
-    initrd="${ROOT%/}/boot/initrd.img-$(uname -r)"
-    if command -v lsinitramfs > /dev/null && [[ -f $initrd ]] && lsinitramfs "$initrd" 2> /dev/null | grep -q '/zfs\.ko'; then
-        print_info "$initrd loads the zfs module: updating its copy of $MODPROBE_DIR"
-        if update-initramfs -u > /dev/null; then
-            print_success "Updated $initrd"
-        else
-            print_error "update-initramfs -u failed: the zfs module may get the old zfs_arc_max at boot"
-            return 1
-        fi
+    print_info "$INITRD loads the zfs module: updating its copy of $MODPROBE_DIR"
+    if update-initramfs -u > /dev/null; then
+        print_success "Updated $INITRD"
     else
-        print_info "The zfs module is not in $initrd: it reads $MODPROBE_DIR when it loads at boot"
+        print_error "update-initramfs -u failed: the zfs module may get the old zfs_arc_max at boot"
+        return 1
     fi
 }
 
@@ -238,29 +284,35 @@ persist_arc_max() {
     local changed line
     if [[ $(pg_modprobe_zfs_arc_max "$MODPROBE_DIR") == "$1" ]]; then
         print_success "At boot: zfs_arc_max=$1 in $MODPROBE_DIR already (no change needed)"
-        return 0
-    fi
-    changed=$(pg_modprobe_set_zfs_arc_max "$MODPROBE_DIR" "$1" "$MODPROBE_FILE")
-    if [[ -z $changed ]]; then
-        print_success "Wrote $MODPROBE_DIR/$MODPROBE_FILE: options zfs zfs_arc_max=$1"
     else
-        while read -r line; do
-            print_success "${line%: *}: zfs_arc_max changed from ${line##*: } to $1"
-        done <<< "$changed"
+        changed=$(pg_modprobe_set_zfs_arc_max "$MODPROBE_DIR" "$1" "$MODPROBE_FILE")
+        if [[ -z $changed ]]; then
+            print_success "Wrote $MODPROBE_DIR/$MODPROBE_FILE: options zfs zfs_arc_max=$1"
+        else
+            while read -r line; do
+                print_success "${line%: *}: zfs_arc_max changed from ${line##*: } to $1"
+            done <<< "$changed"
+        fi
     fi
-    update_initramfs_for_zfs
+    if [[ $INITRD_ZFS == false ]]; then
+        print_info "The zfs module is not in $INITRD: it reads $MODPROBE_DIR when it loads at boot"
+    elif [[ $(pg_modprobe_zfs_arc_max "$BOOT_MODPROBE_DIR") == "$1" ]]; then
+        print_success "At boot: zfs_arc_max=$1 in the initramfs $INITRD already (no change needed)"
+    else
+        update_initramfs_for_zfs
+    fi
 }
 
 # report_boot_arc_max ARC_MAX_BYTES: warn when the zfs_arc_max the zfs module gets at the next boot
-# ($MODPROBE_DIR, or ZFS's default when nothing there sets it) is larger than ARC_MAX_BYTES
+# (boot_source's, or ZFS's default when nothing there sets it) is larger than ARC_MAX_BYTES
 report_boot_arc_max() {
     local boot boot_source
-    boot=$(pg_modprobe_zfs_arc_max "$MODPROBE_DIR")
+    boot=$(pg_modprobe_zfs_arc_max "$BOOT_MODPROBE_DIR")
     if [[ -n $boot && $boot != 0 ]]; then
-        boot_source="zfs_arc_max=$boot in $MODPROBE_DIR"
+        boot_source="zfs_arc_max=$boot in $(boot_source)"
     else
         boot=$(pg_zfs_arc_default_bytes "$ROOT")
-        boot_source="ZFS's default of $boot (no nonzero zfs_arc_max in $MODPROBE_DIR)"
+        boot_source="ZFS's default of $boot (no nonzero zfs_arc_max in $(boot_source))"
     fi
     if [[ $boot -le $1 ]]; then
         print_success "At boot: $boot_source, within $1"
@@ -280,7 +332,7 @@ apply_arc_max() {
     live=$(cat "$ZFS_ARC_MAX_PARAM")
     kept=$(hand_set_arc_max "$plan" "$force")
     if [[ -n $kept ]]; then
-        file=$(pg_modprobe_zfs_arc_max_file "$MODPROBE_DIR")
+        file=$(boot_arc_max_file)
         if [[ -n $overcommit ]]; then
             print_error "Refusing to keep zfs_arc_max=$kept ($(gb "$kept")) in $file, which differs from the plan's $plan ($(gb "$plan")): $overcommit"
             print_error "To replace it with the plan's $plan, now and at boot: sudo $0 --apply --persist --force; to make another value the plan: ZFS_ARC_MAX_GB in .env"
@@ -460,20 +512,29 @@ main() {
 
     echo
     echo "Now:"
-    local zfs=false live boot boot_bytes kept overcommit='' measured_overcommit=''
+    local zfs=false live boot etc boot_bytes kept overcommit='' measured_overcommit=''
     if [[ -f $ZFS_ARC_MAX_PARAM ]]; then
         zfs=true
         live=$(cat "$ZFS_ARC_MAX_PARAM")
-        boot=$(pg_modprobe_zfs_arc_max "$MODPROBE_DIR")
+        read_initramfs "$work"
+        boot=$(pg_modprobe_zfs_arc_max "$BOOT_MODPROBE_DIR")
+        etc=$(pg_modprobe_zfs_arc_max "$MODPROBE_DIR")
         if [[ $live -eq 0 ]]; then
             echo "  zfs_arc_max (runtime)  0, ZFS's default of $(gb "$(pg_zfs_arc_default_bytes "$ROOT")")"
         else
             echo "  zfs_arc_max (runtime)  $live ($(gb "$live"))"
         fi
         if [[ -n $boot ]]; then
-            echo "  zfs_arc_max (at boot)  $boot ($(gb "$boot")), from $MODPROBE_DIR"
+            echo "  zfs_arc_max (at boot)  $boot ($(gb "$boot")), from $(boot_source)"
         else
-            echo "  zfs_arc_max (at boot)  not set in $MODPROBE_DIR: ZFS's default"
+            echo "  zfs_arc_max (at boot)  not set in $(boot_source): ZFS's default"
+        fi
+        if [[ $etc != "$boot" ]]; then
+            if [[ -n $etc ]]; then
+                echo "  zfs_arc_max (/etc)     $etc ($(gb "$etc")), from $MODPROBE_DIR"
+            else
+                echo "  zfs_arc_max (/etc)     not set in $MODPROBE_DIR"
+            fi
         fi
         echo "  zfs_arc_max (plan)     $arc_bytes"
         # the check the haf container makes at every start, against this plan
@@ -501,6 +562,12 @@ main() {
             fi
         elif [[ $apply == false && -n $measured_overcommit ]]; then
             echo "  --apply --persist makes the plan's $arc_bytes the boot-time limit"
+        fi
+        if [[ $etc != "$boot" ]]; then
+            print_warning "zfs_arc_max differs between $(boot_source) (${boot:-not set}) and $MODPROBE_DIR (${etc:-not set}): the zfs module gets the initramfs's at the next boot"
+            if [[ $apply == false ]]; then
+                print_warning "To make the plan's $arc_bytes the boot-time limit in both: sudo $0 --apply --arc-only --persist${kept:+ --force}"
+            fi
         fi
     else
         echo "  ZFS module not loaded: there is no ARC limit to set"
