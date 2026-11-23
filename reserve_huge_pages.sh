@@ -15,14 +15,15 @@
 #   sudo ./reserve_huge_pages.sh --release  # Give them back to general RAM
 #   ./reserve_huge_pages.sh --dry-run       # Show the reservation without changing anything
 #
-# With --dry-run, MEMORY_PLAN_ROOT (default /) points the script at a fixture root with proc/, sys/
-# and etc/ in place of the host's, for tests.
+# With --dry-run, MEMORY_PLAN_ROOT (default /) points the script at a fixture root with proc/, sys/,
+# etc/ and boot/ in place of the host's, for tests.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="${MEMORY_PLAN_ROOT:-/}"
 MODPROBE_DIR="${ROOT%/}/etc/modprobe.d"
+INITRD="${ROOT%/}/boot/initrd.img-$(uname -r)"
 SYSCTL_FILE=/etc/sysctl.d/60-haf-huge-pages.conf
 
 # shellcheck source=postgresql_memory.sh
@@ -76,9 +77,10 @@ NOTES:
     - Reserving needs that much free, unfragmented memory; the script compacts memory first and
       undoes a partial reservation.  At boot (--persist) memory is not fragmented yet.
     - Without --persist the reservation lasts until reboot.
-    - It warns when the ZFS ARC limit the zfs module gets at boot ($MODPROBE_DIR, or ZFS's
-      default), the reservation and the kernel, dirty-page and other-services reserves add up to
-      more than RAM; memory_plan.sh --apply --persist sizes the ARC limit beside the huge pages.
+    - It warns when the ZFS ARC limit the zfs module gets at boot ($MODPROBE_DIR, the copy of it
+      in $INITRD when that loads the zfs module, or ZFS's default), the
+      reservation and the kernel, dirty-page and other-services reserves add up to more than RAM;
+      memory_plan.sh --apply --persist sizes the ARC limit beside the huge pages.
 
 EXAMPLES:
     sudo docker compose stop haf && sudo $0 --persist && sudo docker compose start haf
@@ -95,9 +97,26 @@ meminfo_kb() {
 # gets at boot, HUGE_PAGES huge pages and the reserves (postgresql_memory.sh's, with
 # HAF_OTHER_SERVICES_GB when set) add up to more than RAM
 warn_arc_overcommit() {
-    local boot other check
+    local work boot_dir status=0 where file boot other check
     [[ -d ${ROOT%/}/sys/module/zfs ]] || return 0
-    boot=$(pg_modprobe_zfs_arc_max "$MODPROBE_DIR")
+    work=$(mktemp -d)
+    # shellcheck disable=SC2064 # expand work now
+    trap "rm -rf '$work'" EXIT
+    boot_dir=$(pg_initramfs_modprobe_dir "$INITRD" "$work/initramfs") || status=$?
+    case $status in
+        2) print_warning "unmkinitramfs (initramfs-tools) not found: if $INITRD loads the zfs module, its zfs_arc_max may not be the one checked below" ;;
+        1) print_warning "Could not unpack $INITRD: if it loads the zfs module, its zfs_arc_max may not be the one checked below" ;;
+    esac
+    if [[ -n $boot_dir ]]; then
+        where="the initramfs $INITRD"
+        file=$(pg_modprobe_zfs_arc_max_file "$boot_dir")
+        file=${file:+$INITRD (etc/modprobe.d/${file##*/})}
+    else
+        boot_dir=$MODPROBE_DIR
+        where=$MODPROBE_DIR
+        file=$(pg_modprobe_zfs_arc_max_file "$boot_dir")
+    fi
+    boot=$(pg_modprobe_zfs_arc_max "$boot_dir")
     other=$(pg_setting HAF_OTHER_SERVICES_GB "$SCRIPT_DIR/.env")
     if [[ -n $other ]] && ! pg_check_gb HAF_OTHER_SERVICES_GB "$other" 0; then
         print_warning "Ignoring HAF_OTHER_SERVICES_GB: the overcommit check below counts the fixed ${PG_SAFETY_MARGIN_GB}GB safety margin"
@@ -105,9 +124,9 @@ warn_arc_overcommit() {
     fi
     if ! check=$(pg_overcommit_check "$1" "$(pg_zfs_arc_bytes "$ROOT" "$boot")" "$2" "$3" "$other"); then
         if [[ -n $boot ]]; then
-            print_warning "At boot: $check (zfs_arc_max=$boot in $(pg_modprobe_zfs_arc_max_file "$MODPROBE_DIR"))"
+            print_warning "At boot: $check (zfs_arc_max=$boot in $file)"
         else
-            print_warning "At boot: $check (no zfs_arc_max in $MODPROBE_DIR: ZFS's default)"
+            print_warning "At boot: $check (no zfs_arc_max in $where: ZFS's default)"
         fi
         print_warning "To size the ZFS ARC limit beside these huge pages: sudo $SCRIPT_DIR/memory_plan.sh --apply --persist"
     fi

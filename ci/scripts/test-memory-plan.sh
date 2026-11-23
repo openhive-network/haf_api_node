@@ -12,10 +12,10 @@
 # reserve_huge_pages.sh warns.  A hand-set 32GB there, 0.9GB over only with a transient peak in the
 # measured other services, is kept with a warning; with HAF_OTHER_SERVICES_GB covering that peak it
 # is refused.  With zfs in the initramfs, its copy of modprobe.d is the boot-time one: steem-20's
-# stale 83GB there, beside a hand-edited 32GB in /etc, is reported, refused and rebuilt with
-# --force, and --persist rebuilds an initramfs that alone is stale.  docker, reserve_huge_pages.sh,
-# unmkinitramfs and update-initramfs are stand-ins (the initramfs is an uncompressed newc cpio
-# written here, so no initramfs-tools or cpio is needed).  No root needed.
+# stale 83GB there, beside a hand-edited 32GB in /etc, is reported (by reserve_huge_pages.sh too),
+# refused and rebuilt with --force, and --persist rebuilds an initramfs that alone is stale.
+# docker, reserve_huge_pages.sh, unmkinitramfs and update-initramfs are stand-ins (the initramfs is
+# an uncompressed newc cpio written here, so no initramfs-tools or cpio is needed).  No root needed.
 
 set -euo pipefail
 
@@ -380,13 +380,16 @@ echo "ok: steem-20's hand-set 32GB, over RAM with HAF_OTHER_SERVICES_GB: refused
 RHP="$WORK/reserve"
 mkdir -p "$RHP"
 cp "$REPO_DIR/reserve_huge_pages.sh" "$REPO_DIR/postgresql_memory.sh" "$RHP/"
+# reserve NAME: run reserve_huge_pages.sh --dry-run, output in $WORK/out; fails the test when it fails
+reserve() {
+  MEMORY_PLAN_ROOT="$ROOT" POSTGRESQL_SHARED_BUFFERS_GB='' HAF_OTHER_SERVICES_GB='' "$RHP/reserve_huge_pages.sh" --dry-run > "$WORK/out" 2>&1 \
+    || fail "$1: exited $? ($(cat "$WORK/out"))"
+}
 steem20
-MEMORY_PLAN_ROOT="$ROOT" POSTGRESQL_SHARED_BUFFERS_GB='' HAF_OTHER_SERVICES_GB='' "$RHP/reserve_huge_pages.sh" --dry-run > "$WORK/out" 2>&1 \
-  || fail "reserve_huge_pages.sh --dry-run: exited $? ($(cat "$WORK/out"))"
+reserve "reserve_huge_pages.sh"
 expect "reserve_huge_pages.sh" "\[WARNING\].* At boot: ZFS ARC limit 83\.0GB \+ 63\.0GB of huge pages \(32256 x 2048kB\) \+ 24GB kernel, dirty-page and safety reserves = 170\.0GB, more than the 121\.1GB of RAM \(zfs_arc_max=89120571392 in .*/zfs\.conf\)$"
 printf 'options zfs zfs_arc_max=%s\n' $((34 * GiB)) > "$ROOT/etc/modprobe.d/zfs.conf"
-MEMORY_PLAN_ROOT="$ROOT" POSTGRESQL_SHARED_BUFFERS_GB='' HAF_OTHER_SERVICES_GB='' "$RHP/reserve_huge_pages.sh" --dry-run > "$WORK/out" 2>&1 \
-  || fail "reserve_huge_pages.sh --dry-run, fixed: exited $? ($(cat "$WORK/out"))"
+reserve "reserve_huge_pages.sh, fixed"
 if grep -q "WARNING" "$WORK/out"; then fail "reserve_huge_pages.sh, fixed: warns ($(cat "$WORK/out"))"; fi
 echo "ok: reserve_huge_pages.sh warns about a boot-time zfs_arc_max that overcommits RAM"
 
@@ -406,6 +409,9 @@ expect "steem-20 stale initramfs" "\[WARNING\].* zfs_arc_max differs between the
 expect "steem-20 stale initramfs" "\[WARNING\].* To make the plan's 36507222016 the boot-time limit in both: sudo .* --apply --arc-only --persist --force$"
 expect "steem-20 stale initramfs" "--apply refuses to keep the boot-time 89120571392, which overcommits RAM"
 [ "$(state)" = "$before" ] || fail "steem-20 stale initramfs: changed the host"
+reserve "reserve_huge_pages.sh, stale initramfs"
+expect "reserve_huge_pages.sh, stale initramfs" "\[WARNING\].* At boot: ZFS ARC limit 83\.0GB \+ 63\.0GB of huge pages .* = 170\.0GB, more than the 121\.1GB of RAM \(zfs_arc_max=89120571392 in .*/boot/initrd\.img-$(uname -r) \(etc/modprobe\.d/zfs\.conf\)\)$"
+[ "$(state)" = "$before" ] || fail "reserve_huge_pages.sh, stale initramfs: changed the host"
 if MEMORY_PLAN_ROOT="$ROOT" POSTGRESQL_SHARED_BUFFERS_GB='' HAF_OTHER_SERVICES_GB='' ZFS_ARC_MAX_GB='' PROJECT_NAME='' \
   "$BIN/memory_plan.sh" --sample-seconds 0 --apply --arc-only --persist > "$WORK/out" 2>&1; then
   fail "steem-20 stale initramfs --apply: kept 83GB ($(cat "$WORK/out"))"
@@ -420,7 +426,9 @@ expect "steem-20 stale initramfs --force" "Updated .*/boot/initrd\.img-"
 plan "steem-20 initramfs rebuilt"
 expect "steem-20 initramfs rebuilt" "^  zfs_arc_max \(at boot\)  36507222016 \(34\.0GB\), from the initramfs "
 if grep -qE "overcommit|differs|\(/etc\)" "$WORK/out"; then fail "steem-20 initramfs rebuilt: $(cat "$WORK/out")"; fi
-echo "ok: steem-20's stale initramfs: reported as the boot-time value, refused, rebuilt with --force"
+reserve "reserve_huge_pages.sh, initramfs rebuilt"
+if grep -q "WARNING" "$WORK/out"; then fail "reserve_huge_pages.sh, initramfs rebuilt: warns ($(cat "$WORK/out"))"; fi
+echo "ok: steem-20's stale initramfs: reported as the boot-time value (also by reserve_huge_pages.sh), refused, rebuilt with --force"
 
 # /etc/modprobe.d already holds the plan, only the initramfs is stale: --persist rebuilds it
 steem20
@@ -447,6 +455,10 @@ if grep -qE "differs|\(/etc\)|initramfs" "$WORK/out"; then fail "initramfs witho
 plan "initramfs without zfs --persist" --apply --arc-only --persist
 expect "initramfs without zfs --persist" "The zfs module is not in .*/boot/initrd\.img-.*: it reads .*/etc/modprobe\.d"
 [ ! -e "$WORK/update-initramfs.log" ] || fail "initramfs without zfs: update-initramfs run"
+printf 'options zfs zfs_arc_max=%s\n' 89120571392 > "$ROOT/etc/modprobe.d/zfs.conf"
+initrd 36507222016
+reserve "reserve_huge_pages.sh, initramfs without zfs"
+expect "reserve_huge_pages.sh, initramfs without zfs" "\[WARNING\].* At boot: .* = 170\.0GB, more than the 121\.1GB of RAM \(zfs_arc_max=89120571392 in .*/etc/modprobe\.d/zfs\.conf\)$"
 echo "ok: an initramfs without zfs: /etc/modprobe.d is the boot-time source"
 
 for args in "--persist" "--force" "--arc-only" "--sample-seconds x" "--bogus"; do
