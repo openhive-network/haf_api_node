@@ -105,6 +105,10 @@ services:
     environment:
       POSTGRES_HOST: haf
       POSTGRES_USER: hafbe_owner
+      # Connections hafbe_bal's massive sync splits independent processor groups across;
+      # live sync always uses one. 1 keeps the serial sync. Images without
+      # haf_block_explorer #216 ignore it.
+      BTRACKER_SYNC_PARALLELISM: ${BTRACKER_SYNC_PARALLELISM:-1}
       # block-processing log, kept in the datadir (survives compose down; rotated by the logrotate service)
       LOG_FILE: /logs/haf_block_explorer_block_processing.log
     volumes:
