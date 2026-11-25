@@ -41,6 +41,15 @@ fi
 # Container name prefix
 CONTAINER_PREFIX="${PROJECT_NAME}"
 
+# One value from HAF's database, empty when the haf container or the query is not available
+haf_query() {
+    docker exec "${CONTAINER_PREFIX}-haf-1" psql -U haf_admin -d haf_block_log -qtAX -c "$1" 2>/dev/null || true
+}
+
+fmt_number() {
+    printf "%'d" "$1" 2>/dev/null || echo "$1"
+}
+
 # Function to convert seconds to human-readable format
 format_duration() {
     local seconds="$1"
@@ -156,25 +165,26 @@ parse_haf_timing() {
     echo -e "${BOLD}${GREEN}1. HAF (Core Blockchain Sync)${NC}"
     echo -e "${GREEN}───────────────────────────────────────────────────────────────────${NC}"
 
-    local logs
+    local logs=""
     logs=$(get_logs "$container")
 
     # Extract timing information
-    local reindex_start reindex_entered p2p_entered live_entered live_block
+    local reindex_start="" reindex_entered="" p2p_entered="" live_entered="" live_block=""
 
     reindex_start=$(echo "$logs" | grep -E "PROFILE: Entered REINDEX sync from start state:" | head -1 | grep -oP '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}' || echo "")
-    p2p_entered=$(echo "$logs" | grep -E "PROFILE: Entered P2P sync from start state:" | head -1)
-    live_entered=$(echo "$logs" | grep -E "PROFILE: Entered LIVE sync from start state:" | head -1)
+    # Not reached yet while hived replays: grep finding nothing must not end the script (set -e, pipefail)
+    p2p_entered=$(echo "$logs" | grep -E "PROFILE: Entered P2P sync from start state:" | head -1 || true)
+    live_entered=$(echo "$logs" | grep -E "PROFILE: Entered LIVE sync from start state:" | head -1 || true)
 
     # Parse P2P timing
-    local p2p_timestamp p2p_seconds
+    local p2p_timestamp="" p2p_seconds=""
     if [[ -n "$p2p_entered" ]]; then
         p2p_timestamp=$(echo "$p2p_entered" | grep -oP '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}' || echo "")
         p2p_seconds=$(echo "$p2p_entered" | grep -oP 'start state: \K\d+' || echo "")
     fi
 
     # Parse LIVE timing
-    local live_timestamp live_seconds live_block
+    local live_timestamp="" live_seconds="" live_block=""
     if [[ -n "$live_entered" ]]; then
         live_timestamp=$(echo "$live_entered" | grep -oP '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}' || echo "")
         live_seconds=$(echo "$live_entered" | grep -oP 'start state: \K\d+' || echo "")
@@ -215,6 +225,17 @@ parse_haf_timing() {
         printf "%-35s %-25s %-20s\n" "LIVE sync entered" "$live_timestamp" "${p2p_to_live_duration:-N/A} (P2P→LIVE)"
     fi
 
+    # Still replaying: where hived is, how long it has been at it, and its average speed so far
+    if [[ -z "$p2p_entered" && -n "$reindex_start" ]]; then
+        local head="" elapsed=""
+        head=$(haf_query "SELECT num FROM hafd.blocks ORDER BY num DESC LIMIT 1")
+        elapsed=$(( $(date -u +%s) - $(date -u -d "${reindex_start}Z" +%s 2>/dev/null || date -u +%s) ))
+        printf "%-35s %-25s %-20s\n" "REPLAY in progress" "block $(fmt_number "${head:-0}")" "$(format_duration "$elapsed") so far"
+        if [[ -n "$head" && "$elapsed" -gt 0 ]]; then
+            echo -e "${BOLD}Average replay speed so far:${NC} ~$((head / elapsed)) blocks/second"
+        fi
+    fi
+
     echo ""
     if [[ -n "$total_duration" ]]; then
         echo -e "${BOLD}Total HAF Replay Time:${NC} ${total_duration}"
@@ -242,16 +263,16 @@ parse_haf_app_timing() {
         return
     fi
 
-    local logs
+    local logs=""
     logs=$(get_logs "$container")
 
     # Look for STAGE_CHANGED messages
-    local stage_changes
+    local stage_changes=""
     stage_changes=$(echo "$logs" | grep -E "PROFILE:.*STAGE_CHANGED" || echo "")
 
     if [[ -z "$stage_changes" ]]; then
         # Check if still waiting
-        local waiting
+        local waiting=""
         waiting=$(echo "$logs" | grep -E "Waiting for next block|wait_for_haf" | tail -1 || echo "")
         if [[ -n "$waiting" ]]; then
             echo -e "  ${YELLOW}${app_name}: Still waiting for HAF${NC}"
@@ -262,7 +283,7 @@ parse_haf_app_timing() {
     fi
 
     # Parse stage changes - get the first occurrence of each transition
-    local wait_to_massive massive_to_live
+    local wait_to_massive="" massive_to_live=""
 
     wait_to_massive=$(echo "$stage_changes" | grep -E "wait_for_haf.*to.*MASSIVE" | head -1 || echo "")
     massive_to_live=$(echo "$stage_changes" | grep -E "MASSIVE.*to.*live" | head -1 || echo "")
@@ -280,7 +301,7 @@ parse_haf_app_timing() {
     fi
 
     # Convert to seconds for total calculation
-    local wait_secs massive_secs total_secs
+    local wait_secs="" massive_secs="" total_secs=""
     wait_secs=$(parse_duration_to_seconds "$wait_duration")
     massive_secs=$(parse_duration_to_seconds "$massive_duration")
 
@@ -294,7 +315,7 @@ parse_haf_app_timing() {
     fi
 
     # Determine status
-    local status
+    local status=""
     if [[ -n "$massive_to_live" ]]; then
         status="${GREEN}LIVE${NC}"
     elif [[ -n "$wait_to_massive" ]]; then
@@ -322,11 +343,11 @@ parse_hivemind_timing() {
         return
     fi
 
-    local logs
+    local logs=""
     logs=$(get_logs "$container")
 
     # Look for "Switched to" messages
-    local wait_mode massive_mode live_mode
+    local wait_mode="" massive_mode="" live_mode=""
 
     wait_mode=$(echo "$logs" | grep -E "Switched to.*wait_for_haf.*mode" | head -1 || echo "")
     massive_mode=$(echo "$logs" | grep -E "Switched to.*MASSIVE" | head -1 || echo "")
@@ -346,7 +367,7 @@ parse_hivemind_timing() {
     fi
 
     # Convert to seconds for total calculation
-    local wait_secs massive_secs total_secs
+    local wait_secs="" massive_secs="" total_secs=""
     wait_secs=$(parse_duration_to_seconds "$wait_duration")
     massive_secs=$(parse_duration_to_seconds "$massive_duration")
 
@@ -358,7 +379,7 @@ parse_hivemind_timing() {
     fi
 
     # Determine status
-    local status
+    local status=""
     if [[ -n "$live_mode" ]]; then
         status="${GREEN}LIVE${NC}"
     elif [[ -n "$massive_mode" ]]; then
@@ -387,15 +408,15 @@ parse_hivesense_timing() {
     fi
 
     # Get first log timestamp (just first few lines)
-    local start_time
+    local start_time=""
     start_time=$(docker logs "$container" 2>&1 | head -5 | grep -oP '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}' | head -1 || echo "")
 
     # Check if still waiting for hivemind (check first 100 lines)
-    local still_waiting
+    local still_waiting=""
     still_waiting=$(docker logs "$container" 2>&1 | head -100 | grep -E "Waiting for hivemind head block" | tail -1 || echo "")
 
     # Get last seq number processed (from last few lines)
-    local last_seq
+    local last_seq=""
     last_seq=$(docker logs "$container" 2>&1 | tail -20 | grep -oP 'seq \K[0-9]+' | tail -1 || echo "")
 
     # Look for HNSW index creation info - use a single grep with multiple patterns to avoid multiple full scans
@@ -411,7 +432,7 @@ parse_hivesense_timing() {
         hnsw_size=$(echo "$hnsw_info" | grep -E "Index size:" | tail -1 | grep -oP 'Index size: \K[0-9]+ GB' || echo "")
     fi
 
-    local status
+    local status=""
     if [[ -n "$still_waiting" && -z "$last_seq" ]]; then
         status="${YELLOW}WAITING FOR HIVEMIND${NC}"
     elif [[ -n "$hnsw_complete" ]]; then
@@ -483,31 +504,31 @@ get_current_block() {
         return
     fi
 
-    local logs block
+    local logs="" block=""
     case "$app_type" in
         haf)
             # HAF: "Dump whole block 101791010" or "Got 14 transactions on block 101791010"
-            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:Dump whole block|on block) \K[0-9]+' | tail -1)
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:Dump whole block|on block) \K[0-9]+' | tail -1 || true)
             ;;
         hivemind)
             # Hivemind: "Last imported block is: 101790997" or block numbers in SQL calls
-            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Last imported block is: \K[0-9]+' | tail -1)
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Last imported block is: \K[0-9]+' | tail -1 || true)
             if [[ -z "$block" ]]; then
                 # Try extracting from update_last_completed_block calls
-                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'update_last_completed_block\(\K[0-9]+' | tail -1)
+                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'update_last_completed_block\(\K[0-9]+' | tail -1 || true)
             fi
             ;;
         haf_app)
             # HAF apps (block explorer): "[SINGLE]  Attempting to process block: <101791004>" or "Processed blocks"
-            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'process block: <\K[0-9]+' | tail -1)
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'process block: <\K[0-9]+' | tail -1 || true)
             if [[ -z "$block" ]]; then
                 # Try MASSIVE sync pattern: "Processing block range: X to Y"
-                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Processing block range: [0-9]+ to \K[0-9]+' | tail -1)
+                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Processing block range: [0-9]+ to \K[0-9]+' | tail -1 || true)
             fi
             ;;
         nft|reputation)
             # NFT/Reputation: "nfttracker processed block 101791001" or "Reptracker processed block 101791002"
-            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:nfttracker|Reptracker) process(?:ed|ing) block[: ]+\K[0-9]+' | tail -1)
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:nfttracker|Reptracker) process(?:ed|ing) block[: ]+\K[0-9]+' | tail -1 || true)
             ;;
     esac
 
@@ -524,7 +545,7 @@ is_in_live_mode() {
         return
     fi
 
-    local logs
+    local logs=""
     case "$app_type" in
         haf)
             # HAF is live if we see P2P blocks being processed
@@ -561,44 +582,80 @@ print_sync_progress() {
 
     local found_syncing=false
 
-    # Define block processors to check: container_suffix:app_type:display_name
+    # Block processors to check: container_suffix:app_type:display_name:HAF context (empty for HAF itself).
+    # An app's block comes from its HAF context (hive.app_get_current_block_num), which every app keeps
+    # whatever it logs; its log is only the fallback when the context is not there yet.
     local processors=(
-        "haf-1:haf:HAF"
-        "hivemind-block-processing-1:hivemind:Hivemind"
-        "block-explorer-block-processing-1:haf_app:Block Explorer"
-        "nft-tracker-block-processing-1:nft:NFT Tracker"
-        "reputation-tracker-block-processing-1:reputation:Reputation Tracker"
+        "haf-1:haf:HAF:"
+        "hivemind-block-processing-1:hivemind:Hivemind:hivemind_app"
+        "block-explorer-block-processing-1:haf_app:Block Explorer:hafbe_app"
+        "block-explorer-block-processing-1:haf_app:Balance Tracker (hafbe):hafbe_bal"
+        "nft-tracker-block-processing-1:nft:NFT Tracker:nfttracker_app"
+        "reputation-tracker-block-processing-1:reputation:Reputation Tracker:reptracker_app"
+        "haf-stats-block-processing-1:haf_app:HAF Stats:haf_stats"
+        "haf-fyp-block-processing-1:haf_app:HAF FYP:haf_fyp"
+        "hivesense-sync-1:haf_app:Hivesense:hivesense_app"
+        "l2-framework-block-processing-1:haf_app:L2 framework:l2"
+        "lite-account-block-processing-1:haf_app:Lite account:lite_account"
+        "lite-posts-block-processing-1:haf_app:Lite posts:lite_posts"
+        "lite-social-block-processing-1:haf_app:Lite social:lite_social"
     )
 
-    printf "  ${BOLD}%-25s %-15s %-15s${NC}\n" "Processor" "Current Block" "Status"
-    printf "  %-25s %-15s %-15s\n" "─────────────────────────" "───────────────" "───────────────"
+    local haf_head=""
+    haf_head=$(haf_query "SELECT num FROM hafd.blocks ORDER BY num DESC LIMIT 1")
+
+    printf "  ${BOLD}%-26s %-15s %-15s %-22s %s${NC}\n" "Processor" "Current Block" "Behind HAF" "Container" "Status"
+    printf "  %-26s %-15s %-15s %-22s %s\n" "──────────────────────────" "───────────────" "───────────────" "──────────────────────" "───────────────"
 
     for processor in "${processors[@]}"; do
-        IFS=':' read -r suffix app_type display_name <<< "$processor"
+        IFS=':' read -r suffix app_type display_name context <<< "$processor"
         local container="${CONTAINER_PREFIX}-${suffix}"
 
         if ! container_exists "$container"; then
             continue
         fi
 
-        local is_live current_block status
+        local is_live="" current_block="" status="" behind="" state=""
+        state=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null || echo "unknown")
         is_live=$(is_in_live_mode "$container" "$app_type")
 
-        if [[ "$is_live" == "true" ]]; then
-            status="${GREEN}LIVE${NC}"
-            current_block="-"
-        else
+        current_block=""
+        if [[ -n "$context" ]]; then
+            current_block=$(haf_query "SELECT hive.app_get_current_block_num('${context}') WHERE EXISTS (SELECT 1 FROM hafd.contexts WHERE name = '${context}')")
+        elif [[ "$app_type" == "haf" ]]; then
+            current_block="$haf_head"
+        fi
+        if [[ -z "$current_block" ]]; then
             current_block=$(get_current_block "$container" "$app_type")
-            if [[ -n "$current_block" ]]; then
-                status="${YELLOW}SYNCING${NC}"
-                found_syncing=true
+        fi
+
+        # An app whose context starts later in the chain (the lite apps start at 110M) sits ahead of a
+        # replaying HAF: it has not started, so it is waiting, not syncing
+        local not_started=false
+        behind="-"
+        if [[ -n "$current_block" && -n "$haf_head" && "$app_type" != "haf" ]]; then
+            if (( current_block > haf_head )); then
+                not_started=true
+                behind="starts at $(fmt_number $((current_block + 1)))"
             else
-                status="${YELLOW}WAITING${NC}"
-                current_block="-"
+                behind=$(fmt_number $((haf_head - current_block)))
             fi
         fi
 
-        printf "  %-25s %-15s %b\n" "$display_name" "${current_block}" "$status"
+        if [[ "$is_live" == "true" ]]; then
+            status="${GREEN}LIVE${NC}"
+        elif [[ "$state" == *restarting* ]]; then
+            status="${RED}CRASH-LOOPING${NC}"
+            found_syncing=true
+        elif ! $not_started && [[ -n "$current_block" && "$current_block" != "0" ]]; then
+            status="${YELLOW}SYNCING${NC}"
+            found_syncing=true
+        else
+            status="${YELLOW}WAITING${NC}"
+        fi
+        [[ -n "$current_block" ]] && current_block=$(fmt_number "$current_block") || current_block="-"
+
+        printf "  %-26s %-15s %-15s %-22s %b\n" "$display_name" "$current_block" "$behind" "$state" "$status"
     done
 
     echo ""
@@ -616,7 +673,7 @@ print_summary() {
     echo ""
 
     # Get container creation time as proxy for startup time
-    local haf_created
+    local haf_created=""
     haf_created=$(docker inspect --format='{{.Created}}' "${CONTAINER_PREFIX}-haf-1" 2>/dev/null | cut -d'.' -f1 | tr 'T' ' ' || echo "Unknown")
 
     echo -e "${BOLD}Stack Started:${NC} ${haf_created}"
@@ -627,7 +684,7 @@ print_summary() {
 
     for container in "${containers[@]}"; do
         if container_exists "$container"; then
-            local health
+            local health=""
             health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || echo "unknown")
             if [[ "$health" != "healthy" ]]; then
                 all_healthy=false

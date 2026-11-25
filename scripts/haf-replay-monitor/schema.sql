@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS runs (
     start_time  TIMESTAMPTZ NOT NULL DEFAULT now(),
     end_time    TIMESTAMPTZ,
     notes       TEXT,
-    is_active   BOOLEAN NOT NULL DEFAULT true
+    is_active   BOOLEAN NOT NULL DEFAULT true,
+    haf_started_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS samples (
