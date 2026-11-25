@@ -302,8 +302,9 @@ parse_haf_app_timing() {
     local wait_to_massive="" massive_to_live=""
 
     # Current images enter massive processing straight from 'N/A' (STAGE_CHANGED from 'N/A' to
-    # 'MASSIVE_PROCESSING'), older ones from 'wait_for_haf'
-    wait_to_massive=$(echo "$stage_changes" | grep -E "wait_for_haf.*to.*MASSIVE|STAGE_CHANGED from '[^']*' to 'MASSIVE" | head -1 || echo "")
+    # 'MASSIVE_PROCESSING'), older ones from 'wait_for_haf'. A fall back from 'live' to MASSIVE
+    # after a HAF restart is not that entry: its duration is the time spent live.
+    wait_to_massive=$(echo "$stage_changes" | grep -E "wait_for_haf.*to.*MASSIVE|STAGE_CHANGED from '(N/A|wait_for_haf)' to 'MASSIVE" | head -1 || echo "")
     massive_to_live=$(echo "$stage_changes" | grep -E "MASSIVE.*to.*live" | head -1 || echo "")
 
     local wait_duration="" massive_duration="" live_block=""
@@ -372,7 +373,8 @@ parse_hivemind_timing() {
     if [[ -z "$massive_mode" ]]; then
         # Only the STAGE_CHANGED line: it carries no processing time, but marks massive processing.
         # hivemind logs it before its "Switched to" line, so it must not win over that line.
-        massive_mode=$(echo "$logs" | grep -E "STAGE_CHANGED from '[^']*' to 'MASSIVE" | head -1 || echo "")
+        # Only from 'N/A' or 'wait_for_haf': a fall back from 'live' is not the replay's entry.
+        massive_mode=$(echo "$logs" | grep -E "STAGE_CHANGED from '(N/A|wait_for_haf)' to 'MASSIVE" | head -1 || echo "")
     fi
     live_mode=$(echo "$logs" | grep -E "Switched to.*live.*mode" | tail -1 || echo "")
 
