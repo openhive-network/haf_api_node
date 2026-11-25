@@ -121,6 +121,15 @@ cat > "$WORK/logs/haf-reputation-tracker-block-processing-1" << 'EOF'
 2026-11-25T03:36:01.226Z WARNING:  PROFILE: 'reptracker_app' STAGE_CHANGED from 'wait_for_haf' to 'MASSIVE_PROCESSING' after 12:44:04 block: 1 fork: 2 head block: 101659044 head fork: 2
 2026-11-25T18:51:12.226Z WARNING:  PROFILE: 'reptracker_app' STAGE_CHANGED from 'MASSIVE_PROCESSING' to 'live' after 02:31:11 block: 101659500 fork: 2 head block: 101659500 head fork: 2
 EOF
+# Apps that only fell back from live to MASSIVE after a HAF restart (shed14, 2026-11-24): the
+# 13:23:51 is time spent live, not a wait for HAF.
+cat > "$WORK/logs/haf-nft-tracker-block-processing-1" << 'EOF'
+2026-11-24T21:10:02.205Z WARNING:  PROFILE: 'nfttracker_app' STAGE_CHANGED from 'live' to 'MASSIVE_PROCESSING' after 13:23:51 block: 111923469 fork: 2 head block: 111928100 head fork: 2
+2026-11-24T21:10:50.205Z WARNING:  PROFILE: 'nfttracker_app' STAGE_CHANGED from 'MASSIVE_PROCESSING' to 'live' after 00:00:48 block: 111928137 fork: 2 head block: 111928137 head fork: 2
+EOF
+cat > "$WORK/logs/haf-hivemind-block-processing-1" << 'EOF'
+WARNING - hive.db.adapter:60 - [root] WARNING:  PROFILE: 'hivemind_app' STAGE_CHANGED from 'live' to 'MASSIVE_WITHOUT_INDEXES' after 13:23:51 block: 111923469 fork: 2 head block: 111928100 head fork: 2
+EOF
 { cat "$WORK/haf-p2p"; echo "$LIVE_LINE"; } > "$WORK/haf-live"
 report "$WORK/haf-live"
 expect '^P2P sync entered +2026-11-25T16:10:12 +12h 34m 15s'
@@ -129,6 +138,9 @@ expect '^Total HAF Replay Time: 12h 44m 04s$'
 expect '^Block at LIVE entry: 101659044$'
 reject 'not reached yet|not finished'
 expect '^  Reputation Tracker +12:44:04 +02:31:11 +15h 15m 15s +101659500 +LIVE$'
-echo "ok    finished: P2P and LIVE entries and the total replay time"
+expect '^  NFT Tracker +N/A +00:00:48 +N/A +111,?928,?137 +LIVE$'
+expect '^  Hivemind +N/A +N/A +N/A +N/A +WAITING'
+reject '13:23:51|13h 2[34]m'
+echo "ok    finished: P2P and LIVE entries and the total replay time; a live -> MASSIVE fall back is no wait"
 
 echo "PASS replay_timing_report"
