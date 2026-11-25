@@ -92,7 +92,7 @@ expect '^LIVE sync entered +not reached yet +[0-9dhms ]+ so far'
 expect '^Total HAF Replay Time: not finished \([0-9dhms ]+ so far\)'
 expect '^  Reputation Tracker +N/A'
 expect '^  Hivemind .*PROCESSING'
-expect '^  HAF +20182000 +SYNCING'
+expect '^  HAF +20,182,000 +- .*SYNCING'
 echo "ok    mid-replay: P2P and LIVE not reached yet, app sections reported"
 
 ######### P2P entered, LIVE not yet #########

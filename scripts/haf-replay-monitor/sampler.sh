@@ -6,6 +6,7 @@
 # The sampler polls the HAF container's PostgreSQL for block progress and
 # Docker for container status, then POSTs to the replay monitor API.
 
+# set -e only for argument parsing; the sampling loop handles errors gracefully
 set -euo pipefail
 
 RUN_ID=""
@@ -13,6 +14,7 @@ API_URL=""
 COMPOSE_DIR=""
 INTERVAL=15
 HAF_SERVICE="haf"
+DOWN_LOGGED=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -41,11 +43,12 @@ if [[ -z "$RUN_ID" || -z "$API_URL" || -z "$COMPOSE_DIR" ]]; then
   exit 1
 fi
 
-# Resolve compose options from .env if present
+# Disable set -e for the sampling loop — failures are expected when stacks are down
+set +e
+
 cd "$COMPOSE_DIR"
 COMPOSE_CMD="docker compose"
 
-# Find HAF container name
 find_haf_container() {
   $COMPOSE_CMD ps --format '{{.Name}}' 2>/dev/null | grep -E "[-_]${HAF_SERVICE}[-_]" | head -1
 }
@@ -53,27 +56,40 @@ find_haf_container() {
 query_pg() {
   local container="$1"
   local sql="$2"
-  docker exec "$container" psql -U haf_admin -d haf_block_log -tAF'|' -c "$sql" 2>/dev/null || echo ""
+  docker exec "$container" psql -U haf_admin -d haf_block_log -tAF'|' -c "$sql" 2>/dev/null || true
 }
 
 echo "Sampler started: run_id=$RUN_ID api=$API_URL compose=$COMPOSE_DIR interval=${INTERVAL}s"
 
 while true; do
-  HAF_CONTAINER=$(find_haf_container)
+  HAF_CONTAINER=$(find_haf_container 2>/dev/null || true)
   if [[ -z "$HAF_CONTAINER" ]]; then
-    echo "$(date -Iseconds) HAF container not found, waiting..."
+    if [[ "$DOWN_LOGGED" == false ]]; then
+      echo "$(date -Iseconds) Stack down, waiting for it to come back..."
+      DOWN_LOGGED=true
+    fi
     sleep "$INTERVAL"
     continue
   fi
 
-  # Block progress
-  HIVE_STATE=$(query_pg "$HAF_CONTAINER" "SELECT num, consistent_block FROM hafd.hive_state LIMIT 1")
-  if [[ -z "$HIVE_STATE" ]]; then
+  if [[ "$DOWN_LOGGED" == true ]]; then
+    echo "$(date -Iseconds) Stack is back up"
+    DOWN_LOGGED=false
+  fi
+
+  # Block progress — head block from hafd.blocks, LIB from hafd.hive_state
+  BLOCK_NUM=$(query_pg "$HAF_CONTAINER" "SELECT num FROM hafd.blocks ORDER BY num DESC LIMIT 1")
+  if [[ -z "$BLOCK_NUM" ]]; then
     sleep "$INTERVAL"
     continue
   fi
-  BLOCK_NUM=$(echo "$HIVE_STATE" | cut -d'|' -f1)
-  LIB=$(echo "$HIVE_STATE" | cut -d'|' -f2)
+  LIB=$(query_pg "$HAF_CONTAINER" "SELECT consistent_block FROM hafd.hive_state LIMIT 1")
+
+  # Sanity check — skip if we got garbage
+  if ! [[ "$BLOCK_NUM" =~ ^[0-9]+$ ]]; then
+    sleep "$INTERVAL"
+    continue
+  fi
 
   # App progress
   APP_JSON="[]"
@@ -82,6 +98,7 @@ while true; do
     APP_JSON="["
     first=true
     while IFS='|' read -r name block; do
+      [[ -z "$name" || -z "$block" ]] && continue
       if [[ "$first" == true ]]; then first=false; else APP_JSON+=","; fi
       APP_JSON+="{\"app_name\":\"$name\",\"current_block_num\":$block}"
     done <<< "$CONTEXTS"
@@ -99,7 +116,7 @@ while true; do
   CTR_JSON+="]"
 
   # Memory (HAF container RSS)
-  MEM_RAW=$(docker stats --no-stream --format '{{.MemUsage}}' "$HAF_CONTAINER" 2>/dev/null | cut -d'/' -f1 | tr -d ' ')
+  MEM_RAW=$(docker stats --no-stream --format '{{.MemUsage}}' "$HAF_CONTAINER" 2>/dev/null | cut -d'/' -f1 | tr -d ' ' || true)
   MEM_BYTES=""
   if [[ "$MEM_RAW" =~ ^([0-9.]+)GiB$ ]]; then
     MEM_BYTES=$(echo "${BASH_REMATCH[1]} * 1073741824" | bc | cut -d. -f1)
@@ -110,13 +127,17 @@ while true; do
   # PG database size
   PG_SIZE=$(query_pg "$HAF_CONTAINER" "SELECT pg_database_size('haf_block_log')")
 
+  # HAF container start time
+  HAF_STARTED=$(docker inspect "$HAF_CONTAINER" --format '{{.State.StartedAt}}' 2>/dev/null || true)
+
   # Build payload
   PAYLOAD=$(cat <<ENDJSON
 {
   "block_num": $BLOCK_NUM,
-  "lib": $LIB,
+  "lib": ${LIB:-null},
   "memory_rss": ${MEM_BYTES:-null},
   "pg_size": ${PG_SIZE:-null},
+  "haf_started_at": "${HAF_STARTED:-}",
   "app_progress": $APP_JSON,
   "containers": $CTR_JSON
 }

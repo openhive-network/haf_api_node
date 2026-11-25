@@ -48,6 +48,14 @@ def create_run():
         return jsonify({"id": cur.fetchone()[0]}), 201
 
 
+@app.route("/api/runs/<int:rid>", methods=["DELETE"])
+def delete_run(rid):
+    with get_db() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM runs WHERE id = %s", (rid,))
+        conn.commit()
+        return jsonify({"deleted": cur.rowcount})
+
+
 @app.route("/api/runs/<int:rid>", methods=["PUT"])
 def update_run(rid):
     d = request.json
@@ -137,6 +145,14 @@ def push_sample(rid):
                     "INSERT INTO container_status (run_id, container_name, status, health) VALUES (%s, %s, %s, %s)",
                     (rid, cs["name"], cs.get("status"), cs.get("health")),
                 )
+
+        # Update haf_started_at on the run if provided
+        haf_started = d.get("haf_started_at")
+        if haf_started:
+            cur.execute(
+                "UPDATE runs SET haf_started_at = %s WHERE id = %s",
+                (haf_started, rid),
+            )
 
         conn.commit()
         return jsonify({"blocks_per_sec": bps}), 201
