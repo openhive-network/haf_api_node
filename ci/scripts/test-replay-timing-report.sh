@@ -5,7 +5,8 @@
 # processing) the report completes and marks P2P and LIVE as not reached yet; with P2P entered
 # but not LIVE, only LIVE is not reached; after a finished replay it shows both entries and
 # the total replay time.
-# No docker needed.
+# Block numbers are matched with or without thousands separators, which fmt_number prints per
+# the locale. No docker needed.
 
 set -euo pipefail
 
@@ -55,6 +56,10 @@ cat > "$WORK/logs/haf-nft-tracker-block-processing-1" << 'EOF'
 2026-11-25T03:36:01.205Z WARNING:  PROFILE: 'nfttracker_app' STAGE_CHANGED from 'N/A' to 'MASSIVE_PROCESSING' after N/A block: 1 fork: 2 head block: 952000 head fork: 2
 2026-11-25T04:19:38.086Z NOTICE:  nfttracker processed block range: <20159001, 20167000> successfully in 0.000024 s
 EOF
+cat > "$WORK/logs/haf-haf-stats-block-processing-1" << 'EOF'
+2026-11-25T03:36:01.311Z WARNING:  PROFILE: 'haf_stats' STAGE_CHANGED from 'N/A' to 'MASSIVE_PROCESSING' after N/A block: 1 fork: 2 head block: 956000 head fork: 2
+2026-11-25T04:19:40.512Z blocks 19871001..19881000 (10000) processed in 4.87s (0.5 ms/block), 0 iteration(s)
+EOF
 cat > "$WORK/logs/haf-hivemind-block-processing-1" << 'EOF'
 WARNING - hive.db.adapter:60 - [root] WARNING:  PROFILE: 'hivemind_app' STAGE_CHANGED from 'N/A' to 'MASSIVE_WITHOUT_INDEXES' after N/A block: 1 fork: 2 head block: 2284000 head fork: 2
 INFO - hive.indexer.sync:197 - Switched to `MASSIVE_WITHOUT_INDEXES` mode | block: 10000 | processing time: 00s
@@ -90,10 +95,15 @@ expect '^REINDEX started +2026-11-25T03:35:57 '
 expect '^P2P sync entered +not reached yet +[0-9dhms ]+ so far'
 expect '^LIVE sync entered +not reached yet +[0-9dhms ]+ so far'
 expect '^Total HAF Replay Time: not finished \([0-9dhms ]+ so far\)'
-expect '^  Reputation Tracker +N/A'
+expect '^  Reputation Tracker +N/A .*PROCESSING$'
+expect '^  NFT Tracker +N/A .*PROCESSING$'
 expect '^  Hivemind .*PROCESSING'
-expect '^  HAF +20,182,000 +- .*SYNCING'
-echo "ok    mid-replay: P2P and LIVE not reached yet, app sections reported"
+expect '^  HAF +20,?182,?000 +- .*SYNCING'
+expect '^  Reputation Tracker +17,?028,?000 +- .*SYNCING'
+expect '^  NFT Tracker +20,?167,?000 +- .*SYNCING'
+expect '^  HAF Stats +19,?881,?000 +- .*SYNCING'
+reject '^  (Reputation|NFT) Tracker .*WAITING'
+echo "ok    mid-replay: P2P and LIVE not reached yet, apps processing at their logged blocks"
 
 ######### P2P entered, LIVE not yet #########
 
@@ -106,6 +116,11 @@ echo "ok    P2P entered: only LIVE not reached yet"
 
 ######### finished replay #########
 
+# The stage lines of an app that went wait_for_haf -> MASSIVE -> live on an older image.
+cat > "$WORK/logs/haf-reputation-tracker-block-processing-1" << 'EOF'
+2026-11-25T03:36:01.226Z WARNING:  PROFILE: 'reptracker_app' STAGE_CHANGED from 'wait_for_haf' to 'MASSIVE_PROCESSING' after 12:44:04 block: 1 fork: 2 head block: 101659044 head fork: 2
+2026-11-25T18:51:12.226Z WARNING:  PROFILE: 'reptracker_app' STAGE_CHANGED from 'MASSIVE_PROCESSING' to 'live' after 02:31:11 block: 101659500 fork: 2 head block: 101659500 head fork: 2
+EOF
 { cat "$WORK/haf-p2p"; echo "$LIVE_LINE"; } > "$WORK/haf-live"
 report "$WORK/haf-live"
 expect '^P2P sync entered +2026-11-25T16:10:12 +12h 34m 15s'
@@ -113,6 +128,7 @@ expect '^LIVE sync entered +2026-11-25T16:20:01 +9m 49s \(P2P→LIVE\)'
 expect '^Total HAF Replay Time: 12h 44m 04s$'
 expect '^Block at LIVE entry: 101659044$'
 reject 'not reached yet|not finished'
+expect '^  Reputation Tracker +12:44:04 +02:31:11 +15h 15m 15s +101659500 +LIVE$'
 echo "ok    finished: P2P and LIVE entries and the total replay time"
 
 echo "PASS replay_timing_report"

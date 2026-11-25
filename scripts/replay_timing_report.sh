@@ -301,7 +301,9 @@ parse_haf_app_timing() {
     # Parse stage changes - get the first occurrence of each transition
     local wait_to_massive="" massive_to_live=""
 
-    wait_to_massive=$(echo "$stage_changes" | grep -E "wait_for_haf.*to.*MASSIVE" | head -1 || echo "")
+    # Current images enter massive processing straight from 'N/A' (STAGE_CHANGED from 'N/A' to
+    # 'MASSIVE_PROCESSING'), older ones from 'wait_for_haf'
+    wait_to_massive=$(echo "$stage_changes" | grep -E "wait_for_haf.*to.*MASSIVE|STAGE_CHANGED from '[^']*' to 'MASSIVE" | head -1 || echo "")
     massive_to_live=$(echo "$stage_changes" | grep -E "MASSIVE.*to.*live" | head -1 || echo "")
 
     local wait_duration="" massive_duration="" live_block=""
@@ -366,7 +368,7 @@ parse_hivemind_timing() {
     local wait_mode="" massive_mode="" live_mode=""
 
     wait_mode=$(echo "$logs" | grep -E "Switched to.*wait_for_haf.*mode" | head -1 || echo "")
-    massive_mode=$(echo "$logs" | grep -E "Switched to.*MASSIVE" | head -1 || echo "")
+    massive_mode=$(echo "$logs" | grep -E "Switched to.*MASSIVE|STAGE_CHANGED from '[^']*' to 'MASSIVE" | head -1 || echo "")
     live_mode=$(echo "$logs" | grep -E "Switched to.*live.*mode" | tail -1 || echo "")
 
     local wait_duration="" massive_duration="" live_block=""
@@ -541,10 +543,16 @@ get_current_block() {
                 # Try MASSIVE sync pattern: "Processing block range: X to Y"
                 block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Processing block range: [0-9]+ to \K[0-9]+' | tail -1 || true)
             fi
+            if [[ -z "$block" ]]; then
+                # haf_stats: "blocks 17018001..17028000 (10000) processed in 5.11s"
+                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'blocks [0-9]+\.\.\K[0-9]+(?= \([0-9]+\) processed)' | tail -1 || true)
+            fi
             ;;
         nft|reputation)
-            # NFT/Reputation: "nfttracker processed block 101791001" or "Reptracker processed block 101791002"
-            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:nfttracker|Reptracker) process(?:ed|ing) block[: ]+\K[0-9]+' | tail -1 || true)
+            # NFT/Reputation: "nfttracker processed block 101791001", "Reptracker processed block range: <19355001, 19365000>"
+            # or "blocks 17018001..17028000 (10000) processed in 5.11s"
+            block=$(docker logs "$container" 2>&1 | tail -100 |
+                grep -oP '(?:(?:nfttracker|Reptracker) process(?:ed|ing) block(?: range: <[0-9]+, |[: ]+)|blocks [0-9]+\.\.)\K[0-9]+' | tail -1 || true)
             ;;
     esac
 
