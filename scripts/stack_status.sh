@@ -38,9 +38,6 @@ if [ -z "$STACK_DIR" ]; then
     exit 1
 fi
 
-STATE_FILE="${STATE_FILE:-/tmp/haf-monitor-$(echo "$STACK_DIR" | tr / _).state}"
-NOW=$(date +%s)
-
 # --- Remote execution helper ---
 # Runs a command locally or on the remote host
 
@@ -51,6 +48,17 @@ run() {
         eval "$@"
     fi
 }
+
+# Compose labels a project with its absolute working dir, so resolve a relative one
+# (against the remote login dir with --host). -s keeps a symlinked cwd as `pwd` shows it.
+RESOLVED_DIR=$(run "( d=$(printf '%q' "$STACK_DIR"); case \$d in /*) ;; *) d=\$PWD/\$d ;; esac; realpath -s -m -- \"\$d\" )") || {
+    echo "ERROR: cannot resolve stack dir $STACK_DIR" >&2
+    exit 1
+}
+STACK_DIR=$RESOLVED_DIR
+
+STATE_FILE="${STATE_FILE:-/tmp/haf-monitor-$(echo "$STACK_DIR" | tr / _).state}"
+NOW=$(date +%s)
 
 # --- Helpers ---
 
