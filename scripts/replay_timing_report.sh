@@ -163,18 +163,18 @@ parse_haf_timing() {
     local reindex_start reindex_entered p2p_entered live_entered live_block
 
     reindex_start=$(echo "$logs" | grep -E "PROFILE: Entered REINDEX sync from start state:" | head -1 | grep -oP '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}' || echo "")
-    p2p_entered=$(echo "$logs" | grep -E "PROFILE: Entered P2P sync from start state:" | head -1)
-    live_entered=$(echo "$logs" | grep -E "PROFILE: Entered LIVE sync from start state:" | head -1)
+    p2p_entered=$(echo "$logs" | grep -E "PROFILE: Entered P2P sync from start state:" | head -1 || echo "")
+    live_entered=$(echo "$logs" | grep -E "PROFILE: Entered LIVE sync from start state:" | head -1 || echo "")
 
     # Parse P2P timing
-    local p2p_timestamp p2p_seconds
+    local p2p_timestamp="" p2p_seconds=""
     if [[ -n "$p2p_entered" ]]; then
         p2p_timestamp=$(echo "$p2p_entered" | grep -oP '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}' || echo "")
         p2p_seconds=$(echo "$p2p_entered" | grep -oP 'start state: \K\d+' || echo "")
     fi
 
     # Parse LIVE timing
-    local live_timestamp live_seconds live_block
+    local live_timestamp="" live_seconds="" live_block=""
     if [[ -n "$live_entered" ]]; then
         live_timestamp=$(echo "$live_entered" | grep -oP '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}' || echo "")
         live_seconds=$(echo "$live_entered" | grep -oP 'start state: \K\d+' || echo "")
@@ -199,6 +199,16 @@ parse_haf_timing() {
         total_duration=$(format_duration "$live_seconds")
     fi
 
+    # hived logs its timestamps in UTC without a zone suffix
+    local elapsed_so_far=""
+    if [[ -z "$live_timestamp" && -n "$reindex_start" ]]; then
+        local reindex_start_epoch
+        reindex_start_epoch=$(date -u -d "$reindex_start" +%s 2>/dev/null || echo "")
+        if [[ -n "$reindex_start_epoch" ]]; then
+            elapsed_so_far="$(format_duration $(( $(date +%s) - reindex_start_epoch ))) so far"
+        fi
+    fi
+
     # Print table
     printf "%-35s %-25s %-20s\n" "Phase" "Timestamp" "Duration"
     printf "%-35s %-25s %-20s\n" "─────────────────────────────────" "─────────────────────────" "────────────────────"
@@ -209,15 +219,21 @@ parse_haf_timing() {
 
     if [[ -n "$p2p_timestamp" ]]; then
         printf "%-35s %-25s %-20s\n" "P2P sync entered" "$p2p_timestamp" "${reindex_duration:-N/A}"
+    elif [[ -z "$live_timestamp" ]]; then
+        printf "%-35s %-25s %-20s\n" "P2P sync entered" "not reached yet" "${elapsed_so_far:--}"
     fi
 
     if [[ -n "$live_timestamp" ]]; then
         printf "%-35s %-25s %-20s\n" "LIVE sync entered" "$live_timestamp" "${p2p_to_live_duration:-N/A} (P2P→LIVE)"
+    else
+        printf "%-35s %-25s %-20s\n" "LIVE sync entered" "not reached yet" "${elapsed_so_far:--}"
     fi
 
     echo ""
     if [[ -n "$total_duration" ]]; then
         echo -e "${BOLD}Total HAF Replay Time:${NC} ${total_duration}"
+    else
+        echo -e "${BOLD}Total HAF Replay Time:${NC} not finished${elapsed_so_far:+ (${elapsed_so_far})}"
     fi
     if [[ -n "$live_block" ]]; then
         echo -e "${BOLD}Block at LIVE entry:${NC} ${live_block}"
@@ -487,27 +503,27 @@ get_current_block() {
     case "$app_type" in
         haf)
             # HAF: "Dump whole block 101791010" or "Got 14 transactions on block 101791010"
-            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:Dump whole block|on block) \K[0-9]+' | tail -1)
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:Dump whole block|on block) \K[0-9]+' | tail -1 || true)
             ;;
         hivemind)
             # Hivemind: "Last imported block is: 101790997" or block numbers in SQL calls
-            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Last imported block is: \K[0-9]+' | tail -1)
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Last imported block is: \K[0-9]+' | tail -1 || true)
             if [[ -z "$block" ]]; then
                 # Try extracting from update_last_completed_block calls
-                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'update_last_completed_block\(\K[0-9]+' | tail -1)
+                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'update_last_completed_block\(\K[0-9]+' | tail -1 || true)
             fi
             ;;
         haf_app)
             # HAF apps (block explorer): "[SINGLE]  Attempting to process block: <101791004>" or "Processed blocks"
-            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'process block: <\K[0-9]+' | tail -1)
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'process block: <\K[0-9]+' | tail -1 || true)
             if [[ -z "$block" ]]; then
                 # Try MASSIVE sync pattern: "Processing block range: X to Y"
-                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Processing block range: [0-9]+ to \K[0-9]+' | tail -1)
+                block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP 'Processing block range: [0-9]+ to \K[0-9]+' | tail -1 || true)
             fi
             ;;
         nft|reputation)
             # NFT/Reputation: "nfttracker processed block 101791001" or "Reptracker processed block 101791002"
-            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:nfttracker|Reptracker) process(?:ed|ing) block[: ]+\K[0-9]+' | tail -1)
+            block=$(docker logs "$container" 2>&1 | tail -100 | grep -oP '(?:nfttracker|Reptracker) process(?:ed|ing) block[: ]+\K[0-9]+' | tail -1 || true)
             ;;
     esac
 

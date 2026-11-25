@@ -62,6 +62,7 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/bin"
 
+# $STUB_STACK_DIR: the stack's working dir, as compose labels it (absolute);
 # $STUB_DIR/containers: the running containers (name|status); $STUB_DIR/contexts: the HAF contexts;
 # $STUB_DIR/images: the running containers' images (repo tag|created).
 cat > "$WORK/bin/docker" << 'EOF'
@@ -69,7 +70,8 @@ cat > "$WORK/bin/docker" << 'EOF'
 case "$1" in
   ps)
     case "$*" in
-      *working_dir=*) head -1 "$STUB_DIR/containers" | cut -d'|' -f1 ;;
+      *"working_dir=$STUB_STACK_DIR --format"*) head -1 "$STUB_DIR/containers" | cut -d'|' -f1 ;;
+      *working_dir=*) ;;
       *name=^*)
         args=$*; name=${args#*name=^}; name=${name%%\$*}
         grep "^$name|" "$STUB_DIR/containers" | cut -d'|' -f2 ;;
@@ -98,12 +100,14 @@ EOF
 chmod +x "$WORK/bin/docker"
 echo 'registry.hive.blog/haf:0102968a|2026-11-20T00:00:00Z' > "$WORK/images"
 
-# Runs stack_status.sh on the stand-in stack; $1: the running block-processing services.
+# Runs stack_status.sh on the stand-in stack; $1: the running block-processing services,
+# $2: the stack dir argument (default $STACK_DIR).
 report() {
   printf 'haf-haf-1|Up 4 hours (healthy)\n' > "$WORK/containers"
   local svc
   for svc in $1; do printf 'haf-%s-1|Up 4 hours (healthy)\n' "$svc" >> "$WORK/containers"; done
-  STUB_DIR=$WORK PATH="$WORK/bin:$PATH" "$REPO_DIR/scripts/stack_status.sh" --state "$WORK/state" "$STACK_DIR" > "$WORK/report" 2>&1 ||
+  STUB_DIR=$WORK STUB_STACK_DIR=${STUB_STACK_DIR:-$STACK_DIR} PATH="$WORK/bin:$PATH" \
+    "$REPO_DIR/scripts/stack_status.sh" --state "$WORK/state" "${2:-$STACK_DIR}" > "$WORK/report" 2>&1 ||
     { cat "$WORK/report"; fail "stack_status.sh exited non-zero"; }
   rm -f "$WORK/state"
 }
@@ -176,6 +180,21 @@ printf 'hafbe_app\nhafbe_bal\n' > "$WORK/contexts"
 report ""
 app_row hafbe_bal | grep -qx "    Status:    NOT RUNNING" || { cat "$WORK/report"; fail "a stopped block-explorer-block-processing is not NOT RUNNING"; }
 echo "ok    stopped: hafbe_bal shows NOT RUNNING"
+
+######### relative stack dir #########
+
+printf 'hafbe_app\nhafbe_bal\n' > "$WORK/contexts"
+mkdir -p "$WORK/stack dir/haf_api_node"
+STUB_STACK_DIR="$WORK/stack dir/haf_api_node" report "block-explorer-block-processing" "$WORK/stack dir/haf_api_node/"
+cp "$WORK/report" "$WORK/report.absolute"
+(
+  cd "$WORK/stack dir/haf_api_node"
+  STUB_STACK_DIR="$WORK/stack dir/haf_api_node" report "block-explorer-block-processing" .
+)
+grep -qx "  Stack dir: $WORK/stack dir/haf_api_node" "$WORK/report" || { cat "$WORK/report"; fail "'.' is not reported as the absolute stack dir"; }
+diff <(grep -v '^  Time: ' "$WORK/report.absolute") <(grep -v '^  Time: ' "$WORK/report") ||
+  fail "'.' from inside the stack dir reports differently from its absolute path"
+echo "ok    relative: '.' finds the stack compose labels with its absolute dir"
 
 ######### only third-party images #########
 
