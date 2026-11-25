@@ -368,7 +368,12 @@ parse_hivemind_timing() {
     local wait_mode="" massive_mode="" live_mode=""
 
     wait_mode=$(echo "$logs" | grep -E "Switched to.*wait_for_haf.*mode" | head -1 || echo "")
-    massive_mode=$(echo "$logs" | grep -E "Switched to.*MASSIVE|STAGE_CHANGED from '[^']*' to 'MASSIVE" | head -1 || echo "")
+    massive_mode=$(echo "$logs" | grep -E "Switched to.*MASSIVE" | head -1 || echo "")
+    if [[ -z "$massive_mode" ]]; then
+        # Only the STAGE_CHANGED line: it carries no processing time, but marks massive processing.
+        # hivemind logs it before its "Switched to" line, so it must not win over that line.
+        massive_mode=$(echo "$logs" | grep -E "STAGE_CHANGED from '[^']*' to 'MASSIVE" | head -1 || echo "")
+    fi
     live_mode=$(echo "$logs" | grep -E "Switched to.*live.*mode" | tail -1 || echo "")
 
     local wait_duration="" massive_duration="" live_block=""
